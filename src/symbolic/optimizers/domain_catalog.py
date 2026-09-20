@@ -22,25 +22,49 @@ class VMSku:
         """Approximate monthly cost assuming a 730-hour month."""
         return round(self.hourly_cost_usd * 730.0, 2)
 
-# Temporary catalog for discrete GA optimization
-VM_CATALOG: List[VMSku] = [
-    VMSku("t3.medium", "AWS", 2, 4.0, 0.0416),
-    VMSku("t3.large", "AWS", 2, 8.0, 0.0832),
-    VMSku("t3.xlarge", "AWS", 4, 16.0, 0.1664),
-    VMSku("c5.large", "AWS", 2, 4.0, 0.0850),
-    VMSku("c5.xlarge", "AWS", 4, 8.0, 0.1700),
-    VMSku("m5.large", "AWS", 2, 8.0, 0.0960),
-    VMSku("m5.xlarge", "AWS", 4, 16.0, 0.1920),
-    VMSku("m5.2xlarge", "AWS", 8, 32.0, 0.3840),
-    VMSku("Standard_D4s_v5", "Azure", 4, 16.0, 0.1920),
-    VMSku("e2-standard-4", "GCP", 4, 16.0, 0.1340),
-]
+from src.symbolic.data.repository import CloudDataRepository
+from src.symbolic.data.seed import seed_database
+import os
 
-# Precomputed NumPy arrays for fast vectorized objective evaluation
-CATALOG_COSTS = np.array([sku.monthly_cost() for sku in VM_CATALOG], dtype=np.float32)
-CATALOG_VCPUS = np.array([sku.vcpus for sku in VM_CATALOG], dtype=np.float32)
-CATALOG_RAM = np.array([sku.ram_gb for sku in VM_CATALOG], dtype=np.float32)
+class DatabaseBackedCatalog:
+    """Provides a vectorized catalog interface to the local SQLite database."""
+    def __init__(self):
+        # Auto-seed if db missing
+        db_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+            "data", "cloud_finops.db"
+        )
+        if not os.path.exists(db_path):
+            seed_database(db_path)
+            
+        self.repo = CloudDataRepository()
+        self.skus = self.repo.get_skus(active_only=True)
+        
+        # We wrap in the legacy VMSku to avoid breaking ObjectiveEvaluator's typing,
+        # but realistically ObjectiveEvaluator only needs the numpy arrays.
+        self.VM_CATALOG = [
+            VMSku(
+                name=s.sku,
+                provider=s.provider_id,
+                vcpus=s.vcpus,
+                ram_gb=s.ram_gb,
+                hourly_cost_usd=s.hourly_price_usd
+            ) for s in self.skus
+        ]
+        
+        self.CATALOG_COSTS = np.array([sku.monthly_cost() for sku in self.VM_CATALOG], dtype=np.float32)
+        self.CATALOG_VCPUS = np.array([sku.vcpus for sku in self.VM_CATALOG], dtype=np.float32)
+        self.CATALOG_RAM = np.array([sku.ram_gb for sku in self.VM_CATALOG], dtype=np.float32)
+
+    def get_provider_mask(self, providers: List[str]) -> np.ndarray:
+        return np.array([sku.provider in providers for sku in self.VM_CATALOG], dtype=bool)
+
+# Global singleton for backwards compatibility
+_catalog = DatabaseBackedCatalog()
+VM_CATALOG = _catalog.VM_CATALOG
+CATALOG_COSTS = _catalog.CATALOG_COSTS
+CATALOG_VCPUS = _catalog.CATALOG_VCPUS
+CATALOG_RAM = _catalog.CATALOG_RAM
 
 def get_provider_mask(providers: List[str]) -> np.ndarray:
-    """Returns a boolean mask of catalog items matching the requested providers."""
-    return np.array([sku.provider in providers for sku in VM_CATALOG], dtype=bool)
+    return _catalog.get_provider_mask(providers)
