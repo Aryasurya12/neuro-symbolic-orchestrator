@@ -34,7 +34,7 @@ class ParticleSwarmOptimization(OptimizationEngine):
         self.c2 = social_coefficient
         self.rng = np.random.default_rng(random_seed)
 
-    def solve(self, request: SymbolicOptimizationRequest) -> OptimizationResult:
+    def solve(self, request: SymbolicOptimizationRequest, progress_callback: Optional[callable] = None) -> OptimizationResult:
         start_time = time.perf_counter()
         
         # Bounds: [bandwidth_mbps, replicas]
@@ -65,7 +65,7 @@ class ParticleSwarmOptimization(OptimizationEngine):
         gbest_cost = pbest_costs[best_idx]
         gbest_feasible = pbest_feasible[best_idx]
 
-        for _ in range(self.iterations):
+        for iteration in range(self.iterations):
             r1 = self.rng.random((self.swarm_size, 2))
             r2 = self.rng.random((self.swarm_size, 2))
 
@@ -107,6 +107,15 @@ class ParticleSwarmOptimization(OptimizationEngine):
                 if pbest_costs[current_best_idx] < gbest_cost:
                     gbest_cost = pbest_costs[current_best_idx]
                     gbest_position = pbest_positions[current_best_idx].copy()
+
+            if progress_callback:
+                progress_callback({
+                    "event": "progress",
+                    "solver": "Vectorized_PSO",
+                    "iteration": iteration + 1,
+                    "best_cost_usd": float(gbest_cost) if gbest_feasible else None,
+                    "is_feasible": bool(gbest_feasible)
+                })
 
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
 

@@ -6,7 +6,7 @@ and the Z3 hard constraints to form a formal OptimizationEngine.
 
 import time
 import z3
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 from src.symbolic.models import (
     SymbolicOptimizationRequest,
@@ -28,8 +28,14 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         self.graph = InfrastructureGraph()
         self.steering = GraphSteeringLayer(self.graph)
 
-    def solve(self, request: SymbolicOptimizationRequest) -> OptimizationResult:
+    def solve(self, request: SymbolicOptimizationRequest, progress_callback: Optional[callable] = None) -> OptimizationResult:
         start_time = time.perf_counter()
+
+        if progress_callback:
+            progress_callback({
+                "event": "solver_started",
+                "solver": "GraphSteeredZ3"
+            })
 
         solver = z3.Optimize()
         solver.set("timeout", self.timeout_ms)
@@ -75,6 +81,12 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         # 4. SOLVE
         result = solver.check()
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
+
+        if progress_callback:
+            progress_callback({
+                "event": "solver_completed",
+                "solver": "GraphSteeredZ3"
+            })
 
         if result == z3.sat:
             model = solver.model()

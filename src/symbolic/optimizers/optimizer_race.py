@@ -19,7 +19,7 @@ class OptimizerRace:
         self.ga_engine = ga_engine
         self.pso_engine = pso_engine
 
-    def execute_race(self, request: SymbolicOptimizationRequest) -> OptimizationResult:
+    def execute_race(self, request: SymbolicOptimizationRequest, progress_callback: Optional[callable] = None) -> OptimizationResult:
         """
         Executes the race. 
         Note: The problem_type generally determines which solver is most appropriate, 
@@ -29,8 +29,8 @@ class OptimizerRace:
         start_time = time.perf_counter()
 
         # Execute sequentially for now
-        ga_result = self.ga_engine.solve(request)
-        pso_result = self.pso_engine.solve(request)
+        ga_result = self.ga_engine.solve(request, progress_callback)
+        pso_result = self.pso_engine.solve(request, progress_callback)
 
         # Selection logic
         best_result = self._select_best(ga_result, pso_result)

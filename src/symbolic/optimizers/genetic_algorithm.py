@@ -85,7 +85,7 @@ class GeneticAlgorithm(OptimizationEngine):
         random_genes = self.rng.integers(0, max_units + 1, size=population.shape)
         return np.where(mutate_mask, random_genes, population)
 
-    def solve(self, request: SymbolicOptimizationRequest) -> OptimizationResult:
+    def solve(self, request: SymbolicOptimizationRequest, progress_callback: Optional[callable] = None) -> OptimizationResult:
         start_time = time.perf_counter()
         
         provider_mask = get_provider_mask(request.cloud_providers)
@@ -108,7 +108,7 @@ class GeneticAlgorithm(OptimizationEngine):
         best_cost = float('inf')
         best_feasible = False
 
-        for _ in range(self.generations):
+        for generation in range(self.generations):
             costs, is_feasible, constraints = ObjectiveEvaluator.evaluate_ga_population(population, request)
             fitness = costs + (~is_feasible) * 1e6
 
@@ -148,6 +148,15 @@ class GeneticAlgorithm(OptimizationEngine):
             
             # Restore elites
             population[:self.elite_count] = elites
+            
+            if progress_callback:
+                progress_callback({
+                    "event": "progress",
+                    "solver": "Vectorized_GA",
+                    "iteration": generation + 1,
+                    "best_cost_usd": float(best_cost) if best_feasible else None,
+                    "is_feasible": best_feasible
+                })
 
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
         
