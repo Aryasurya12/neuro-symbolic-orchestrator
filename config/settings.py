@@ -1,7 +1,12 @@
 """Configuration settings for the FinOps Neuro-Symbolic Orchestrator (neurasym)."""
 
+import os
 from dataclasses import dataclass, field
 from typing import Tuple
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 @dataclass
@@ -12,6 +17,11 @@ class Settings:
     SOLVER_TIMEOUT_MS: int = 500
     ENABLE_Z3_GRAPH_OPTIMIZER: bool = True
     CHROMA_DB_PATH: str = "./chroma_db"
+
+    # API Keys & External Integrations
+    OPENROUTER_API_KEY: str = field(
+        default_factory=lambda: os.getenv("OPENROUTER_API_KEY", "")
+    )
 
     # Currency conversion & formatting settings
     USD_TO_INR_RATE: float = 85.0
@@ -37,3 +47,4 @@ class Settings:
 
 
 settings = Settings()
+

@@ -1,10 +1,31 @@
-"""SEM-3: Disentangled SCOPE Parser for Natural Language Cloud Queries."""
+"""SEM-3: Disentangled SCOPE Parser for Natural Language Cloud Queries.
 
+Implements a Hybrid Parsing Architecture combining a sub-5ms local regex/CARM parser
+with an OpenRouter NVIDIA Nemotron LLM fallback for high-accuracy intent extraction.
+"""
+
+import json
+import os
 import re
+import sys
 from typing import List, Literal, Set, Tuple, cast
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# Ensure UTF-8 stdout encoding on Windows consoles
+if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from config.settings import settings
 from src.semantic.carm_matcher import CARMMatcher
 from src.semantic.schemas import CloudOptimizationContract
+
+# 1. Load OPENROUTER_API_KEY from .env using python-dotenv
+load_dotenv()
+
 
 
 class SCOPEParser:
@@ -357,3 +378,100 @@ class SCOPEParser:
         )
 
         return contract, template_filename, score
+
+    def parse_query_local(self, user_query: str) -> CloudOptimizationContract:
+        """Parses query using local regex and heuristic SCOPE parser."""
+        contract, _, _ = self.parse_query_to_contract(user_query)
+        return contract
+
+    def parse_fallback_nemotron(self, user_query: str) -> CloudOptimizationContract:
+        """Fallback LLM parser delegating to OpenRouter NVIDIA Nemotron."""
+        return parse_fallback_nemotron(user_query)
+
+    def parse_query_hybrid(self, user_query: str) -> CloudOptimizationContract:
+        """Hybrid parsing entrypoint method on SCOPEParser."""
+        return parse_query_hybrid(user_query)
+
+
+# ===========================================================================
+# 2 & 3. OpenRouter NVIDIA Nemotron Fallback Implementation
+# ===========================================================================
+
+def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
+    """Fallback function using OpenRouter NVIDIA Nemotron LLM to extract a validated
+
+    CloudOptimizationContract from complex, ambiguous natural language queries.
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+    )
+
+    schema_json = json.dumps(CloudOptimizationContract.model_json_schema(), indent=2)
+    system_prompt = (
+        "You are an expert FinOps cloud resource optimizer and structured parser. "
+        "Extract cloud optimization requirements from the user's natural language query "
+        "and return a JSON object that strictly adheres to the following JSON schema:\n\n"
+        f"{schema_json}\n\n"
+        "Return ONLY the valid raw JSON object matching the schema. Do not output markdown fences or explanatory text."
+    )
+
+    response = client.chat.completions.create(
+        model="nvidia/llama-3.1-nemotron-70b-instruct",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_query},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+    )
+
+    raw_json = response.choices[0].message.content or "{}"
+    return CloudOptimizationContract.model_validate_json(raw_json)
+
+
+# ===========================================================================
+# 4. Hybrid Entrypoint Function
+# ===========================================================================
+
+def parse_query_local(user_query: str) -> CloudOptimizationContract:
+    """Parses a query using the fast local SCOPE regex & CARM matcher."""
+    if not user_query or not user_query.strip():
+        raise ValueError("Query is empty or whitespace.")
+    parser = SCOPEParser()
+    contract, _, _ = parser.parse_query_to_contract(user_query)
+    return contract
+
+
+def parse_query_hybrid(user_query: str) -> CloudOptimizationContract:
+    """Hybrid entrypoint function:
+
+    - Step 1: Attempts fast local SCOPE parsing (<5ms, $0 cost).
+    - Step 2: On failure or exception, falls back to OpenRouter NVIDIA Nemotron LLM.
+    - Step 3: Returns a safe default CloudOptimizationContract if all approaches fail.
+    """
+    # Step 1: Try executing the existing local parser
+    try:
+        contract = parse_query_local(user_query)
+        print("⚡ [Part A] Parsed via Local SCOPE Parser (<5ms, $0 Cost)")
+        return contract
+    except Exception as local_err:
+        # Step 2: Fallback to OpenRouter NVIDIA Nemotron
+        try:
+            contract = parse_fallback_nemotron(user_query)
+            print("🧠 [Part A] Parsed via OpenRouter NVIDIA Nemotron Fallback")
+            return contract
+        except Exception as api_err:
+            # Step 3: Fail-safe default contract
+            print(f"⚠️ [Part A] Parsing failed, falling back to default contract: {api_err}")
+            return CloudOptimizationContract(
+                problem_type="ILP_VM_Allocation",
+                cloud_providers=["AWS"],
+                budget_max_usd=getattr(settings, "DEFAULT_BUDGET_USD", 500.0),
+                service_count=1,
+                required_vcpus=1,
+                required_ram_gb=1.0,
+                latency_max_ms=100.0,
+                sla_availability_pct=99.9,
+            )

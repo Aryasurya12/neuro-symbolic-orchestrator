@@ -13,14 +13,22 @@ Covers:
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch, MagicMock
 import pytest
 from pydantic import ValidationError
+
 
 from config.settings import settings
 from src.semantic.schemas import CloudOptimizationContract
 from src.semantic.carm_matcher import CARMMatcher
-from src.semantic.scope_parser import SCOPEParser
+from src.semantic.scope_parser import (
+    SCOPEParser,
+    parse_fallback_nemotron,
+    parse_query_hybrid,
+    parse_query_local,
+)
 from src.semantic.explainer import FinOpsExplainer
+
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +314,48 @@ class TestFinOpsExplainer(unittest.TestCase):
         self.assertIn("₹", report)
         self.assertIn("$300.00 USD (₹25,500.00 INR)", report)
         self.assertIn("Exchange Rate        : 1 USD = 85.00 INR", report)
+
+
+# ---------------------------------------------------------------------------
+# SEM-3: Hybrid Architecture & Nemotron Fallback Tests
+# ---------------------------------------------------------------------------
+
+class TestHybridSCOPEParser(unittest.TestCase):
+    def test_parse_query_local_success(self):
+        query = "I need 4 vCPUs and 16GB RAM on AWS with budget $300"
+        contract = parse_query_local(query)
+        self.assertEqual(contract.problem_type, "ILP_VM_Allocation")
+        self.assertEqual(contract.required_vcpus, 4)
+        self.assertEqual(contract.required_ram_gb, 16.0)
+
+    def test_parse_query_hybrid_local_path(self):
+        query = "Continuous stream scaling with bandwidth 100 to 500 mbps autoscale cpu 70%"
+        contract = parse_query_hybrid(query)
+        self.assertEqual(contract.problem_type, "PSO_Continuous_Scaling")
+
+    @patch("src.semantic.scope_parser.parse_fallback_nemotron")
+    @patch("src.semantic.scope_parser.parse_query_local", side_effect=Exception("Local parse failed"))
+    def test_parse_query_hybrid_fallback_on_local_error(self, mock_local, mock_fallback):
+        mock_fallback.return_value = CloudOptimizationContract(
+            problem_type="Z3_Graph_Disaster_Recovery",
+            cloud_providers=["AWS", "Azure"],
+            budget_max_usd=600.0,
+            sla_availability_pct=99.99,
+        )
+        contract = parse_query_hybrid("complex ambiguous multi-region query")
+        mock_local.assert_called_once()
+        mock_fallback.assert_called_once_with("complex ambiguous multi-region query")
+        self.assertEqual(contract.problem_type, "Z3_Graph_Disaster_Recovery")
+        self.assertEqual(contract.budget_max_usd, 600.0)
+
+    @patch("src.semantic.scope_parser.parse_fallback_nemotron", side_effect=Exception("API Rate Limit / Network Down"))
+    @patch("src.semantic.scope_parser.parse_query_local", side_effect=Exception("Local parse failed"))
+    def test_parse_query_hybrid_failsafe_default_on_double_error(self, mock_local, mock_fallback):
+        contract = parse_query_hybrid("invalid query that crashes all")
+        self.assertEqual(contract.problem_type, "ILP_VM_Allocation")
+        self.assertEqual(contract.cloud_providers, ["AWS"])
+        self.assertEqual(contract.budget_max_usd, settings.DEFAULT_BUDGET_USD)
+
 
 
 if __name__ == "__main__":
