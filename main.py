@@ -9,15 +9,10 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from src.semantic.scope_parser import SCOPEParser
-from src.semantic.explainer import FinOpsExplainer
-from templates.ILP_VM_Knapsack_Allocation import solve_ilp_vm_knapsack
-from templates.Continuous_PSO_Dynamic_Scaling import solve_pso_continuous_scaling
-from templates.Graph_SMT_Z3_MultiRegion_Placement import solve_z3_graph_disaster_recovery
-
+from src.orchestrator.service import NeuroSymbolicOrchestrator
 
 def main() -> None:
-    parser = SCOPEParser()
+    orchestrator = NeuroSymbolicOrchestrator()
 
     print("============================================================")
     print("🚀 neurasym FinOps Orchestrator (Interactive CLI Mode)")
@@ -39,42 +34,7 @@ def main() -> None:
             continue
 
         try:
-            # 1. Parse & CARM Template Match
-            contract, matched_template, score = parser.parse_query_to_contract(user_query)
-            print(f"\n✅ Matched Template : {matched_template} (Jaccard Score: {score:.2f})")
-
-            # 2. Dynamic Routing to Matched Solver Template
-            if (
-                matched_template == "PSO_Continuous_Scaling"
-                or contract.problem_type == "PSO_Continuous_Scaling"
-            ):
-                solver_res = solve_pso_continuous_scaling(
-                    bandwidth_min_mbps=100.0,
-                    bandwidth_max_mbps=1000.0,
-                    target_cpu_pct=70.0,
-                    budget_max_usd=contract.budget_max_usd,
-                )
-            elif (
-                matched_template == "Z3_Graph_Disaster_Recovery"
-                or contract.problem_type == "Z3_Graph_Disaster_Recovery"
-            ):
-                solver_res = solve_z3_graph_disaster_recovery(
-                    sla_pct=contract.sla_availability_pct,
-                    max_latency_ms=contract.latency_max_ms,
-                    budget_max_usd=contract.budget_max_usd,
-                    target_providers=contract.cloud_providers,
-                )
-            else:
-                # Default: ILP VM Knapsack Allocation
-                solver_res = solve_ilp_vm_knapsack(
-                    required_vcpus=contract.required_vcpus,
-                    required_ram_gb=contract.required_ram_gb,
-                    budget_max_usd=contract.budget_max_usd,
-                    target_providers=contract.cloud_providers,
-                )
-
-            # 3. Generate Stage 6 Executive Dual-Currency Report ($ & ₹)
-            report = FinOpsExplainer.generate_report(contract, solver_res)
+            report = orchestrator.process_query(user_query)
             print("\n" + report)
 
         except Exception as e:

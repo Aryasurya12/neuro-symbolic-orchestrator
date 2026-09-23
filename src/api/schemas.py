@@ -45,3 +45,11 @@ class OptimizationResponse(BaseModel):
             metrics=result.metrics.model_dump(),
             error_message=result.error_message
         )
+
+class NaturalLanguageQueryRequest(BaseModel):
+    """Client request payload for natural language optimization query."""
+    query: str = Field(..., description="Natural language description of cloud deployment needs.")
+
+class NaturalLanguageQueryResponse(BaseModel):
+    """The JSON response containing the generated text report."""
+    report: str
