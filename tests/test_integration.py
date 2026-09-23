@@ -37,3 +37,9 @@ def test_integration_infeasible(orchestrator):
     report = orchestrator.process_query(query)
 
     assert "Feasibility Status   : Infeasible" in report
+    assert "Optimized Monthly Cost   : N/A" in report
+    assert "Monthly Net Savings      : N/A" in report
+    assert "Budget Utilization Rate  : N/A" in report
+    assert "The requested workload cannot be satisfied under the supplied constraints." in report
+    assert "The requested allocation exceeds the available budget." in report or "Insufficient vCPUs available in target cloud/budget." in report or "Insufficient RAM available in target cloud/budget." in report
+    assert "1-Year Savings Plans" not in report

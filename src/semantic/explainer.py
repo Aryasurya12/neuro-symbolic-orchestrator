@@ -64,12 +64,52 @@ class FinOpsExplainer:
             "-" * 82,
             " FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)",
             "-" * 82,
+        ]
+
+        if status.upper() == "INFEASIBLE":
+            lines.extend([
+                f"  - Monthly Budget Cap       : {usd_sym}{budget_max:,.2f} USD ({inr_sym}{budget_inr:,.2f} INR) / month",
+                f"  - Optimized Monthly Cost   : N/A",
+                f"  - Monthly Net Savings      : N/A",
+                f"  - Budget Utilization Rate  : N/A",
+                "-" * 82,
+            ])
+            
+            lines.append(" ACTIONABLE FINOPS RECOMMENDATIONS")
+            lines.append("-" * 82)
+            lines.append("  The requested workload cannot be satisfied under the supplied constraints.")
+            lines.append("  Consider increasing the budget, reducing required resources, or relaxing")
+            lines.append("  the relevant constraints.")
+            
+            if "error_message" in solver_result and solver_result["error_message"]:
+                lines.append("")
+                lines.append(f"  Reason: {solver_result['error_message']}")
+
+            if "constraint_status" in solver_result:
+                cstatus = solver_result["constraint_status"]
+                failed = []
+                if not cstatus.get("budget_ok", True): failed.append("The requested allocation exceeds the available budget.")
+                if not cstatus.get("vcpu_ok", True): failed.append("Insufficient vCPUs available in target cloud/budget.")
+                if not cstatus.get("ram_ok", True): failed.append("Insufficient RAM available in target cloud/budget.")
+                if not cstatus.get("latency_ok", True): failed.append("Latency constraints cannot be met.")
+                if not cstatus.get("sla_ok", True): failed.append("SLA availability constraints cannot be met.")
+                
+                if failed:
+                    lines.append("")
+                    lines.append("  Failed Constraints:")
+                    for f in failed:
+                        lines.append(f"  - {f}")
+
+            lines.append("=" * 82)
+            return "\n".join(lines)
+
+        lines.extend([
             f"  - Monthly Budget Cap       : {usd_sym}{budget_max:,.2f} USD ({inr_sym}{budget_inr:,.2f} INR) / month",
             f"  - Optimized Monthly Cost   : {usd_sym}{total_cost:,.2f} USD ({inr_sym}{cost_inr:,.2f} INR) / month",
             f"  - Monthly Net Savings      : {usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR) / month ({max(0.0, 100.0 - utilization):.1f}% under cap)",
             f"  - Budget Utilization Rate  : {utilization:>6.2f}%",
             "-" * 82,
-        ]
+        ])
 
         if problem == "ILP_VM_Allocation":
             allocated_vms = solver_result.get("allocated_vms", [])

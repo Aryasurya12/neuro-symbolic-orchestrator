@@ -158,11 +158,35 @@ class GeneticAlgorithm(OptimizationEngine):
                     "is_feasible": best_feasible
                 })
 
+        if not best_feasible:
+            # Capture best infeasible candidate to provide constraint diagnostics
+            costs, is_feasible, constraints = ObjectiveEvaluator.evaluate_ga_population(population, request)
+            fitness = costs + (~is_feasible) * 1e6
+            best_idx = np.argmin(fitness)
+            best_chrom = population[best_idx]
+            decisions = {
+                VM_CATALOG[i].name: int(best_chrom[i]) 
+                for i in range(self.num_genes) if best_chrom[i] > 0
+            }
+            status = ObjectiveEvaluator.create_constraint_status(
+                is_feasible=False,
+                budget_ok=bool(constraints["budget_ok"][best_idx]),
+                vcpu_ok=bool(constraints["vcpu_ok"][best_idx]),
+                ram_ok=bool(constraints["ram_ok"][best_idx])
+            )
+            best_candidate = OptimizationCandidate(
+                decision_variables=decisions,
+                objective_cost_usd=float(costs[best_idx]),
+                is_feasible=False,
+                constraint_status=status
+            )
+
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
         
         return OptimizationResult(
             best_candidate=best_candidate,
             is_feasible=best_feasible,
             metrics=OptimizationMetrics(runtime_ms=runtime_ms, iterations=self.generations),
-            solver_name="Vectorized_GA"
+            solver_name="Vectorized_GA",
+            error_message="No feasible candidate found." if not best_feasible else None
         )

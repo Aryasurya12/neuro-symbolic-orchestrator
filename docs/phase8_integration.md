@@ -29,3 +29,9 @@ To verify that this end-to-end integration did not break or significantly slow d
 
 ## Conclusion
 The orchestrator is now a fully functional, query-in/report-out neuro-symbolic engine capable of accurately processing plain English specifications and resolving them algebraically through deterministic solvers.
+
+## Phase 8.1: Infeasible Result Handling
+During the stabilization phase (8.1), precise handling for infeasible (UNSAT) optimizations was introduced. When hard constraints (e.g., budget limits, hardware minimums, or provider restrictions) cannot be met:
+1. **Solver Propagation**: Solvers (GA, PSO, Z3, OptiHive) capture the best available diagnostic candidate instead of throwing away results, embedding the exact `ConstraintStatus` failure reasons.
+2. **Explainer Layer**: `FinOpsExplainer` intercepts `status == 'INFEASIBLE'` and correctly zeroes out deceptive cost/savings metrics (printing `N/A`), replacing them with actionable constraint diagnostics.
+3. **Safety Guarantee**: Hard constraints can never be silently overridden by soft preferences, ensuring the orchestrator remains analytically rigorous.

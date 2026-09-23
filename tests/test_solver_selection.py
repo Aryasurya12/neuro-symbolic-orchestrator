@@ -49,7 +49,8 @@ def test_selector_rejects_infeasible():
     final = selector.select(req, res_list)
     
     assert not final.is_feasible
-    assert final.best_candidate is None
+    if final.best_candidate is not None:
+        assert final.best_candidate.is_feasible is False
 
 def test_selector_picks_best_feasible():
     req = _create_mock_req()

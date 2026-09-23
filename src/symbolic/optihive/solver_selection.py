@@ -56,12 +56,13 @@ class OptiHiveSelector:
         # 3. EM Latent-Class Selection
         if not filtered_candidates:
             runtime_ms = (time.perf_counter() - start_time) * 1000.0
+            best_infeasible = candidates[0] if candidates else None
             return OptimizationResult(
-                best_candidate=None,
+                best_candidate=best_infeasible,
                 is_feasible=False,
                 metrics=OptimizationMetrics(runtime_ms=runtime_ms),
                 solver_name="OptiHive_Selector",
-                error_message="No candidates passed the ILP syntactic filter."
+                error_message="No feasible candidate found."
             )
             
         best_fc, _, _ = self.em_selector.select(filtered_candidates)

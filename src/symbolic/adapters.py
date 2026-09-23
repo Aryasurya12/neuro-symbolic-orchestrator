@@ -23,11 +23,14 @@ def to_explainer_dict(result: OptimizationResult, contract: CloudOptimizationCon
     dictionary format expected by the FinOpsExplainer.
     """
     if not result.is_feasible or not result.best_candidate:
-        return {
+        out = {
             "status": "Infeasible",
             "solver": result.solver_name,
             "error_message": result.error_message
         }
+        if result.best_candidate and result.best_candidate.constraint_status:
+            out["constraint_status"] = result.best_candidate.constraint_status.model_dump()
+        return out
 
     cand = result.best_candidate
     decision_vars = cand.decision_variables
