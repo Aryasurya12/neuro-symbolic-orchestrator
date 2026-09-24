@@ -1,28 +1,55 @@
-"""SYM-2: Deterministic Graph-Steering (Soft Preference) Layer.
+﻿"""SYM-2: Learned Graph-Steering (Soft Preference) Layer with Deterministic Fallback.
 
 This layer produces soft heuristic preference scores based on graph topology.
-It serves as an abstraction for future SAGE-GNN/RGCN models.
+It incorporates a lightweight RGCN/GraphSAGE-inspired NumPy model for learned steering.
 It has absolutely zero authority to declare a candidate feasible or infeasible.
 """
 
+import os
 from typing import Dict, Tuple
-from .graph_model import InfrastructureGraph, RegionNode
+from .graph_model import InfrastructureGraph
+from .graph_gnn import NumPyGraphModel
 
 class GraphSteeringLayer:
     """Produces soft preferences for candidate region topologies."""
 
-    def __init__(self, graph: InfrastructureGraph):
+    def __init__(self, graph: InfrastructureGraph, model_path: str = "src/symbolic/solvers/gnn_checkpoint.json"):
         self.graph = graph
+        self.model = None
+        self._learned_embeddings = None
+        
+        # Attempt to load the learned model
+        if os.path.exists(model_path):
+            try:
+                self.model = NumPyGraphModel()
+                self.model.load(model_path)
+                self._learned_embeddings = self.model.forward(self.graph)
+                print(f"[GraphSteering] Loaded learned RGCN/GraphSAGE-inspired steering model from {model_path}.")
+            except Exception as e:
+                print(f"[GraphSteering] Error loading learned model: {e}. Falling back to deterministic heuristic.")
+                self.model = None
+        else:
+            print(f"[GraphSteering] Learned model checkpoint '{model_path}' not found. Using deterministic fallback.")
 
     def score_pair(self, id_a: str, id_b: str) -> float:
         """
-        Calculates a deterministic soft preference score for a pair of regions.
-        Higher score = worse preference (we treat it as a cost penalty).
+        Calculates a soft preference score for a pair of regions.
+        Higher score = worse preference (cost penalty).
         
-        Rules:
-        - Latency penalty: 1.0 unit per ms
-        - Geo-diversity: 50.0 bonus (negative penalty) if different geo
+        Uses learned model if available, else deterministic fallback.
         """
+        if self.model and self._learned_embeddings is not None:
+            # Learned steering
+            try:
+                return self.model.score_pair(self._learned_embeddings, id_a, id_b)
+            except Exception as e:
+                print(f"[GraphSteering] Learned scoring failed during inference: {e}. Using fallback.")
+                
+        # Deterministic fallback
+        return self._deterministic_score_pair(id_a, id_b)
+
+    def _deterministic_score_pair(self, id_a: str, id_b: str) -> float:
+        """Original deterministic fallback heuristic."""
         node_a = self.graph.get_node(id_a)
         node_b = self.graph.get_node(id_b)
         

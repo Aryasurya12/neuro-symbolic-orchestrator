@@ -4,7 +4,7 @@ from src.symbolic.solvers.graph_steering import GraphSteeringLayer
 
 def test_graph_steering_preferences():
     graph = InfrastructureGraph()
-    steering = GraphSteeringLayer(graph)
+    steering = GraphSteeringLayer(graph, model_path="dummy")
     
     # us-east-1 and eastus are both US_East geo, latency 12.0
     # Penalty: 12.0
@@ -18,7 +18,7 @@ def test_graph_steering_preferences():
 
 def test_graph_steering_all_pairs():
     graph = InfrastructureGraph()
-    steering = GraphSteeringLayer(graph)
+    steering = GraphSteeringLayer(graph, model_path="dummy")
     scores = steering.get_all_pair_scores()
     
     assert len(scores) == 25

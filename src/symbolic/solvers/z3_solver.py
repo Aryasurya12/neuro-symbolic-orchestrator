@@ -23,10 +23,19 @@ from .constraints import Z3ConstraintFactory
 class GraphSteeredZ3Solver(OptimizationEngine):
     """Z3 SMT Solver directed by graph-based soft preferences."""
 
-    def __init__(self, timeout_ms: int = 5000):
+    def __init__(self, timeout_ms: int = 5000, steering_mode: str = "learned"):
         self.timeout_ms = timeout_ms
+        self.steering_mode = steering_mode
         self.graph = InfrastructureGraph()
-        self.steering = GraphSteeringLayer(self.graph)
+        
+        # We handle initialization of the steering layer based on mode
+        self.steering = None
+        self.last_stats = {}
+        if self.steering_mode != "none":
+            self.steering = GraphSteeringLayer(self.graph)
+            # If deterministic is requested, we actively suppress the learned model
+            if self.steering_mode == "deterministic" and self.steering.model:
+                self.steering.model = None
 
     def solve(self, request: SymbolicOptimizationRequest, progress_callback: Optional[callable] = None) -> OptimizationResult:
         start_time = time.perf_counter()
@@ -72,15 +81,26 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         # Graph steering is integrated by adding its penalty score heavily discounted 
         # so it only breaks ties or biases choices WITHOUT violating budget limits.
         # It is strictly an objective term, never a hard assertion.
-        graph_preference_expr = self._build_steering_expr(selected_vars, nodes)
-        
-        # We minimize (Cost + 0.001 * GraphPenalty)
-        # This guarantees hard constraints dominate, cost dominates, and graph steering breaks ties.
-        solver.minimize(total_cost_expr + (0.001 * graph_preference_expr))
+        if self.steering_mode != "none":
+            graph_preference_expr = self._build_steering_expr(selected_vars, nodes)
+            solver.minimize(total_cost_expr + (0.001 * graph_preference_expr))
+        else:
+            solver.minimize(total_cost_expr)
 
         # 4. SOLVE
         result = solver.check()
         runtime_ms = (time.perf_counter() - start_time) * 1000.0
+        
+        # Extract statistics for benchmarking
+        try:
+            stats = solver.statistics()
+            self.last_stats = {
+                "conflicts": stats.get_key_value("conflicts") if "conflicts" in stats.keys() else 0,
+                "decisions": stats.get_key_value("decisions") if "decisions" in stats.keys() else 0,
+                "propagations": stats.get_key_value("propagations") if "propagations" in stats.keys() else 0,
+            }
+        except:
+            self.last_stats = {"conflicts": 0, "decisions": 0, "propagations": 0}
 
         if progress_callback:
             progress_callback({
