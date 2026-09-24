@@ -22,6 +22,9 @@ class Settings:
     OPENROUTER_API_KEY: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_API_KEY", "")
     )
+    OPENROUTER_MODEL: str = field(
+        default_factory=lambda: os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
+    )
 
     # Currency conversion & formatting settings
     USD_TO_INR_RATE: float = 85.0

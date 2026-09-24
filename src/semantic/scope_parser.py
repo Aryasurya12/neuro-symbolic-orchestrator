@@ -35,10 +35,43 @@ class SCOPEParser:
     supporting dual USD ($) and INR (₹) budget inputs.
     """
 
+    @staticmethod
+    def has_cloud_intent(text: str) -> bool:
+        """Smart Cloud Intent Check: Identifies if the user query contains domain-relevant
+
+        cloud computing, infrastructure sizing, or FinOps keywords/patterns.
+        """
+        if not text or not text.strip():
+            return False
+
+        lower = text.lower()
+        cloud_keywords = [
+            "aws", "azure", "gcp", "google cloud", "amazon", "cloud",
+            "vm", "vms", "instance", "instances", "vcpu", "vcpus", "core", "cores", "v-cpu",
+            "ram", "memory", "gb", "gigabytes", "compute", "storage",
+            "budget", "cost", "price", "spend", "spending", "savings", "discount",
+            "usd", "$", "dollar", "dollars", "₹", "inr", "rs", "rs.", "rupee", "rupees",
+            "latency", "ms", "response time", "ping", "delay",
+            "sla", "availability", "uptime", "fault tolerant", "redundant",
+            "autoscale", "autoscaling", "scaling", "bandwidth", "mbps", "gbps", "throughput",
+            "stream", "traffic", "pso",
+            "microservice", "microservices", "service", "services", "container", "containers",
+            "disaster recovery", "failover", "multi-region", "multi region", "multiregion",
+            "disjoint", "cross-region", "knapsack", "z3", "milp", "ilp", "placement", "topology",
+            "allocate", "allocation", "provision", "deploy", "workload", "cluster", "node", "nodes"
+        ]
+
+        return any(
+            re.search(r"\b" + re.escape(kw) + r"\b", lower) if kw not in ["$", "₹"] else kw in lower
+            for kw in cloud_keywords
+        )
+
     def __init__(self, matcher: CARMMatcher | None = None) -> None:
         self.matcher = matcher or CARMMatcher()
 
     def extract_constraints_from_text(self, text: str) -> Set[str]:
+
+
         """Analyzes natural language text and extracts symbolic constraint tokens.
 
         Returns an empty set if no relevant domain signals are present.
@@ -248,18 +281,24 @@ class SCOPEParser:
             converted_usd = round(inr_budget / settings.USD_TO_INR_RATE, 2)
             params["budget_max_usd"] = converted_usd
         else:
-            # 2. Check for USD or general Budget: e.g. "$300", "300 USD", "budget of $350", "budget 300"
-            usd_match = re.search(
-                r"(?:budget(?:\s+of|\s+max|\s+limit)?\s*[:=]?\s*\$?|\$)\s*(\d+(?:,\d+)*(?:\.\d+)?)",
-                text,
-                re.IGNORECASE,
-            )
-            if usd_match:
-                try:
-                    raw_val = usd_match.group(1).replace(",", "")
-                    params["budget_max_usd"] = float(raw_val)
-                except ValueError:
-                    pass
+            # 2. Check for USD or general Budget: e.g. "$300", "300 USD", "budget of $350", "budget 300", "under $300"
+            usd_patterns = [
+                r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+                r"(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:usd|dollars?)",
+                r"(?:budget|cost|price|spend|limit|under|cap)\s*(?:of|max|limit|under|is|to)?\s*[:=]?\s*\$?\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+            ]
+            for pat in usd_patterns:
+                m = re.search(pat, text, re.IGNORECASE)
+                if m:
+                    try:
+                        raw_val = m.group(1).replace(",", "")
+                        val = float(raw_val)
+                        if val > 0:
+                            params["budget_max_usd"] = val
+                            break
+                    except ValueError:
+                        pass
+
 
         # Service / Microservice count: e.g. "5 microservices", "3 services"
         service_match = re.search(
@@ -399,7 +438,6 @@ class SCOPEParser:
 
 def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
     """Fallback function using OpenRouter NVIDIA Nemotron LLM to extract a validated
-
     CloudOptimizationContract from complex, ambiguous natural language queries.
     """
     api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
@@ -407,6 +445,19 @@ def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
         base_url="https://openrouter.ai/api/v1",
         api_key=api_key,
     )
+
+    primary_model = os.getenv("OPENROUTER_MODEL") or getattr(
+        settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
+    )
+    candidate_models = [
+        primary_model,
+        "nvidia/nemotron-3.5-lightning:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+    ]
+    # Deduplicate while preserving order
+    models_to_try = list(dict.fromkeys(candidate_models))
 
     schema_json = json.dumps(CloudOptimizationContract.model_json_schema(), indent=2)
     system_prompt = (
@@ -417,28 +468,106 @@ def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
         "Return ONLY the valid raw JSON object matching the schema. Do not output markdown fences or explanatory text."
     )
 
-    response = client.chat.completions.create(
-        model="nvidia/llama-3.1-nemotron-70b-instruct",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_query},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.0,
+    last_error = None
+    for model_name in models_to_try:
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_query},
+                ],
+                temperature=0.0,
+            )
+
+            raw_content = (response.choices[0].message.content or "{}").strip()
+            # Clean markdown fences if present
+            if raw_content.startswith("```"):
+                raw_content = re.sub(r"^```(?:json)?\s*", "", raw_content)
+                raw_content = re.sub(r"\s*```$", "", raw_content)
+            raw_content = raw_content.strip()
+
+            return CloudOptimizationContract.model_validate_json(raw_content)
+        except Exception as err:
+            last_error = err
+            continue
+
+    raise RuntimeError(f"All candidate OpenRouter models failed. Last error: {last_error}")
+
+
+def has_cloud_intent(user_query: str) -> bool:
+    """Convenience module function to check if a query has cloud/FinOps intent."""
+    return SCOPEParser.has_cloud_intent(user_query)
+
+
+def validate_parsed_numbers(user_query: str, contract: CloudOptimizationContract) -> None:
+    """Checks if numeric quantities mentioned in user_query (budget, nodes, vCPUs, RAM)
+    were accurately captured. If the local parser missed or replaced with default values,
+    raises ValueError("Local parser missed custom constraints") to trigger parse_fallback_nemotron.
+    """
+    # 1. Check budget mentions ($300, 300 USD, 300 dollars, ₹25000, 25000 INR, budget 300, etc.)
+    budget_patterns = [
+        r"(?:\$|₹|rs\.?)\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+        r"(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:usd|dollars?|inr|rupees?)",
+        r"(?:budget|spend|cost)\s*(?:of|max|limit|under|is|to)?\s*[:=]?\s*\$?\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+    ]
+    for pat in budget_patterns:
+        m = re.search(pat, user_query, re.IGNORECASE)
+        if m:
+            raw_val = m.group(1) or (m.group(2) if len(m.groups()) >= 2 else None)
+            if raw_val:
+                num_val = float(raw_val.replace(",", ""))
+                inr_converted = round(num_val / getattr(settings, "USD_TO_INR_RATE", 83.0), 2)
+                # If contract budget does not match either direct USD or INR-converted value
+                if abs(contract.budget_max_usd - num_val) > 0.01 and abs(contract.budget_max_usd - inr_converted) > 1.0:
+                    raise ValueError(
+                        f"Local parser missed custom constraints: explicit budget '{num_val}' in query (contract has {contract.budget_max_usd})"
+                    )
+            break
+
+    # 2. Check nodes / services / instances count (e.g. 4 nodes, 5 microservices, 3 instances)
+    node_match = re.search(
+        r"(\d+)\s*(?:nodes?|instances?|microservices?|services?|components?)",
+        user_query,
+        re.IGNORECASE,
     )
+    if node_match:
+        expected_nodes = int(node_match.group(1))
+        if contract.service_count != expected_nodes:
+            raise ValueError(
+                f"Local parser missed custom constraints: explicit node/service count '{expected_nodes}' in query (contract has {contract.service_count})"
+            )
 
-    raw_json = response.choices[0].message.content or "{}"
-    return CloudOptimizationContract.model_validate_json(raw_json)
+    # 3. Check vCPU mentions (4 vCPUs, 8 cores, etc.)
+    vcpu_match = re.search(r"(\d+)\s*(?:vcpus?|cores?|v-cpu)", user_query, re.IGNORECASE)
+    if vcpu_match:
+        expected_vcpus = int(vcpu_match.group(1))
+        if contract.required_vcpus != expected_vcpus:
+            raise ValueError(
+                f"Local parser missed custom constraints: explicit vCPU count '{expected_vcpus}' in query (contract has {contract.required_vcpus})"
+            )
 
+    # 4. Check RAM mentions (16GB RAM, 32 GB memory, etc.)
+    ram_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)\s*(?:ram|memory)?", user_query, re.IGNORECASE)
+    if ram_match:
+        expected_ram = float(ram_match.group(1))
+        if abs(contract.required_ram_gb - expected_ram) > 0.01:
+            raise ValueError(
+                f"Local parser missed custom constraints: explicit RAM '{expected_ram}' in query (contract has {contract.required_ram_gb})"
+            )
 
-# ===========================================================================
-# 4. Hybrid Entrypoint Function
-# ===========================================================================
 
 def parse_query_local(user_query: str) -> CloudOptimizationContract:
-    """Parses a query using the fast local SCOPE regex & CARM matcher."""
+    """Parses a query using the fast local SCOPE regex & CARM matcher.
+
+    Raises ValueError if query lacks confident cloud intent or is empty.
+    """
     if not user_query or not user_query.strip():
         raise ValueError("Query is empty or whitespace.")
+
+    if not has_cloud_intent(user_query):
+        raise ValueError(f"Smart Intent Check failed: No cloud domain signals found in '{user_query}'.")
+
     parser = SCOPEParser()
     contract, _, _ = parser.parse_query_to_contract(user_query)
     return contract
@@ -448,12 +577,17 @@ def parse_query_hybrid(user_query: str) -> CloudOptimizationContract:
     """Hybrid entrypoint function:
 
     - Step 1: Attempts fast local SCOPE parsing (<5ms, $0 cost).
-    - Step 2: On failure or exception, falls back to OpenRouter NVIDIA Nemotron LLM.
-    - Step 3: Returns a safe default CloudOptimizationContract if all approaches fail.
+    - Step 2: Checks if the query contains explicit numeric constraints (e.g. '$300', '300 dollars', '4 nodes')
+      that the local parser missed or replaced with default values (like budget_max_usd == 500).
+      If custom constraints do not match, raises ValueError("Local parser missed custom constraints").
+    - Step 3: On failure/mismatch, falls back to OpenRouter NVIDIA Nemotron LLM.
+    - Step 4: Returns a safe default CloudOptimizationContract if all approaches fail.
     """
     # Step 1: Try executing the existing local parser
     try:
         contract = parse_query_local(user_query)
+        # Check if query contains explicit numeric constraints missed or defaulted by local parser
+        validate_parsed_numbers(user_query, contract)
         print("⚡ [Part A] Parsed via Local SCOPE Parser (<5ms, $0 Cost)")
         return contract
     except Exception as local_err:
@@ -475,3 +609,4 @@ def parse_query_hybrid(user_query: str) -> CloudOptimizationContract:
                 latency_max_ms=100.0,
                 sla_availability_pct=99.9,
             )
+

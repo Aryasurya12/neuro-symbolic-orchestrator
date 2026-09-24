@@ -1,14 +1,17 @@
 """SEM-5: Stage 6 FinOps Report Generator & Natural Language Explainer."""
 
-from typing import Any, Dict
+import os
+import re
+from typing import Any, Dict, List, Optional
 from config.settings import settings
 from src.semantic.schemas import CloudOptimizationContract
+from openai import OpenAI
 
 
 class FinOpsExplainer:
     """Transforms raw symbolic optimization solver telemetry and Pydantic contracts
-
-    into executive-level FinOps deployment reports with multi-currency support (USD / INR).
+    into executive-level FinOps deployment reports with multi-currency support (USD / INR)
+    and dynamic, contextualized FinOps recommendations.
     """
 
     @staticmethod
@@ -19,15 +22,216 @@ class FinOpsExplainer:
         return round(usd_amount * rate, 2)
 
     @classmethod
+    def generate_dynamic_recommendations(
+        cls,
+        contract: CloudOptimizationContract,
+        solver_result: Dict[str, Any],
+        exchange_rate: float = settings.USD_TO_INR_RATE,
+    ) -> List[str]:
+        """Generates dynamic, non-hardcoded FinOps recommendations tailored specifically
+        to the cloud provider, allocated instance families, budget headroom, and problem type.
+        """
+        recs: List[str] = []
+        inr_sym = settings.CURRENCY_SYMBOL_INR
+        usd_sym = settings.CURRENCY_SYMBOL_USD
+
+        budget_max = contract.budget_max_usd
+        total_cost = solver_result.get(
+            "total_monthly_cost_usd",
+            solver_result.get("estimated_monthly_cost_usd", 0.0),
+        )
+        savings = solver_result.get(
+            "cost_savings_usd", max(0.0, budget_max - total_cost)
+        )
+        savings_inr = cls.usd_to_inr(savings, exchange_rate)
+        utilization = solver_result.get(
+            "budget_utilized_pct",
+            round((total_cost / budget_max) * 100, 2) if budget_max > 0 else 0.0,
+        )
+
+        providers = [p.upper() for p in contract.cloud_providers]
+        allocated_vms = solver_result.get("allocated_vms", [])
+        instance_types = [vm.get("instance_type", "") for vm in allocated_vms if vm.get("instance_type")]
+        instance_summary = ", ".join(set(instance_types)) if instance_types else "allocated compute"
+
+        # 1. Cloud Provider & Commitment Strategy
+        if "AWS" in providers:
+            if any("t3" in it.lower() or "t4" in it.lower() for it in instance_types):
+                recs.append(
+                    f"Pricing Strategy: Workload utilizes burstable instances ({instance_summary}). "
+                    f"Enroll in AWS 1-Year Compute Savings Plans (saves ~28-34%) or migrate to ARM64 Graviton (t4g) "
+                    f"for up to 20% better price-to-performance."
+                )
+            else:
+                recs.append(
+                    f"Pricing Strategy: Commit to 1-Year AWS EC2 Instance Savings Plans or Standard Reserved Instances "
+                    f"for steady-state compute ({instance_summary}), yielding 30-45% discount over on-demand rates."
+                )
+        elif "AZURE" in providers:
+            recs.append(
+                f"Pricing Strategy: Purchase Azure 1-Yr/3-Yr Reserved Virtual Machine Instances with Azure Hybrid Benefit (AHB) "
+                f"to reduce base compute expenses by up to 40-65%."
+            )
+        elif "GCP" in providers:
+            recs.append(
+                f"Pricing Strategy: Activate Google Cloud 1-Year Committed Use Discounts (CUDs) and evaluate Spot VMs "
+                f"for stateless batch components to achieve 60-90% cost reduction."
+            )
+        else:
+            recs.append(
+                f"Pricing Strategy: Leverage cross-cloud commitment tiers across {', '.join(contract.cloud_providers)} "
+                f"and evaluate containerized spot instances for stateless service components."
+            )
+
+        # 2. Budget Headroom & Capacity Strategy
+        if utilization < 30.0:
+            recs.append(
+                f"Budget Headroom ({utilization:.1f}% utilized): You have a monthly surplus of "
+                f"{usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR). Reallocate surplus capital toward "
+                f"multi-AZ automated failover and managed snapshot replication."
+            )
+        elif utilization > 75.0:
+            recs.append(
+                f"Budget Warning ({utilization:.1f}% utilized): Spending is near the {usd_sym}{budget_max:,.2f} USD cap "
+                f"with only {usd_sym}{savings:,.2f} USD buffer. Configure automated billing alerts and scaling throttles "
+                f"at 85% to prevent overage."
+            )
+        else:
+            recs.append(
+                f"Spend Governance ({utilization:.1f}% utilized): Optimal operating band with {usd_sym}{savings:,.2f} USD "
+                f"({inr_sym}{savings_inr:,.2f} INR)/mo buffer. Establish automated CloudWatch/Prometheus anomaly alerts at 80%."
+            )
+
+        # 3. Problem & Architecture Specific Optimization
+        if contract.problem_type == "ILP_VM_Allocation":
+            if contract.service_count > 1:
+                recs.append(
+                    f"Workload Bin-Packing: Consolidate the {contract.service_count} requested microservices into containerized "
+                    f"pods (ECS/EKS/Docker) with strict CPU/memory limits to maximize utilization density on {instance_summary}."
+                )
+            else:
+                recs.append(
+                    f"Compute Rightsizing: Track sustained CPU credit usage on {instance_summary} for 14 days; "
+                    f"scale down instance size if average utilization remains below 40%."
+                )
+        elif contract.problem_type == "PSO_Continuous_Scaling":
+            target_cpu = solver_result.get("target_cpu_utilization_pct", 70.0)
+            recs.append(
+                f"Autoscaling Governance: Set Horizontal Pod Autoscaler (HPA) cooldown periods (300s scale-down window) "
+                f"targeting {target_cpu:.0f}% CPU to avoid resource flapping and transient billing ticks."
+            )
+        elif contract.problem_type == "Z3_Graph_Disaster_Recovery":
+            p_region = solver_result.get("primary_region", "Primary")
+            s_region = solver_result.get("secondary_region", "Secondary")
+            lat = solver_result.get("inter_region_latency_ms", 0.0)
+            recs.append(
+                f"Data Transfer & Egress: Inter-region replication between {p_region} and {s_region} ({lat:.1f}ms latency) "
+                f"incurs cross-region transfer fees; enable zstd/gzip compression to minimize data egress costs."
+            )
+
+        # 4. Mandatory Tagging & Attribution
+        recs.append(
+            f"Governance & Attribution: Apply mandatory Cost Allocation Tags (`Environment`, `CostCenter`, `Owner:FinOps`) "
+            f"across all {contract.service_count} service resources for 100% cost attribution."
+        )
+
+        return recs
+
+    @classmethod
+    def generate_llm_recommendations(
+        cls,
+        contract: CloudOptimizationContract,
+        solver_result: Dict[str, Any],
+        timeout_seconds: float = 6.0,
+    ) -> Optional[List[str]]:
+        """Invokes OpenRouter NVIDIA Nemotron to generate dynamic, AI-reasoned FinOps advice.
+        Returns a list of recommendation strings, or None on failure/timeout.
+        """
+        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
+        if not api_key:
+            return None
+
+        primary_model = os.getenv("OPENROUTER_MODEL") or getattr(
+            settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
+        )
+        candidate_models = [
+            primary_model,
+            "nvidia/nemotron-3.5-lightning:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+        ]
+        models_to_try = list(dict.fromkeys(candidate_models))
+
+        total_cost = solver_result.get(
+            "total_monthly_cost_usd",
+            solver_result.get("estimated_monthly_cost_usd", 0.0),
+        )
+        utilization = solver_result.get("budget_utilized_pct", 0.0)
+        vms = [
+            f"{v.get('provider', '')} {v.get('instance_type', '')} x{v.get('count', 1)}"
+            for v in solver_result.get("allocated_vms", [])
+        ]
+        vms_str = ", ".join(vms) if vms else "Optimized compute instance"
+
+        prompt = (
+            f"You are a Principal FinOps Architect. Analyze this cloud deployment result:\n"
+            f"- Problem Type: {contract.problem_type}\n"
+            f"- Cloud Provider(s): {', '.join(contract.cloud_providers)}\n"
+            f"- Target Services: {contract.service_count} service(s), {contract.required_vcpus} vCPUs, {contract.required_ram_gb}GB RAM\n"
+            f"- Budget Cap: ${contract.budget_max_usd:.2f} USD\n"
+            f"- Optimized Monthly Cost: ${total_cost:.2f} USD ({utilization:.1f}% budget utilized)\n"
+            f"- Placed Resources: {vms_str}\n\n"
+            f"Provide exactly 3 concise, highly-actionable, technical FinOps recommendations tailored to this specific result. "
+            f"Include specific pricing models (Savings Plans/RIs/CUDs/Spot), monitoring thresholds, and architecture rightsizing tactics. "
+            f"Output ONLY 3 numbered lines:\n"
+            f"1. <recommendation>\n"
+            f"2. <recommendation>\n"
+            f"3. <recommendation>"
+        )
+
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+            timeout=timeout_seconds,
+        )
+
+        for model_name in models_to_try:
+            try:
+                resp = client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=350,
+                )
+                if not resp or not resp.choices:
+                    continue
+                content = (resp.choices[0].message.content or "").strip()
+                lines = [l.strip() for l in content.split("\n") if l.strip()]
+                recs = []
+                for line in lines:
+                    if re.match(r"^\d+[\.\)]\s+", line):
+                        cleaned = re.sub(r"^\d+[\.\)]\s*", "", line)
+                        # Sanitize any non-standard unicode characters
+                        cleaned = cleaned.encode("ascii", "replace").decode("ascii")
+                        if cleaned:
+                            recs.append(cleaned)
+                if len(recs) >= 2:
+                    return recs[:4]
+            except Exception:
+                continue
+
+        return None
+
+    @classmethod
     def generate_report(
         cls,
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
         exchange_rate: float = settings.USD_TO_INR_RATE,
+        enable_llm_explainer: bool = True,
     ) -> str:
         """Generates a structured ASCII Executive FinOps Deployment Report
-
-        displaying both USD and INR currency metrics.
+        displaying dual-currency metrics ($ and ₹) and dynamic, contextual recommendations.
         """
         problem = contract.problem_type
         status = solver_result.get("status", "UNKNOWN")
@@ -129,14 +333,27 @@ class FinOpsExplainer:
                 f"  - Composite Availability   : {achieved_sla:.5f}% SLA (Target: {contract.sla_availability_pct:.3f}%)",
             ])
 
+        # Obtain dynamic / LLM recommendations
+        recommendations = None
+        if enable_llm_explainer:
+            try:
+                recommendations = cls.generate_llm_recommendations(contract, solver_result)
+            except Exception:
+                recommendations = None
+
+        if not recommendations:
+            recommendations = cls.generate_dynamic_recommendations(
+                contract, solver_result, exchange_rate
+            )
+
         lines.extend([
             "-" * 82,
             " ACTIONABLE FINOPS RECOMMENDATIONS",
             "-" * 82,
-            "  1. Commit to 1-Year Savings Plans or Reserved Instances for 20-35% additional discount.",
-            "  2. Establish CloudWatch/Prometheus anomaly alerts triggered at 85% budget utilization.",
-            "  3. Schedule automated rightsizing reviews after 14 days of sustained metric observation.",
-            "=" * 82,
         ])
+        for idx, rec in enumerate(recommendations, 1):
+            # Wrap lines cleanly if needed
+            lines.append(f"  {idx}. {rec}")
 
+        lines.append("=" * 82)
         return "\n".join(lines)

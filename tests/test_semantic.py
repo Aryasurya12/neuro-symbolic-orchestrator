@@ -348,14 +348,56 @@ class TestHybridSCOPEParser(unittest.TestCase):
         self.assertEqual(contract.problem_type, "Z3_Graph_Disaster_Recovery")
         self.assertEqual(contract.budget_max_usd, 600.0)
 
-    @patch("src.semantic.scope_parser.parse_fallback_nemotron", side_effect=Exception("API Rate Limit / Network Down"))
-    @patch("src.semantic.scope_parser.parse_query_local", side_effect=Exception("Local parse failed"))
-    def test_parse_query_hybrid_failsafe_default_on_double_error(self, mock_local, mock_fallback):
-        contract = parse_query_hybrid("invalid query that crashes all")
-        self.assertEqual(contract.problem_type, "ILP_VM_Allocation")
-        self.assertEqual(contract.cloud_providers, ["AWS"])
-        self.assertEqual(contract.budget_max_usd, settings.DEFAULT_BUDGET_USD)
+    def test_has_cloud_intent_detects_cloud_queries(self):
+        self.assertTrue(SCOPEParser.has_cloud_intent("I need 4 vCPUs on AWS"))
+        self.assertTrue(SCOPEParser.has_cloud_intent("Deploy containers under $300 budget"))
+        self.assertTrue(SCOPEParser.has_cloud_intent("Multi-region disaster recovery with 99.99% SLA"))
+        self.assertFalse(SCOPEParser.has_cloud_intent("What is the capital of France?"))
+        self.assertFalse(SCOPEParser.has_cloud_intent("Good morning!"))
+        self.assertFalse(SCOPEParser.has_cloud_intent(""))
 
+    def test_parse_query_local_raises_on_non_cloud_query(self):
+        with self.assertRaises(ValueError) as ctx:
+            parse_query_local("Tell me a funny joke about cats")
+        self.assertIn("Smart Intent Check failed", str(ctx.exception))
+
+    def test_numeric_validation_detects_mismatch(self):
+        from src.semantic.scope_parser import validate_parsed_numbers
+        # Contract with budget 500 but query mentions $300
+        contract = CloudOptimizationContract(
+            problem_type="ILP_VM_Allocation",
+            budget_max_usd=500.0,
+            required_vcpus=1,
+            required_ram_gb=1.0,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            validate_parsed_numbers("Deploy on AWS with budget $300", contract)
+        self.assertIn("Local parser missed custom constraints", str(ctx.exception))
+
+        # Contract with vCPUs 1 but query mentions 8 cores
+        with self.assertRaises(ValueError) as ctx:
+            validate_parsed_numbers("Deploy on AWS with 8 cores", contract)
+        self.assertIn("Local parser missed custom constraints", str(ctx.exception))
+
+    @patch("src.semantic.scope_parser.parse_fallback_nemotron")
+    def test_parse_query_hybrid_fallback_on_missed_constraints(self, mock_fallback):
+        mock_fallback.return_value = CloudOptimizationContract(
+            problem_type="ILP_VM_Allocation",
+            cloud_providers=["AWS"],
+            budget_max_usd=300.0,
+            required_vcpus=4,
+            required_ram_gb=16.0,
+        )
+        with patch("src.semantic.scope_parser.parse_query_local") as mock_local:
+            mock_local.return_value = CloudOptimizationContract(
+                problem_type="ILP_VM_Allocation",
+                budget_max_usd=500.0,
+                required_vcpus=1,
+                required_ram_gb=1.0,
+            )
+            contract = parse_query_hybrid("Need 4 vCPUs on AWS with budget $300")
+            mock_fallback.assert_called_once_with("Need 4 vCPUs on AWS with budget $300")
+            self.assertEqual(contract.budget_max_usd, 300.0)
 
 
 if __name__ == "__main__":
