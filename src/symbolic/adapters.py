@@ -55,7 +55,7 @@ def to_explainer_dict(result: OptimizationResult, contract: CloudOptimizationCon
         for sku_name, count in decision_vars.items():
             if count > 0:
                 # Find SKU in catalog
-                sku = next((s for s in catalog if s.id == sku_name), None)
+                sku = next((s for s in catalog if s.id == sku_name or s.sku == sku_name), None)
                 if sku:
                     monthly_cost = sku.hourly_price_usd * 730 * count
                     allocated_vms.append({
