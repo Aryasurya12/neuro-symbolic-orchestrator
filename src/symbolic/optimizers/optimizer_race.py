@@ -1,6 +1,7 @@
 """SYM-1: Parallel / Virtual Mathematical Race."""
 
 import time
+import concurrent.futures
 from typing import Optional
 
 from src.symbolic.models import (
@@ -28,9 +29,34 @@ class OptimizerRace:
         """
         start_time = time.perf_counter()
 
-        # Execute sequentially for now
-        ga_result = self.ga_engine.solve(request, progress_callback)
-        pso_result = self.pso_engine.solve(request, progress_callback)
+        ga_result = None
+        pso_result = None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_ga = executor.submit(self.ga_engine.solve, request, progress_callback)
+            future_pso = executor.submit(self.pso_engine.solve, request, progress_callback)
+
+            try:
+                ga_result = future_ga.result()
+            except Exception as e:
+                ga_result = OptimizationResult(
+                    solver_name="GeneticAlgorithm",
+                    is_feasible=False,
+                    best_candidate=None,
+                    metrics=OptimizationMetrics(runtime_ms=0.0, iterations=0, objective_history=[], memory_used_mb=0.0),
+                    error_message=f"GA failed: {str(e)}"
+                )
+
+            try:
+                pso_result = future_pso.result()
+            except Exception as e:
+                pso_result = OptimizationResult(
+                    solver_name="ParticleSwarmOptimization",
+                    is_feasible=False,
+                    best_candidate=None,
+                    metrics=OptimizationMetrics(runtime_ms=0.0, iterations=0, objective_history=[], memory_used_mb=0.0),
+                    error_message=f"PSO failed: {str(e)}"
+                )
 
         # Selection logic
         best_result = self._select_best(ga_result, pso_result)
