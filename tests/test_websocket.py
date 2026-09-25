@@ -7,13 +7,13 @@ def test_websocket_flow():
     
     payload = {
         "problem_type": "Test",
-        "cloud_providers": ["AWS", "Azure"],
-        "budget_max_usd": 300.0,
+        "cloud_providers": ["AWS", "Azure", "GCP"],
+        "budget_max_usd": 1000.0,
         "service_count": 1,
         "required_vcpus": 4,
         "required_ram_gb": 16.0,
-        "latency_max_ms": 50.0,
-        "sla_availability_pct": 99.0
+        "latency_max_ms": 0.0,
+        "sla_availability_pct": 0.0
     }
     
     with client.websocket_connect("/ws/optimize") as websocket:

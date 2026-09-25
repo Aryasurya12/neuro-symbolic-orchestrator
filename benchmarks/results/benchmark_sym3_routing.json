@@ -1,0 +1,251 @@
+[
+  {
+    "scenario": "VM_ALLOCATION",
+    "feasible": true,
+    "baseline_ms": 72.48700002674013,
+    "adaptive_ms": 20.82239999435842,
+    "routing": {
+      "selected_solvers": [
+        "Z3",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          70.0
+        ],
+        [
+          "PSO",
+          40.0
+        ],
+        [
+          "GA",
+          20.0
+        ]
+      ],
+      "scores": {
+        "GA": 20.0,
+        "PSO": 40.0,
+        "Z3": 70.0
+      },
+      "features": {
+        "resource_scale": 1024.0,
+        "service_scale": 5,
+        "budget_tightness": 0.9765625,
+        "provider_count": 2,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 2,
+        "is_highly_constrained": true
+      },
+      "reason": "Medium confidence, executing Z3 and PSO.",
+      "confidence": "MEDIUM"
+    }
+  },
+  {
+    "scenario": "COMPUTE_INTENSIVE",
+    "feasible": true,
+    "baseline_ms": 19.441999960690737,
+    "adaptive_ms": 5.167299997992814,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "GA",
+          70.0
+        ],
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 70.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 262144.0,
+        "service_scale": 15,
+        "budget_tightness": 0.019073486328125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Medium confidence, executing GA and PSO.",
+      "confidence": "MEDIUM"
+    }
+  },
+  {
+    "scenario": "COST_OPTIMIZATION",
+    "feasible": true,
+    "baseline_ms": 22.67279999796301,
+    "adaptive_ms": 5.5989999091252685,
+    "routing": {
+      "selected_solvers": [
+        "PSO",
+        "GA"
+      ],
+      "ranked_solvers": [
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "GA",
+          50.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 50.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 128.0,
+        "service_scale": 3,
+        "budget_tightness": 0.78125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Medium confidence, executing PSO and GA.",
+      "confidence": "MEDIUM"
+    }
+  },
+  {
+    "scenario": "COST_OPTIMIZATION",
+    "feasible": false,
+    "baseline_ms": 21.041899919509888,
+    "adaptive_ms": 18.251500092446804,
+    "routing": {}
+  },
+  {
+    "scenario": "MULTI_CLOUD",
+    "feasible": true,
+    "baseline_ms": 22.18679990619421,
+    "adaptive_ms": 4.977600066922605,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "GA",
+          70.0
+        ],
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 70.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 4096.0,
+        "service_scale": 8,
+        "budget_tightness": 0.48828125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Medium confidence, executing GA and PSO.",
+      "confidence": "MEDIUM"
+    }
+  },
+  {
+    "scenario": "LOW_LATENCY",
+    "feasible": false,
+    "baseline_ms": 20.03999997396022,
+    "adaptive_ms": 17.30039995163679,
+    "routing": {}
+  },
+  {
+    "scenario": "HIGH_AVAILABILITY",
+    "feasible": false,
+    "baseline_ms": 23.22839992120862,
+    "adaptive_ms": 17.237700056284666,
+    "routing": {}
+  },
+  {
+    "scenario": "DISASTER_RECOVERY",
+    "feasible": false,
+    "baseline_ms": 20.726900082081556,
+    "adaptive_ms": 29.49709992390126,
+    "routing": {}
+  },
+  {
+    "scenario": "SMALL_PROBLEM",
+    "feasible": true,
+    "baseline_ms": 34.20600004028529,
+    "adaptive_ms": 5.591199966147542,
+    "routing": {
+      "selected_solvers": [
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "PSO",
+          75.0
+        ],
+        [
+          "GA",
+          50.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 50.0,
+        "PSO": 75.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 8.0,
+        "service_scale": 1,
+        "budget_tightness": 62.5,
+        "provider_count": 1,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "High confidence in PSO due to strong feature match.",
+      "confidence": "HIGH"
+    }
+  },
+  {
+    "scenario": "LARGE_PROBLEM",
+    "feasible": false,
+    "baseline_ms": 41.048699989914894,
+    "adaptive_ms": 22.954300045967102,
+    "routing": {}
+  }
+]
