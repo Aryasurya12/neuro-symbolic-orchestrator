@@ -8,10 +8,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 30.3700008392334,
-    "semantic_latency_ms": 0.24239998310804367,
-    "symbolic_latency_ms": 13.264400069601834,
-    "explanation_latency_ms": 0.11309992987662554,
-    "total_end_to_end_latency_ms": 13.619899982586503,
+    "semantic_latency_ms": 0.2595999976620078,
+    "symbolic_latency_ms": 13.465399970300496,
+    "explanation_latency_ms": 0.09200000204145908,
+    "total_end_to_end_latency_ms": 13.816999970003963,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -23,10 +23,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 280.32000732421875,
-    "semantic_latency_ms": 0.2370999427512288,
-    "symbolic_latency_ms": 11.271500028669834,
-    "explanation_latency_ms": 0.09019998833537102,
-    "total_end_to_end_latency_ms": 11.598799959756434,
+    "semantic_latency_ms": 0.25479996111243963,
+    "symbolic_latency_ms": 15.235599945299327,
+    "explanation_latency_ms": 0.09630003478378057,
+    "total_end_to_end_latency_ms": 15.586699941195548,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -38,10 +38,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 485.89000701904297,
-    "semantic_latency_ms": 0.23300002794712782,
-    "symbolic_latency_ms": 11.106800055131316,
-    "explanation_latency_ms": 0.10559998918324709,
-    "total_end_to_end_latency_ms": 11.445400072261691,
+    "semantic_latency_ms": 0.24580000899732113,
+    "symbolic_latency_ms": 11.716200038790703,
+    "explanation_latency_ms": 0.10380009189248085,
+    "total_end_to_end_latency_ms": 12.065800139680505,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -53,10 +53,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 121.47000122070312,
-    "semantic_latency_ms": 0.22090005222707987,
-    "symbolic_latency_ms": 11.78609998896718,
-    "explanation_latency_ms": 0.09290000889450312,
-    "total_end_to_end_latency_ms": 12.099900050088763,
+    "semantic_latency_ms": 0.22200006060302258,
+    "symbolic_latency_ms": 14.80590004939586,
+    "explanation_latency_ms": 0.08749996777623892,
+    "total_end_to_end_latency_ms": 15.11540007777512,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -68,10 +68,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 97.81999969482422,
-    "semantic_latency_ms": 0.21810003090649843,
-    "symbolic_latency_ms": 12.107099988497794,
-    "explanation_latency_ms": 0.0906999921426177,
-    "total_end_to_end_latency_ms": 12.41590001154691,
+    "semantic_latency_ms": 0.23779994808137417,
+    "symbolic_latency_ms": 13.231199933215976,
+    "explanation_latency_ms": 0.09750004392117262,
+    "total_end_to_end_latency_ms": 13.566499925218523,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -83,10 +83,10 @@
     "expected_feasible": false,
     "is_feasible": false,
     "objective_cost_usd": "N/A",
-    "semantic_latency_ms": 0.20309991668909788,
-    "symbolic_latency_ms": 11.013599927537143,
-    "explanation_latency_ms": 0.06689992733299732,
-    "total_end_to_end_latency_ms": 11.283599771559238,
+    "semantic_latency_ms": 0.2098000841215253,
+    "symbolic_latency_ms": 12.800300028175116,
+    "explanation_latency_ms": 0.06490002851933241,
+    "total_end_to_end_latency_ms": 13.075000140815973,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -98,10 +98,10 @@
     "expected_feasible": false,
     "is_feasible": false,
     "objective_cost_usd": "N/A",
-    "semantic_latency_ms": 0.2207999350503087,
-    "symbolic_latency_ms": 11.678499984554946,
-    "explanation_latency_ms": 0.06590003613382578,
-    "total_end_to_end_latency_ms": 11.965199955739081,
+    "semantic_latency_ms": 0.23959996178746223,
+    "symbolic_latency_ms": 10.49890008289367,
+    "explanation_latency_ms": 0.0654999166727066,
+    "total_end_to_end_latency_ms": 10.803999961353838,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -113,10 +113,10 @@
     "expected_feasible": false,
     "is_feasible": false,
     "objective_cost_usd": "N/A",
-    "semantic_latency_ms": 0.21840003319084644,
-    "symbolic_latency_ms": 10.342299938201904,
-    "explanation_latency_ms": 0.06539991591125727,
-    "total_end_to_end_latency_ms": 10.626099887304008,
+    "semantic_latency_ms": 0.21630001720041037,
+    "symbolic_latency_ms": 13.006099965423346,
+    "explanation_latency_ms": 0.062700011767447,
+    "total_end_to_end_latency_ms": 13.285099994391203,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -128,10 +128,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 30.3700008392334,
-    "semantic_latency_ms": 0.20790006965398788,
-    "symbolic_latency_ms": 12.320199981331825,
-    "explanation_latency_ms": 0.09060010779649019,
-    "total_end_to_end_latency_ms": 12.618700158782303,
+    "semantic_latency_ms": 0.2180999144911766,
+    "symbolic_latency_ms": 14.033399987965822,
+    "explanation_latency_ms": 0.08740008343011141,
+    "total_end_to_end_latency_ms": 14.33889998588711,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -143,10 +143,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 97.81999969482422,
-    "semantic_latency_ms": 0.23969996254891157,
-    "symbolic_latency_ms": 12.410399969667196,
-    "explanation_latency_ms": 0.09180000051856041,
-    "total_end_to_end_latency_ms": 12.741899932734668,
+    "semantic_latency_ms": 0.24369999300688505,
+    "symbolic_latency_ms": 11.02620002347976,
+    "explanation_latency_ms": 0.08839997462928295,
+    "total_end_to_end_latency_ms": 11.358299991115928,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -158,10 +158,10 @@
     "expected_feasible": true,
     "is_feasible": true,
     "objective_cost_usd": 248.0,
-    "semantic_latency_ms": 0.2516999375075102,
-    "symbolic_latency_ms": 24.734399979934096,
-    "explanation_latency_ms": 0.07740000728517771,
-    "total_end_to_end_latency_ms": 25.063499924726784,
+    "semantic_latency_ms": 0.2443999983370304,
+    "symbolic_latency_ms": 25.560299982316792,
+    "explanation_latency_ms": 0.07920002099126577,
+    "total_end_to_end_latency_ms": 25.883900001645088,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -173,10 +173,10 @@
     "expected_feasible": false,
     "is_feasible": false,
     "objective_cost_usd": "N/A",
-    "semantic_latency_ms": 0.23370003327727318,
-    "symbolic_latency_ms": 17.37180002965033,
-    "explanation_latency_ms": 0.05989999044686556,
-    "total_end_to_end_latency_ms": 17.66540005337447,
+    "semantic_latency_ms": 0.25210005696862936,
+    "symbolic_latency_ms": 18.21960008237511,
+    "explanation_latency_ms": 0.061400001868605614,
+    "total_end_to_end_latency_ms": 18.533100141212344,
     "hard_constraint_violations_detected": 0
   },
   {
@@ -188,10 +188,10 @@
     "expected_feasible": false,
     "is_feasible": false,
     "objective_cost_usd": "N/A",
-    "semantic_latency_ms": 0.2269999822601676,
-    "symbolic_latency_ms": 11.597000062465668,
-    "explanation_latency_ms": 0.0700000673532486,
-    "total_end_to_end_latency_ms": 11.894000112079084,
+    "semantic_latency_ms": 0.21049997303634882,
+    "symbolic_latency_ms": 13.273100019432604,
+    "explanation_latency_ms": 0.0638000201433897,
+    "total_end_to_end_latency_ms": 13.547400012612343,
     "hard_constraint_violations_detected": 0
   }
 ]

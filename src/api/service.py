@@ -1,4 +1,6 @@
 import asyncio
+import time
+import uuid
 from typing import Callable, Dict, Any, Optional
 
 from src.symbolic.models import SymbolicOptimizationRequest, OptimizationResult
@@ -19,12 +21,16 @@ class OptimizationService:
     def run_pipeline_sync(
         self, 
         request: SymbolicOptimizationRequest, 
-        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+        progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        run_id: Optional[str] = None,
+        scenario_tag: Optional[str] = None,
     ) -> OptimizationResult:
         """
         Runs the full Phase 1-4 pipeline synchronously.
         This must be called via asyncio.to_thread in FastAPI.
         """
+        _start = time.perf_counter()
+        _run_id = run_id or str(uuid.uuid4())
         ga_engine = GeneticAlgorithm(population_size=50, generations=20)
         pso_engine = ParticleSwarmOptimization(swarm_size=20, iterations=20)
         z3_engine = GraphSteeredZ3Solver(timeout_ms=2000)
@@ -107,7 +113,22 @@ class OptimizationService:
         
         if progress_callback:
             progress_callback({"event": "solver_completed", "solver": "OptiHiveSelector"})
-            
+
+        # SYM-5: Telemetry collection — failure-safe, never blocks result
+        try:
+            from src.symbolic.telemetry.collector import collect as _collect
+            _total_ms = (time.perf_counter() - _start) * 1000.0
+            _collect(
+                request=request,
+                result=final_result,
+                routing_metadata=final_result.metadata.get("routing", {}),
+                total_runtime_ms=_total_ms,
+                run_id=_run_id,
+                scenario_tag=scenario_tag,
+            )
+        except Exception:
+            pass
+
         return final_result
 
     async def run_pipeline_async(

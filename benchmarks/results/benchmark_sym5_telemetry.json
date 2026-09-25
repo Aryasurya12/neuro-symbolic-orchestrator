@@ -1,0 +1,102 @@
+[
+  {
+    "scenario": "VM_ALLOCATION",
+    "feasible": false,
+    "sym3_ms": 95.77770007308573,
+    "sym4_ms": 20.511599956080317,
+    "sym5_ms": 28.585699968971312,
+    "telemetry_overhead_ms": 8.074100012890995,
+    "routing_mode": "learned_high",
+    "selected_solvers": "Z3"
+  },
+  {
+    "scenario": "COMPUTE_INTENSIVE",
+    "feasible": true,
+    "sym3_ms": 22.94419996906072,
+    "sym4_ms": 5.754400044679642,
+    "sym5_ms": 14.943099929951131,
+    "telemetry_overhead_ms": 9.18869988527149,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO"
+  },
+  {
+    "scenario": "COST_OPTIMIZATION",
+    "feasible": true,
+    "sym3_ms": 17.026099958457053,
+    "sym4_ms": 21.079699974507093,
+    "sym5_ms": 30.969200073741376,
+    "telemetry_overhead_ms": 9.889500099234283,
+    "routing_mode": "learned_medium",
+    "selected_solvers": "PSO,GA,Z3"
+  },
+  {
+    "scenario": "COST_INFEASIBLE",
+    "feasible": false,
+    "sym3_ms": 27.38569991197437,
+    "sym4_ms": 19.512400031089783,
+    "sym5_ms": 32.20090002287179,
+    "telemetry_overhead_ms": 12.68849999178201,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO,Z3"
+  },
+  {
+    "scenario": "MULTI_CLOUD",
+    "feasible": true,
+    "sym3_ms": 16.478999983519316,
+    "sym4_ms": 6.2729999190196395,
+    "sym5_ms": 15.145900077186525,
+    "telemetry_overhead_ms": 8.872900158166885,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO"
+  },
+  {
+    "scenario": "LOW_LATENCY",
+    "feasible": false,
+    "sym3_ms": 29.177999938838184,
+    "sym4_ms": 17.701899982057512,
+    "sym5_ms": 28.758600004948676,
+    "telemetry_overhead_ms": 11.056700022891164,
+    "routing_mode": "learned_high",
+    "selected_solvers": "Z3"
+  },
+  {
+    "scenario": "HIGH_AVAILABILITY",
+    "feasible": false,
+    "sym3_ms": 29.43059999961406,
+    "sym4_ms": 18.71119998395443,
+    "sym5_ms": 28.9102999959141,
+    "telemetry_overhead_ms": 10.199100011959672,
+    "routing_mode": "deterministic",
+    "selected_solvers": "Z3"
+  },
+  {
+    "scenario": "DISASTER_RECOVERY",
+    "feasible": true,
+    "sym3_ms": 27.211900101974607,
+    "sym4_ms": 22.5770000834018,
+    "sym5_ms": 28.484500013291836,
+    "telemetry_overhead_ms": 5.907499929890037,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO,Z3"
+  },
+  {
+    "scenario": "SMALL_PROBLEM",
+    "feasible": true,
+    "sym3_ms": 14.311600010842085,
+    "sym4_ms": 5.945399985648692,
+    "sym5_ms": 14.135499950498343,
+    "telemetry_overhead_ms": 8.19009996484965,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO"
+  },
+  {
+    "scenario": "LARGE_PROBLEM",
+    "feasible": true,
+    "sym3_ms": 27.732500107958913,
+    "sym4_ms": 21.161100012250245,
+    "sym5_ms": 38.24040002655238,
+    "telemetry_overhead_ms": 17.079300014302135,
+    "routing_mode": "learned_high",
+    "selected_solvers": "GA,PSO,Z3"
+  }
+]
