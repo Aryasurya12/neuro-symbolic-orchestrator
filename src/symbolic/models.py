@@ -38,3 +38,4 @@ class OptimizationResult(BaseModel):
     metrics: OptimizationMetrics
     solver_name: str
     error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None

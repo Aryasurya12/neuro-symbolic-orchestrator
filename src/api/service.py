@@ -40,8 +40,9 @@ class OptimizationService:
         
         if progress_callback:
             progress_callback({
-                "event": "routing_decision", 
-                "selected_solvers": routing_decision.selected_solvers,
+                "event": "routing_decided", 
+                "mode": getattr(routing_decision, "routing_mode", "deterministic"),
+                "solver": ",".join(routing_decision.selected_solvers),
                 "confidence": routing_decision.confidence,
                 "reason": routing_decision.reason
             })
@@ -88,17 +89,21 @@ class OptimizationService:
         selector = OptiHiveSelector()
         final_result = selector.select(request, results)
         
-        # Attach routing metadata
+        final_result.metadata = final_result.metadata or {}
+        final_result.metadata["routing"] = {
+            "selected_solvers": routing_decision.selected_solvers,
+            "ranked_solvers": routing_decision.ranked_solvers,
+            "scores": routing_decision.scores,
+            "features": routing_decision.features,
+            "reason": routing_decision.reason,
+            "confidence": routing_decision.confidence,
+            "routing_mode": getattr(routing_decision, "routing_mode", "deterministic")
+        }
+        
+        # Also attach to candidate if it exists
         if final_result.best_candidate:
             final_result.best_candidate.metadata = final_result.best_candidate.metadata or {}
-            final_result.best_candidate.metadata["routing"] = {
-                "selected_solvers": routing_decision.selected_solvers,
-                "ranked_solvers": routing_decision.ranked_solvers,
-                "scores": routing_decision.scores,
-                "features": routing_decision.features,
-                "reason": routing_decision.reason,
-                "confidence": routing_decision.confidence
-            }
+            final_result.best_candidate.metadata["routing"] = final_result.metadata["routing"]
         
         if progress_callback:
             progress_callback({"event": "solver_completed", "solver": "OptiHiveSelector"})

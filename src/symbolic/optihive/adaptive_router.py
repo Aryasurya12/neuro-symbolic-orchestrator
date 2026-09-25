@@ -78,7 +78,8 @@ class SolverRoutingDecision:
         scores: Dict[str, float],
         features: Dict[str, Any],
         reason: str,
-        confidence: str
+        confidence: str,
+        routing_mode: str = "deterministic"
     ):
         self.selected_solvers = selected_solvers
         self.ranked_solvers = ranked_solvers
@@ -86,14 +87,24 @@ class SolverRoutingDecision:
         self.features = features
         self.reason = reason
         self.confidence = confidence
+        self.routing_mode = routing_mode
 
 class AdaptiveSolverRouter:
-    """Adaptive Router for Optimization Engines."""
+    """Adaptive Router for Optimization Engines (SYM-4 Hybrid)."""
     
+    def __init__(self):
+        self.learned_router = None
+        try:
+            from .learned_router import LearnedSolverRouter
+            self.learned_router = LearnedSolverRouter()
+        except Exception as e:
+            print(f"Warning: LearnedSolverRouter failed to load: {e}")
+
     def route(self, request: SymbolicOptimizationRequest) -> SolverRoutingDecision:
         try:
             features = SolverRoutingFeatures(request)
             
+            # SYM-3 Deterministic Scoring
             scores = {
                 "GA": SolverSuitabilityScorer.score_ga(features),
                 "PSO": SolverSuitabilityScorer.score_pso(features),
@@ -101,30 +112,74 @@ class AdaptiveSolverRouter:
             }
             
             ranked_solvers = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-            primary_solver, primary_score = ranked_solvers[0]
-            secondary_solver, secondary_score = ranked_solvers[1]
+            det_primary_solver = ranked_solvers[0][0]
             
-            # Policy
-            if primary_score > 70.0 and (primary_score - secondary_score > 20.0):
-                confidence = "HIGH"
-                selected_solvers = [primary_solver]
-                reason = f"High confidence in {primary_solver} due to strong feature match."
-            elif primary_score > 50.0:
-                confidence = "MEDIUM"
-                selected_solvers = [primary_solver, secondary_solver]
-                reason = f"Medium confidence, executing {primary_solver} and {secondary_solver}."
-            else:
-                confidence = "LOW"
-                selected_solvers = ["GA", "PSO", "Z3"]
-                reason = "Low confidence across all solvers, falling back to full execution."
-                
+            # Base Deterministic Decision
+            det_selected_solvers = [det_primary_solver]
+            if ranked_solvers[0][1] <= 70.0 or (ranked_solvers[0][1] - ranked_solvers[1][1] <= 20.0):
+                if ranked_solvers[0][1] > 50.0:
+                    det_selected_solvers.append(ranked_solvers[1][0])
+                else:
+                    det_selected_solvers = ["GA", "PSO", "Z3"]
+            
+            selected_solvers = list(det_selected_solvers)
+            confidence = "LOW"
+            reason = "Deterministic SYM-3 fallback."
+            routing_mode = "deterministic"
+            
+            # SYM-4 Learned Routing
+            if self.learned_router is not None:
+                try:
+                    learned_pred = self.learned_router.predict(features)
+                    
+                    LEARNED_HIGH_CONFIDENCE = 0.80
+                    LEARNED_MEDIUM_CONFIDENCE = 0.60
+                    
+                    if learned_pred.confidence >= LEARNED_HIGH_CONFIDENCE:
+                        routing_mode = "learned_high"
+                        confidence = "HIGH"
+                        reason = f"Learned router high confidence ({learned_pred.confidence:.2f})"
+                        if learned_pred.predicted_solver == "GA_PSO":
+                            selected_solvers = ["GA", "PSO"]
+                        elif learned_pred.predicted_solver == "GA_PSO_Z3":
+                            selected_solvers = ["GA", "PSO", "Z3"]
+                        else:
+                            selected_solvers = [learned_pred.predicted_solver]
+                    
+                    elif learned_pred.confidence >= LEARNED_MEDIUM_CONFIDENCE:
+                        routing_mode = "learned_medium"
+                        confidence = "MEDIUM"
+                        reason = f"Learned router medium confidence ({learned_pred.confidence:.2f}), combined with deterministic"
+                        
+                        learned_solvers = []
+                        if learned_pred.predicted_solver == "GA_PSO":
+                            learned_solvers = ["GA", "PSO"]
+                        elif learned_pred.predicted_solver == "GA_PSO_Z3":
+                            learned_solvers = ["GA", "PSO", "Z3"]
+                        else:
+                            learned_solvers = [learned_pred.predicted_solver]
+                            
+                        # Combine sets
+                        combined = set(learned_solvers) | set(det_selected_solvers)
+                        selected_solvers = list(combined)
+                except Exception as e:
+                    reason = f"Learned routing failed ({e}), using deterministic."
+            
+            # Safety Arbitration
+            # If the request requires hard verification, ensure Z3 is present.
+            if features.has_latency_constraint or features.has_sla_constraint or features.is_highly_constrained:
+                if "Z3" not in selected_solvers:
+                    selected_solvers.append("Z3")
+                    reason += " (Safety Arbitration: Added Z3 for hard constraint verification)"
+                    
             return SolverRoutingDecision(
                 selected_solvers=selected_solvers,
                 ranked_solvers=ranked_solvers,
                 scores=scores,
                 features=features.to_dict(),
                 reason=reason,
-                confidence=confidence
+                confidence=confidence,
+                routing_mode=routing_mode
             )
         except Exception as e:
             # Safe Fallback
@@ -134,5 +189,6 @@ class AdaptiveSolverRouter:
                 scores={},
                 features={},
                 reason=f"Routing error ({str(e)}), falling back to deterministic full race.",
-                confidence="LOW"
+                confidence="LOW",
+                routing_mode="fallback"
             )
