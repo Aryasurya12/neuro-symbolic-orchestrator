@@ -1,7 +1,7 @@
 [
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.12839981354773045,
+    "semantic_latency_ms": 0.13020006008446217,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -14,7 +14,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 14.094300102442503,
+    "symbolic_latency_ms": 11.498400010168552,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": true,
@@ -27,7 +27,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 14.596099965274334,
+    "end_to_end_latency_ms": 11.687800055369735,
     "contract_generated": true,
     "is_feasible": true,
     "cost_usd": 121.47000122070312,
@@ -38,7 +38,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 13.13450001180172,
+    "symbolic_latency_ms": 13.706600060686469,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": true,
@@ -49,7 +49,7 @@
   },
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.08850009180605412,
+    "semantic_latency_ms": 0.0871000811457634,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -62,7 +62,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 12.96969992108643,
+    "symbolic_latency_ms": 9.652799926698208,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -83,7 +83,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 11.486500035971403,
+    "end_to_end_latency_ms": 11.96499983780086,
     "contract_generated": true,
     "is_feasible": false,
     "cost_usd": "N/A",
@@ -102,7 +102,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 10.675800032913685,
+    "symbolic_latency_ms": 11.15830009803176,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -121,7 +121,7 @@
   },
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.07790001109242439,
+    "semantic_latency_ms": 0.12139999307692051,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -134,7 +134,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 11.761000147089362,
+    "symbolic_latency_ms": 11.21259992942214,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -155,7 +155,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 12.133799958974123,
+    "end_to_end_latency_ms": 9.67820012010634,
     "contract_generated": true,
     "is_feasible": false,
     "cost_usd": "N/A",
@@ -174,7 +174,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 11.805100133642554,
+    "symbolic_latency_ms": 11.914900038391352,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -193,7 +193,7 @@
   },
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.09169988334178925,
+    "semantic_latency_ms": 0.09480002336204052,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -206,7 +206,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 11.174699990078807,
+    "symbolic_latency_ms": 12.184000108391047,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -227,7 +227,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 11.836100136861205,
+    "end_to_end_latency_ms": 11.357199866324663,
     "contract_generated": true,
     "is_feasible": false,
     "cost_usd": "N/A",
@@ -246,7 +246,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 12.14020000770688,
+    "symbolic_latency_ms": 12.646300019696355,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -265,7 +265,7 @@
   },
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.09149988181889057,
+    "semantic_latency_ms": 0.10229996405541897,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -278,7 +278,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 13.556600082665682,
+    "symbolic_latency_ms": 13.13549978658557,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": true,
@@ -291,7 +291,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 12.40280014462769,
+    "end_to_end_latency_ms": 13.706800062209368,
     "contract_generated": true,
     "is_feasible": true,
     "cost_usd": 30.3700008392334,
@@ -302,7 +302,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 12.438199948519468,
+    "symbolic_latency_ms": 12.14210013858974,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": true,
@@ -313,7 +313,7 @@
   },
   {
     "configuration": "Semantic-Only",
-    "semantic_latency_ms": 0.09469990618526936,
+    "semantic_latency_ms": 0.1542000100016594,
     "symbolic_latency_ms": "N/A",
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
@@ -326,7 +326,7 @@
   {
     "configuration": "Symbolic-Only",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 18.484999891370535,
+    "symbolic_latency_ms": 17.78819994069636,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": false,
@@ -339,7 +339,7 @@
     "configuration": "Neuro-Symbolic",
     "semantic_latency_ms": "N/A",
     "symbolic_latency_ms": "N/A",
-    "end_to_end_latency_ms": 17.82199996523559,
+    "end_to_end_latency_ms": 17.939999932423234,
     "contract_generated": true,
     "is_feasible": false,
     "cost_usd": "N/A",
@@ -350,7 +350,7 @@
   {
     "configuration": "Symbolic-Only (No OptiHive)",
     "semantic_latency_ms": "N/A",
-    "symbolic_latency_ms": 10.30600001104176,
+    "symbolic_latency_ms": 12.32069986872375,
     "end_to_end_latency_ms": "N/A",
     "contract_generated": true,
     "is_feasible": true,

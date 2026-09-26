@@ -1,53 +1,53 @@
 scenario,config,outcome_label,candidate_feasible,reference_feasible,candidate_cost,reference_cost,cost_delta_pct,runtime_ratio,notes
-A1_Small,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.516,Cost within 5% tolerance (+0.0%).
-A2_Medium,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.101,Cost within 5% tolerance (+0.0%).
-A3_Large,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.006,Cost within 5% tolerance (+0.0%).
-B1_Comfortable,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.956,Cost within 5% tolerance (+0.0%).
-B2_NearBoundary,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.563,Cost within 5% tolerance (+0.0%).
+A1_Small,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.529,Cost within 5% tolerance (+0.0%).
+A2_Medium,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.964,Cost within 5% tolerance (+0.0%).
+A3_Large,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.924,Cost within 5% tolerance (+0.0%).
+B1_Comfortable,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.01,Cost within 5% tolerance (+0.0%).
+B2_NearBoundary,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.86,Cost within 5% tolerance (+0.0%).
 B3_Tight,BASELINE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 C1_Budget_Infeas,BASELINE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-C2_Res_Infeas,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.002,Cost within 5% tolerance (+0.0%).
-D1_Multi_AWS_Az,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.033,Cost within 5% tolerance (+0.0%).
-D2_Multi_All,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.98,Cost within 5% tolerance (+0.0%).
-E1_DR_Feasible,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.066,Cost within 5% tolerance (+0.0%).
+C2_Res_Infeas,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.004,Cost within 5% tolerance (+0.0%).
+D1_Multi_AWS_Az,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.011,Cost within 5% tolerance (+0.0%).
+D2_Multi_All,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,0.952,Cost within 5% tolerance (+0.0%).
+E1_DR_Feasible,BASELINE,EQUIVALENT,True,True,53.0,53.0,0.0,1.106,Cost within 5% tolerance (+0.0%).
 E2_DR_Infeasible,BASELINE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 F1_Boundary,BASELINE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-A1_Small,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.098,Cost within 5% tolerance (+0.0%).
-A2_Medium,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.159,Cost within 5% tolerance (+0.0%).
-A3_Large,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.161,Cost within 5% tolerance (+0.0%).
-B1_Comfortable,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.88,Cost within 5% tolerance (+0.0%).
-B2_NearBoundary,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,1.636,Cost within 5% tolerance (+0.0%).
+A1_Small,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.129,Cost within 5% tolerance (+0.0%).
+A2_Medium,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.154,Cost within 5% tolerance (+0.0%).
+A3_Large,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.165,Cost within 5% tolerance (+0.0%).
+B1_Comfortable,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.825,Cost within 5% tolerance (+0.0%).
+B2_NearBoundary,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.839,Cost within 5% tolerance (+0.0%).
 B3_Tight,SYM-3,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 C1_Budget_Infeas,SYM-3,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-C2_Res_Infeas,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.907,Cost within 5% tolerance (+0.0%).
-D1_Multi_AWS_Az,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.176,Cost within 5% tolerance (+0.0%).
-D2_Multi_All,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.234,Cost within 5% tolerance (+0.0%).
-E1_DR_Feasible,SYM-3,INFEASIBLE,False,True,,53.0,,,Candidate infeasible while reference is feasible — routing failure.
+C2_Res_Infeas,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.927,Cost within 5% tolerance (+0.0%).
+D1_Multi_AWS_Az,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.136,Cost within 5% tolerance (+0.0%).
+D2_Multi_All,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,0.16,Cost within 5% tolerance (+0.0%).
+E1_DR_Feasible,SYM-3,EQUIVALENT,True,True,53.0,53.0,0.0,1.035,Cost within 5% tolerance (+0.0%).
 E2_DR_Infeasible,SYM-3,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 F1_Boundary,SYM-3,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-A1_Small,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.116,Cost within 5% tolerance (+0.0%).
-A2_Medium,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.147,Cost within 5% tolerance (+0.0%).
-A3_Large,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.182,Cost within 5% tolerance (+0.0%).
-B1_Comfortable,SYM-4,INFEASIBLE,False,True,,53.0,,,Candidate infeasible while reference is feasible — routing failure.
-B2_NearBoundary,SYM-4,INFEASIBLE,False,True,,53.0,,,Candidate infeasible while reference is feasible — routing failure.
+A1_Small,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.095,Cost within 5% tolerance (+0.0%).
+A2_Medium,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.111,Cost within 5% tolerance (+0.0%).
+A3_Large,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.107,Cost within 5% tolerance (+0.0%).
+B1_Comfortable,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,1.036,Cost within 5% tolerance (+0.0%).
+B2_NearBoundary,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.893,Cost within 5% tolerance (+0.0%).
 B3_Tight,SYM-4,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 C1_Budget_Infeas,SYM-4,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-C2_Res_Infeas,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.961,Cost within 5% tolerance (+0.0%).
-D1_Multi_AWS_Az,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.167,Cost within 5% tolerance (+0.0%).
-D2_Multi_All,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.177,Cost within 5% tolerance (+0.0%).
-E1_DR_Feasible,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,1.063,Cost within 5% tolerance (+0.0%).
+C2_Res_Infeas,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,1.129,Cost within 5% tolerance (+0.0%).
+D1_Multi_AWS_Az,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.116,Cost within 5% tolerance (+0.0%).
+D2_Multi_All,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,0.115,Cost within 5% tolerance (+0.0%).
+E1_DR_Feasible,SYM-4,EQUIVALENT,True,True,53.0,53.0,0.0,1.016,Cost within 5% tolerance (+0.0%).
 E2_DR_Infeasible,SYM-4,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 F1_Boundary,SYM-4,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-A1_Small,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.529,Cost within 5% tolerance (+0.0%).
-A2_Medium,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.004,Cost within 5% tolerance (+0.0%).
-A3_Large,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.209,Cost within 5% tolerance (+0.0%).
-B1_Comfortable,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.023,Cost within 5% tolerance (+0.0%).
-B2_NearBoundary,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.478,Cost within 5% tolerance (+0.0%).
+A1_Small,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.494,Cost within 5% tolerance (+0.0%).
+A2_Medium,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.162,Cost within 5% tolerance (+0.0%).
+A3_Large,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.182,Cost within 5% tolerance (+0.0%).
+B1_Comfortable,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.043,Cost within 5% tolerance (+0.0%).
+B2_NearBoundary,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.893,Cost within 5% tolerance (+0.0%).
 B3_Tight,CANDIDATE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 C1_Budget_Infeas,CANDIDATE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
-C2_Res_Infeas,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.981,Cost within 5% tolerance (+0.0%).
-D1_Multi_AWS_Az,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.043,Cost within 5% tolerance (+0.0%).
-D2_Multi_All,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.959,Cost within 5% tolerance (+0.0%).
-E1_DR_Feasible,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.055,Cost within 5% tolerance (+0.0%).
+C2_Res_Infeas,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,2.238,Cost within 5% tolerance (+0.0%).
+D1_Multi_AWS_Az,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.046,Cost within 5% tolerance (+0.0%).
+D2_Multi_All,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,0.978,Cost within 5% tolerance (+0.0%).
+E1_DR_Feasible,CANDIDATE,EQUIVALENT,True,True,53.0,53.0,0.0,1.105,Cost within 5% tolerance (+0.0%).
 E2_DR_Infeasible,CANDIDATE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.
 F1_Boundary,CANDIDATE,BOTH_INFEASIBLE,False,False,,,,,Both infeasible — expected for this workload.

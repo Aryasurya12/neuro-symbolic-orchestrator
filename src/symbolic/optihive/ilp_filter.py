@@ -64,9 +64,10 @@ class ILPSyntacticFilter:
                 
         # 3. Decision Variable Syntactic Provider Check (if explicit)
         dvars = candidate.decision_variables
+        req_providers = {p.upper() for p in request.cloud_providers}
         for key, val in dvars.items():
             if "provider" in key.lower() and isinstance(val, str):
-                if val not in request.cloud_providers:
+                if val.upper() not in req_providers:
                     is_feasible = False
                     violations.append(f"Invalid provider selected: {val} not in {request.cloud_providers}")
                     

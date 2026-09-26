@@ -45,7 +45,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.516,
+        "runtime_ratio": 0.529,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -57,7 +57,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.101,
+        "runtime_ratio": 0.964,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -69,7 +69,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.006,
+        "runtime_ratio": 0.924,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -81,7 +81,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.956,
+        "runtime_ratio": 1.01,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -93,7 +93,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.563,
+        "runtime_ratio": 0.86,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -129,7 +129,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.002,
+        "runtime_ratio": 1.004,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -141,7 +141,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.033,
+        "runtime_ratio": 1.011,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -153,7 +153,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.98,
+        "runtime_ratio": 0.952,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -165,7 +165,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.066,
+        "runtime_ratio": 1.106,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -201,7 +201,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.098,
+        "runtime_ratio": 0.129,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -213,7 +213,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.159,
+        "runtime_ratio": 0.154,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -225,7 +225,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.161,
+        "runtime_ratio": 0.165,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -237,7 +237,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.88,
+        "runtime_ratio": 0.825,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -249,7 +249,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.636,
+        "runtime_ratio": 0.839,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -285,7 +285,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.907,
+        "runtime_ratio": 0.927,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -297,7 +297,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.176,
+        "runtime_ratio": 0.136,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -309,20 +309,20 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.234,
+        "runtime_ratio": 0.16,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
         "scenario": "E1_DR_Feasible",
         "config": "SYM-3",
-        "outcome_label": "INFEASIBLE",
-        "candidate_feasible": false,
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
         "reference_feasible": true,
-        "candidate_cost": null,
+        "candidate_cost": 53.0,
         "reference_cost": 53.0,
-        "cost_delta_pct": null,
-        "runtime_ratio": null,
-        "notes": "Candidate infeasible while reference is feasible \u2014 routing failure."
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 1.035,
+        "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
         "scenario": "E2_DR_Infeasible",
@@ -350,6 +350,102 @@
       },
       {
         "scenario": "A1_Small",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 0.095,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "A2_Medium",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 0.111,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "A3_Large",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 0.107,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "B1_Comfortable",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 1.036,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "B2_NearBoundary",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 0.893,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "B3_Tight",
+        "config": "SYM-4",
+        "outcome_label": "BOTH_INFEASIBLE",
+        "candidate_feasible": false,
+        "reference_feasible": false,
+        "candidate_cost": null,
+        "reference_cost": null,
+        "cost_delta_pct": null,
+        "runtime_ratio": null,
+        "notes": "Both infeasible \u2014 expected for this workload."
+      },
+      {
+        "scenario": "C1_Budget_Infeas",
+        "config": "SYM-4",
+        "outcome_label": "BOTH_INFEASIBLE",
+        "candidate_feasible": false,
+        "reference_feasible": false,
+        "candidate_cost": null,
+        "reference_cost": null,
+        "cost_delta_pct": null,
+        "runtime_ratio": null,
+        "notes": "Both infeasible \u2014 expected for this workload."
+      },
+      {
+        "scenario": "C2_Res_Infeas",
+        "config": "SYM-4",
+        "outcome_label": "EQUIVALENT",
+        "candidate_feasible": true,
+        "reference_feasible": true,
+        "candidate_cost": 53.0,
+        "reference_cost": 53.0,
+        "cost_delta_pct": 0.0,
+        "runtime_ratio": 1.129,
+        "notes": "Cost within 5% tolerance (+0.0%)."
+      },
+      {
+        "scenario": "D1_Multi_AWS_Az",
         "config": "SYM-4",
         "outcome_label": "EQUIVALENT",
         "candidate_feasible": true,
@@ -361,102 +457,6 @@
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
-        "scenario": "A2_Medium",
-        "config": "SYM-4",
-        "outcome_label": "EQUIVALENT",
-        "candidate_feasible": true,
-        "reference_feasible": true,
-        "candidate_cost": 53.0,
-        "reference_cost": 53.0,
-        "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.147,
-        "notes": "Cost within 5% tolerance (+0.0%)."
-      },
-      {
-        "scenario": "A3_Large",
-        "config": "SYM-4",
-        "outcome_label": "EQUIVALENT",
-        "candidate_feasible": true,
-        "reference_feasible": true,
-        "candidate_cost": 53.0,
-        "reference_cost": 53.0,
-        "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.182,
-        "notes": "Cost within 5% tolerance (+0.0%)."
-      },
-      {
-        "scenario": "B1_Comfortable",
-        "config": "SYM-4",
-        "outcome_label": "INFEASIBLE",
-        "candidate_feasible": false,
-        "reference_feasible": true,
-        "candidate_cost": null,
-        "reference_cost": 53.0,
-        "cost_delta_pct": null,
-        "runtime_ratio": null,
-        "notes": "Candidate infeasible while reference is feasible \u2014 routing failure."
-      },
-      {
-        "scenario": "B2_NearBoundary",
-        "config": "SYM-4",
-        "outcome_label": "INFEASIBLE",
-        "candidate_feasible": false,
-        "reference_feasible": true,
-        "candidate_cost": null,
-        "reference_cost": 53.0,
-        "cost_delta_pct": null,
-        "runtime_ratio": null,
-        "notes": "Candidate infeasible while reference is feasible \u2014 routing failure."
-      },
-      {
-        "scenario": "B3_Tight",
-        "config": "SYM-4",
-        "outcome_label": "BOTH_INFEASIBLE",
-        "candidate_feasible": false,
-        "reference_feasible": false,
-        "candidate_cost": null,
-        "reference_cost": null,
-        "cost_delta_pct": null,
-        "runtime_ratio": null,
-        "notes": "Both infeasible \u2014 expected for this workload."
-      },
-      {
-        "scenario": "C1_Budget_Infeas",
-        "config": "SYM-4",
-        "outcome_label": "BOTH_INFEASIBLE",
-        "candidate_feasible": false,
-        "reference_feasible": false,
-        "candidate_cost": null,
-        "reference_cost": null,
-        "cost_delta_pct": null,
-        "runtime_ratio": null,
-        "notes": "Both infeasible \u2014 expected for this workload."
-      },
-      {
-        "scenario": "C2_Res_Infeas",
-        "config": "SYM-4",
-        "outcome_label": "EQUIVALENT",
-        "candidate_feasible": true,
-        "reference_feasible": true,
-        "candidate_cost": 53.0,
-        "reference_cost": 53.0,
-        "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.961,
-        "notes": "Cost within 5% tolerance (+0.0%)."
-      },
-      {
-        "scenario": "D1_Multi_AWS_Az",
-        "config": "SYM-4",
-        "outcome_label": "EQUIVALENT",
-        "candidate_feasible": true,
-        "reference_feasible": true,
-        "candidate_cost": 53.0,
-        "reference_cost": 53.0,
-        "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.167,
-        "notes": "Cost within 5% tolerance (+0.0%)."
-      },
-      {
         "scenario": "D2_Multi_All",
         "config": "SYM-4",
         "outcome_label": "EQUIVALENT",
@@ -465,7 +465,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.177,
+        "runtime_ratio": 0.115,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -477,7 +477,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.063,
+        "runtime_ratio": 1.016,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -513,7 +513,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.529,
+        "runtime_ratio": 0.494,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -525,7 +525,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.004,
+        "runtime_ratio": 1.162,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -537,7 +537,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.209,
+        "runtime_ratio": 0.182,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -549,7 +549,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.023,
+        "runtime_ratio": 1.043,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -561,7 +561,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.478,
+        "runtime_ratio": 0.893,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -597,7 +597,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.981,
+        "runtime_ratio": 2.238,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -609,7 +609,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.043,
+        "runtime_ratio": 1.046,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -621,7 +621,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 0.959,
+        "runtime_ratio": 0.978,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -633,7 +633,7 @@
         "candidate_cost": 53.0,
         "reference_cost": 53.0,
         "cost_delta_pct": 0.0,
-        "runtime_ratio": 1.055,
+        "runtime_ratio": 1.105,
         "notes": "Cost within 5% tolerance (+0.0%)."
       },
       {
@@ -672,19 +672,19 @@
         "not_evaluated": 0
       },
       "SYM-3": {
-        "equivalent": 8,
+        "equivalent": 9,
         "acceptable": 0,
         "inferior": 0,
-        "infeasible": 1,
+        "infeasible": 0,
         "failed": 0,
         "both_infeasible": 4,
         "not_evaluated": 0
       },
       "SYM-4": {
-        "equivalent": 7,
+        "equivalent": 9,
         "acceptable": 0,
         "inferior": 0,
-        "infeasible": 2,
+        "infeasible": 0,
         "failed": 0,
         "both_infeasible": 4,
         "not_evaluated": 0
@@ -701,33 +701,33 @@
     },
     "latency_ms": {
       "BASELINE": {
-        "median_ms": 18.704599933698773,
-        "p95_ms": 30.845300061628222,
-        "max_ms": 30.845300061628222,
+        "median_ms": 23.03429995663464,
+        "p95_ms": 33.08509988710284,
+        "max_ms": 33.08509988710284,
         "n": 13
       },
       "SYM-3": {
-        "median_ms": 14.923699898645282,
-        "p95_ms": 32.276200130581856,
-        "max_ms": 32.276200130581856,
+        "median_ms": 13.509700074791908,
+        "p95_ms": 25.989199988543987,
+        "max_ms": 25.989199988543987,
         "n": 13
       },
       "SYM-4": {
-        "median_ms": 15.160199953243136,
-        "p95_ms": 26.334899943321943,
-        "max_ms": 26.334899943321943,
+        "median_ms": 15.114899957552552,
+        "p95_ms": 25.512699969112873,
+        "max_ms": 25.512699969112873,
         "n": 13
       },
       "CANDIDATE": {
-        "median_ms": 18.571199849247932,
-        "p95_ms": 29.167099855840206,
-        "max_ms": 29.167099855840206,
+        "median_ms": 22.750800009816885,
+        "p95_ms": 42.34570008702576,
+        "max_ms": 42.34570008702576,
         "n": 13
       },
       "REFERENCE": {
-        "median_ms": 18.455500015988946,
-        "p95_ms": 37.9528000485152,
-        "max_ms": 37.9528000485152,
+        "median_ms": 25.10279999114573,
+        "p95_ms": 45.11810000985861,
+        "max_ms": 45.11810000985861,
         "n": 13
       }
     },

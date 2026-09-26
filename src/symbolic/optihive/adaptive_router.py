@@ -165,12 +165,17 @@ class AdaptiveSolverRouter:
                 except Exception as e:
                     reason = f"Learned routing failed ({e}), using deterministic."
             
-            # Safety Arbitration
-            # If the request requires hard verification, ensure Z3 is present.
-            if features.has_latency_constraint or features.has_sla_constraint or features.is_highly_constrained:
-                if "Z3" not in selected_solvers:
-                    selected_solvers.append("Z3")
-                    reason += " (Safety Arbitration: Added Z3 for hard constraint verification)"
+            # Safety Arbitration (Deterministic safety layer)
+            try:
+                from .safety_arbitration import apply_safety_arbitration
+                safety_res = apply_safety_arbitration(request, selected_solvers)
+                selected_solvers = safety_res.final_solver_set
+                if safety_res.safety_triggered:
+                    reason += f" ({safety_res.safety_reason})"
+            except Exception as e:
+                # Defense in depth: if safety arbitration fails, fail safe to full race
+                selected_solvers = ["GA", "PSO", "Z3"]
+                reason += f" (Safety Arbitration fallback: {e})"
                     
             return SolverRoutingDecision(
                 selected_solvers=selected_solvers,

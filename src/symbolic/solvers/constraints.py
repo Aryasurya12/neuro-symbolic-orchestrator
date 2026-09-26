@@ -16,8 +16,9 @@ class Z3ConstraintFactory:
     ) -> List[z3.BoolRef]:
         """Regions belonging to disallowed providers cannot be selected."""
         constraints = []
+        allowed_upper = {p.upper() for p in allowed_providers}
         for node in graph.get_all_nodes():
-            if node.provider not in allowed_providers:
+            if node.provider.upper() not in allowed_upper:
                 constraints.append(z3.Not(selected_vars[node.id]))
         return constraints
 

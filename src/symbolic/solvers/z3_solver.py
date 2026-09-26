@@ -65,13 +65,15 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         # Budget
         solver.add(Z3ConstraintFactory.budget_constraint(selected_vars, self.graph, request.budget_max_usd))
         
-        # Latency
-        for c in Z3ConstraintFactory.latency_constraint(selected_vars, self.graph, request.latency_max_ms):
-            solver.add(c)
+        # Latency (only when constraint is active)
+        if request.latency_max_ms > 0:
+            for c in Z3ConstraintFactory.latency_constraint(selected_vars, self.graph, request.latency_max_ms):
+                solver.add(c)
             
-        # SLA Availability
-        for c in Z3ConstraintFactory.sla_constraint(selected_vars, self.graph, request.sla_availability_pct):
-            solver.add(c)
+        # SLA Availability (only when constraint is active)
+        if request.sla_availability_pct > 0:
+            for c in Z3ConstraintFactory.sla_constraint(selected_vars, self.graph, request.sla_availability_pct):
+                solver.add(c)
 
         # 2. APPLY OBJECTIVE
         # Base cost objective
@@ -168,22 +170,23 @@ class GraphSteeredZ3Solver(OptimizationEngine):
             
         reg_a, reg_b = selected_nodes[0], selected_nodes[1]
         
-        # Validate Provider
-        if reg_a.provider not in request.cloud_providers or reg_b.provider not in request.cloud_providers:
+        # Validate Provider (case-insensitive)
+        allowed_upper = {p.upper() for p in request.cloud_providers}
+        if reg_a.provider.upper() not in allowed_upper or reg_b.provider.upper() not in allowed_upper:
             return None
             
         latency = self.graph.get_latency(reg_a.id, reg_b.id)
         
-        # Validate Latency
-        if latency > request.latency_max_ms:
+        # Validate Latency (only when constraint is active)
+        if request.latency_max_ms > 0 and latency > request.latency_max_ms:
             return None
             
-        # Validate SLA
+        # Validate SLA (only when constraint is active)
         unavail_a = 1.0 - (reg_a.sla_pct / 100.0)
         unavail_b = 1.0 - (reg_b.sla_pct / 100.0)
         composite_sla = (1.0 - (unavail_a * unavail_b)) * 100.0
         
-        if composite_sla < request.sla_availability_pct:
+        if request.sla_availability_pct > 0 and composite_sla < request.sla_availability_pct:
             return None
             
         # Validate Budget
