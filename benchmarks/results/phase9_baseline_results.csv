@@ -1,25 +1,25 @@
 configuration,semantic_latency_ms,symbolic_latency_ms,end_to_end_latency_ms,contract_generated,is_feasible,cost_usd,solver,constraint_status,scenario
-Semantic-Only,0.12839992996305227,N/A,N/A,True,N/A,N/A,N/A,N/A,Normal Feasible
-Symbolic-Only,N/A,13.7877999804914,N/A,True,True,121.47000122070312,N/A,{},Normal Feasible
-Neuro-Symbolic,N/A,N/A,16.035799984820187,True,True,121.47000122070312,N/A,{},Normal Feasible
-Symbolic-Only (No OptiHive),N/A,13.429900049231946,N/A,True,True,121.47000122070312,N/A,{},Normal Feasible
-Semantic-Only,0.08740008343011141,N/A,N/A,True,N/A,N/A,N/A,N/A,Large Resource
-Symbolic-Only,N/A,11.335600051097572,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
-Neuro-Symbolic,N/A,N/A,9.710999904200435,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
-Symbolic-Only (No OptiHive),N/A,12.804899946786463,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
-Semantic-Only,0.1506999833509326,N/A,N/A,True,N/A,N/A,N/A,N/A,Tight Budget
-Symbolic-Only,N/A,9.87329997587949,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
-Neuro-Symbolic,N/A,N/A,10.686299996450543,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
-Symbolic-Only (No OptiHive),N/A,13.059600023552775,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
-Semantic-Only,0.15620002523064613,N/A,N/A,True,N/A,N/A,N/A,N/A,Intentionally Infeasible
-Symbolic-Only,N/A,13.383700046688318,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
-Neuro-Symbolic,N/A,N/A,12.920500012114644,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
-Symbolic-Only (No OptiHive),N/A,11.693499982357025,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
-Semantic-Only,0.09200000204145908,N/A,N/A,True,N/A,N/A,N/A,N/A,Multi-Provider
-Symbolic-Only,N/A,14.596399967558682,N/A,True,True,30.3700008392334,N/A,{},Multi-Provider
-Neuro-Symbolic,N/A,N/A,15.996000031009316,True,True,30.3700008392334,N/A,{},Multi-Provider
-Symbolic-Only (No OptiHive),N/A,14.609500067308545,N/A,True,True,30.3700008392334,N/A,{},Multi-Provider
-Semantic-Only,0.11659995652735233,N/A,N/A,True,N/A,N/A,N/A,N/A,Latency/SLA Constrained (DR)
-Symbolic-Only,N/A,18.505700048990548,N/A,True,False,N/A,N/A,{},Latency/SLA Constrained (DR)
-Neuro-Symbolic,N/A,N/A,18.695599981583655,True,False,N/A,N/A,{},Latency/SLA Constrained (DR)
-Symbolic-Only (No OptiHive),N/A,11.303400038741529,N/A,True,True,30.3700008392334,N/A,{},Latency/SLA Constrained (DR)
+Semantic-Only,0.12839981354773045,N/A,N/A,True,N/A,N/A,N/A,N/A,Normal Feasible
+Symbolic-Only,N/A,14.094300102442503,N/A,True,True,121.47000122070312,N/A,{},Normal Feasible
+Neuro-Symbolic,N/A,N/A,14.596099965274334,True,True,121.47000122070312,N/A,{},Normal Feasible
+Symbolic-Only (No OptiHive),N/A,13.13450001180172,N/A,True,True,121.47000122070312,N/A,{},Normal Feasible
+Semantic-Only,0.08850009180605412,N/A,N/A,True,N/A,N/A,N/A,N/A,Large Resource
+Symbolic-Only,N/A,12.96969992108643,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
+Neuro-Symbolic,N/A,N/A,11.486500035971403,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
+Symbolic-Only (No OptiHive),N/A,10.675800032913685,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Large Resource
+Semantic-Only,0.07790001109242439,N/A,N/A,True,N/A,N/A,N/A,N/A,Tight Budget
+Symbolic-Only,N/A,11.761000147089362,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
+Neuro-Symbolic,N/A,N/A,12.133799958974123,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
+Symbolic-Only (No OptiHive),N/A,11.805100133642554,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Tight Budget
+Semantic-Only,0.09169988334178925,N/A,N/A,True,N/A,N/A,N/A,N/A,Intentionally Infeasible
+Symbolic-Only,N/A,11.174699990078807,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
+Neuro-Symbolic,N/A,N/A,11.836100136861205,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
+Symbolic-Only (No OptiHive),N/A,12.14020000770688,N/A,True,False,N/A,N/A,"{'is_feasible': False, 'budget_ok': True, 'vcpu_ok': False, 'ram_ok': False, 'latency_ok': True, 'sla_ok': True, 'details': 'Validated by Vectorized ObjectiveEvaluator'}",Intentionally Infeasible
+Semantic-Only,0.09149988181889057,N/A,N/A,True,N/A,N/A,N/A,N/A,Multi-Provider
+Symbolic-Only,N/A,13.556600082665682,N/A,True,True,30.3700008392334,N/A,{},Multi-Provider
+Neuro-Symbolic,N/A,N/A,12.40280014462769,True,True,30.3700008392334,N/A,{},Multi-Provider
+Symbolic-Only (No OptiHive),N/A,12.438199948519468,N/A,True,True,30.3700008392334,N/A,{},Multi-Provider
+Semantic-Only,0.09469990618526936,N/A,N/A,True,N/A,N/A,N/A,N/A,Latency/SLA Constrained (DR)
+Symbolic-Only,N/A,18.484999891370535,N/A,True,False,N/A,N/A,{},Latency/SLA Constrained (DR)
+Neuro-Symbolic,N/A,N/A,17.82199996523559,True,False,N/A,N/A,{},Latency/SLA Constrained (DR)
+Symbolic-Only (No OptiHive),N/A,10.30600001104176,N/A,True,True,30.3700008392334,N/A,{},Latency/SLA Constrained (DR)
