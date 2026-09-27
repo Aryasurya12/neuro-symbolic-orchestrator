@@ -65,3 +65,4 @@ cover/
 # Logs
 *.log
 logs/
+*.db

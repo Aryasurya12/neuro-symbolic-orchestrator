@@ -1,0 +1,453 @@
+[
+  {
+    "scenario": "VM_ALLOCATION",
+    "feasible": false,
+    "baseline_ms": 79.96640005148947,
+    "sym3_ms": 27.02139993198216,
+    "sym4_ms": 21.357699995860457,
+    "routing": {
+      "selected_solvers": [
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          70.0
+        ],
+        [
+          "PSO",
+          40.0
+        ],
+        [
+          "GA",
+          20.0
+        ]
+      ],
+      "scores": {
+        "GA": 20.0,
+        "PSO": 40.0,
+        "Z3": 70.0
+      },
+      "features": {
+        "resource_scale": 1024.0,
+        "service_scale": 5,
+        "budget_tightness": 0.9765625,
+        "provider_count": 2,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 2,
+        "is_highly_constrained": true
+      },
+      "reason": "Learned router high confidence (0.89)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "COMPUTE_INTENSIVE",
+    "feasible": true,
+    "baseline_ms": 22.36039994750172,
+    "sym3_ms": 6.086000008508563,
+    "sym4_ms": 7.310900022275746,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "GA",
+          70.0
+        ],
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 70.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 262144.0,
+        "service_scale": 15,
+        "budget_tightness": 0.019073486328125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Learned router high confidence (1.00)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "COST_OPTIMIZATION",
+    "feasible": true,
+    "baseline_ms": 19.575099926441908,
+    "sym3_ms": 6.2125000404194,
+    "sym4_ms": 21.768599981442094,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "Z3",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "GA",
+          50.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 50.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 128.0,
+        "service_scale": 3,
+        "budget_tightness": 0.78125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Learned router medium confidence (0.65), combined with deterministic",
+      "confidence": "MEDIUM",
+      "routing_mode": "learned_medium"
+    }
+  },
+  {
+    "scenario": "COST_OPTIMIZATION_INFEAS",
+    "feasible": false,
+    "baseline_ms": 20.092400023713708,
+    "sym3_ms": 18.765400047414005,
+    "sym4_ms": 21.89059997908771,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO",
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          70.0
+        ],
+        [
+          "GA",
+          40.0
+        ],
+        [
+          "PSO",
+          40.0
+        ]
+      ],
+      "scores": {
+        "GA": 40.0,
+        "PSO": 40.0,
+        "Z3": 70.0
+      },
+      "features": {
+        "resource_scale": 16384.0,
+        "service_scale": 10,
+        "budget_tightness": 0.00030517578125,
+        "provider_count": 1,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 2,
+        "is_highly_constrained": true
+      },
+      "reason": "Learned router high confidence (1.00) (Safety Arbitration: Added Z3 for hard constraint verification)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "MULTI_CLOUD",
+    "feasible": true,
+    "baseline_ms": 22.497399942949414,
+    "sym3_ms": 5.69819996599108,
+    "sym4_ms": 5.56189997587353,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "GA",
+          70.0
+        ],
+        [
+          "PSO",
+          60.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 70.0,
+        "PSO": 60.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 4096.0,
+        "service_scale": 8,
+        "budget_tightness": 0.48828125,
+        "provider_count": 3,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Learned router high confidence (1.00)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "LOW_LATENCY",
+    "feasible": false,
+    "baseline_ms": 20.730199990794063,
+    "sym3_ms": 17.01319997664541,
+    "sym4_ms": 17.12010009214282,
+    "routing": {
+      "selected_solvers": [
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          90.0
+        ],
+        [
+          "PSO",
+          40.0
+        ],
+        [
+          "GA",
+          20.0
+        ]
+      ],
+      "scores": {
+        "GA": 20.0,
+        "PSO": 40.0,
+        "Z3": 90.0
+      },
+      "features": {
+        "resource_scale": 1024.0,
+        "service_scale": 4,
+        "budget_tightness": 1.46484375,
+        "provider_count": 1,
+        "has_latency_constraint": true,
+        "has_sla_constraint": false,
+        "constraint_density": 3,
+        "is_highly_constrained": true
+      },
+      "reason": "Learned router high confidence (0.99)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "HIGH_AVAILABILITY",
+    "feasible": false,
+    "baseline_ms": 20.052899955771863,
+    "sym3_ms": 18.349400022998452,
+    "sym4_ms": 19.771500024944544,
+    "routing": {
+      "selected_solvers": [
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          90.0
+        ],
+        [
+          "GA",
+          40.0
+        ],
+        [
+          "PSO",
+          40.0
+        ]
+      ],
+      "scores": {
+        "GA": 40.0,
+        "PSO": 40.0,
+        "Z3": 90.0
+      },
+      "features": {
+        "resource_scale": 4096.0,
+        "service_scale": 6,
+        "budget_tightness": 0.6103515625,
+        "provider_count": 2,
+        "has_latency_constraint": false,
+        "has_sla_constraint": true,
+        "constraint_density": 3,
+        "is_highly_constrained": true
+      },
+      "reason": "Deterministic SYM-3 fallback.",
+      "confidence": "LOW",
+      "routing_mode": "deterministic"
+    }
+  },
+  {
+    "scenario": "DISASTER_RECOVERY",
+    "feasible": true,
+    "baseline_ms": 23.014400037936866,
+    "sym3_ms": 18.178500002250075,
+    "sym4_ms": 21.786400000564754,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO",
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          90.0
+        ],
+        [
+          "GA",
+          40.0
+        ],
+        [
+          "PSO",
+          40.0
+        ]
+      ],
+      "scores": {
+        "GA": 40.0,
+        "PSO": 40.0,
+        "Z3": 90.0
+      },
+      "features": {
+        "resource_scale": 16384.0,
+        "service_scale": 10,
+        "budget_tightness": 0.18310546875,
+        "provider_count": 3,
+        "has_latency_constraint": true,
+        "has_sla_constraint": true,
+        "constraint_density": 3,
+        "is_highly_constrained": true
+      },
+      "reason": "Learned router high confidence (1.00) (Safety Arbitration: Added Z3 for hard constraint verification)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "SMALL_PROBLEM",
+    "feasible": true,
+    "baseline_ms": 20.835199975408614,
+    "sym3_ms": 6.978600053116679,
+    "sym4_ms": 5.5729999439790845,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO"
+      ],
+      "ranked_solvers": [
+        [
+          "PSO",
+          75.0
+        ],
+        [
+          "GA",
+          50.0
+        ],
+        [
+          "Z3",
+          30.0
+        ]
+      ],
+      "scores": {
+        "GA": 50.0,
+        "PSO": 75.0,
+        "Z3": 30.0
+      },
+      "features": {
+        "resource_scale": 8.0,
+        "service_scale": 1,
+        "budget_tightness": 62.5,
+        "provider_count": 1,
+        "has_latency_constraint": false,
+        "has_sla_constraint": false,
+        "constraint_density": 1,
+        "is_highly_constrained": false
+      },
+      "reason": "Learned router high confidence (1.00)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  },
+  {
+    "scenario": "LARGE_PROBLEM",
+    "feasible": true,
+    "baseline_ms": 20.701799890957773,
+    "sym3_ms": 18.224800005555153,
+    "sym4_ms": 25.495300069451332,
+    "routing": {
+      "selected_solvers": [
+        "GA",
+        "PSO",
+        "Z3"
+      ],
+      "ranked_solvers": [
+        [
+          "Z3",
+          60.0
+        ],
+        [
+          "GA",
+          40.0
+        ],
+        [
+          "PSO",
+          40.0
+        ]
+      ],
+      "scores": {
+        "GA": 40.0,
+        "PSO": 40.0,
+        "Z3": 60.0
+      },
+      "features": {
+        "resource_scale": 4194304.0,
+        "service_scale": 30,
+        "budget_tightness": 0.002384185791015625,
+        "provider_count": 4,
+        "has_latency_constraint": true,
+        "has_sla_constraint": true,
+        "constraint_density": 3,
+        "is_highly_constrained": true
+      },
+      "reason": "Learned router high confidence (1.00) (Safety Arbitration: Added Z3 for hard constraint verification)",
+      "confidence": "HIGH",
+      "routing_mode": "learned_high"
+    }
+  }
+]
