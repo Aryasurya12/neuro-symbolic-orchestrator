@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import textwrap
 import time
@@ -24,8 +25,12 @@ st.set_page_config(
 
 
 def render_html(html_str: str) -> None:
-    """Renders HTML in Streamlit with automatic dedenting to prevent CommonMark code block escapes."""
-    st.markdown(textwrap.dedent(html_str).strip(), unsafe_allow_html=True)
+    """Renders pure HTML in Streamlit directly without CommonMark code block escapes."""
+    clean_html = "\n".join(line.strip() for line in html_str.strip().splitlines())
+    if hasattr(st, "html"):
+        st.html(clean_html)
+    else:
+        st.markdown(clean_html, unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -211,8 +216,14 @@ render_html(
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: 6px;
-        padding: 18px 20px;
+        padding: 16px 18px;
         text-align: left;
+        min-height: 104px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
         transition: border-color 150ms ease;
     }
 
@@ -221,22 +232,26 @@ render_html(
     }
 
     .metric-value {
-        font-size: 1.65rem;
+        font-size: clamp(1.15rem, 1.8vw, 1.55rem);
         font-weight: 700;
         color: var(--accent-primary);
         font-family: var(--font-mono);
         font-variant-numeric: tabular-nums;
-        line-height: 1.1;
+        line-height: 1.2;
         margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .metric-label {
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
         font-family: var(--font-sans);
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
+        line-height: 1.3;
     }
 
     /* CARM Bars */
@@ -278,7 +293,7 @@ render_html(
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
         border-radius: 6px;
-        padding: 20px;
+        padding: 22px;
         margin-bottom: 24px;
     }
 
@@ -286,7 +301,7 @@ render_html(
         display: flex;
         align-items: center;
         margin-bottom: 14px;
-        gap: 12px;
+        gap: 14px;
     }
 
     .race-row:last-child {
@@ -294,7 +309,8 @@ render_html(
     }
 
     .race-label {
-        width: 220px;
+        width: 210px;
+        min-width: 180px;
         font-size: 0.85rem;
         font-weight: 600;
         color: var(--text-primary);
@@ -304,22 +320,27 @@ render_html(
 
     .race-bar-bg {
         flex: 1;
-        background-color: #1A1A1A;
-        height: 14px;
-        border-radius: 3px;
+        background-color: #161616;
+        height: 16px;
+        border-radius: 4px;
         overflow: hidden;
         border: 1px solid var(--border-default);
+        display: flex;
+        align-items: center;
         position: relative;
     }
 
     .race-bar-fill {
         height: 100%;
-        border-radius: 2px;
-        transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 3px;
+        min-width: 4px;
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+        transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .race-meta {
-        width: 240px;
+        width: 230px;
+        min-width: 200px;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -526,6 +547,60 @@ WORKLOAD_PRESETS = {
 
 
 # =============================================================================
+# Semantic Query Highlighting Helper (Part 2A)
+# =============================================================================
+def highlight_query_terms(query: str) -> str:
+    """Highlights parsed semantic substrings within query text using restrained palette colors:
+
+    - Blue (#38BDF8): Cloud Providers
+    - Neon Green (#22C55E): Currency / Budget mentions
+    - Amber (#F59E0B): Percentage / SLA targets
+    - Cyan / Purple (#2DD4BF / #C084FC): Compute, memory, latency, and architecture parameters
+    """
+    categories = [
+        # Cloud Providers (Blue)
+        (r"\b(AWS|GCP|Azure|Google Cloud|Amazon Web Services)\b", "#38BDF8", "Cloud Provider"),
+        # Currency / Budget Mention (Neon Green)
+        (r"(\$\d+(?:\.\d+)?|\b\d+\s*(?:dollars|usd|bucks|rupees)\b|saste mein|\bunders?\s*\$?\d+(?:\s*(?:dollars|usd|bucks|rupees))?)", "#22C55E", "Budget/Currency"),
+        # Percentage / SLA Mention (Amber)
+        (r"(\b\d+(?:\.\d+)?%\s*(?:SLA|availability)?|\b99\.99%?\b)", "#F59E0B", "SLA Target"),
+        # Latency Mention (Cyan)
+        (r"(\b\d+\s*ms\b|\bunder\s*\d+\s*ms\b|\blatency\s*(?:under|<=)?\s*\d+\s*ms\b)", "#2DD4BF", "Latency SLA"),
+        # Compute / Resources / Architecture (Purple)
+        (r"(\b\d+\s*(?:high-memory\s+nodes|nodes|vCPUs|GB\s+RAM|instances)\b|\b\d+GB\s+RAM\b|\bus-[a-z]+-\d+\b|\bactive-passive\s+DR\b|\bbatch processing\b)", "#C084FC", "Compute / Architecture"),
+    ]
+
+    spans = []
+    for pattern, color, label in categories:
+        for m in re.finditer(pattern, query, re.IGNORECASE):
+            spans.append((m.start(), m.end(), color, label))
+
+    # Sort spans by start asc, length desc
+    spans.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+
+    # Filter out overlapping spans
+    non_overlapping = []
+    last_end = -1
+    for start, end, color, label in spans:
+        if start >= last_end:
+            non_overlapping.append((start, end, color, label))
+            last_end = end
+
+    # Construct HTML with spans
+    out = []
+    curr = 0
+    for start, end, color, label in non_overlapping:
+        if start > curr:
+            out.append(query[curr:start])
+        out.append(f'<span style="color: {color}; font-weight: 600; border-bottom: 1px dashed {color};" title="{label}">{query[start:end]}</span>')
+        curr = end
+    if curr < len(query):
+        out.append(query[curr:])
+
+    return "".join(out)
+
+
+# =============================================================================
 # Real-Time Live Pipeline Execution Function
 # =============================================================================
 def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
@@ -570,15 +645,15 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     savings = max(0.0, budget - optimal_cost)
     savings_pct = (savings / budget) * 100.0 if budget > 0 else 0.0
 
-    # Engine label
+    # Engine label (clean, concise names for uniform card height)
     if problem_type == "Z3_Graph_Disaster_Recovery":
-        engine_label = "Z3 SMT Graph Solver"
+        engine_label = "Z3 SMT Graph"
         solver_desc = "SMT evaluation over topological candidate region pairs against latency, SLA, and budget constraints."
     elif problem_type == "PSO_Continuous_Scaling":
-        engine_label = "Continuous PSO Scaling"
+        engine_label = "Continuous PSO"
         solver_desc = "Continuous dynamic particle swarm optimization minimizing bandwidth and replica compute cost."
     else:
-        engine_label = "SciPy HiGHS MILP / Branch & Bound"
+        engine_label = "SciPy HiGHS MILP"
         solver_desc = "Branch & Bound global integer programming solution satisfying all resource inequalities."
 
     # Multi-Region Disaster Recovery Candidates (for Z3 problem type)
@@ -689,13 +764,13 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             f"Guarantees 0 constraint violations and achieves ${savings:.2f}/month ({savings_pct:.1f}%) net budget savings under the ${budget:.2f} monthly cap."
         )
 
-    # Race Simulation Data (Contrasting Recorded LLMs with Live Solver Execution)
+    # Race Simulation Data (Proportional to Slowest Mode ~193.4s)
     race_data = [
         {
             "mode": "Mode 1: Pure LLM",
             "latency_ms": 193400,
             "latency_disp": "193.4s",
-            "width_pct": 92,
+            "width_pct": 98,
             "status": "❌ Hallucinated",
             "color": "#F59E0B",
         },
@@ -703,7 +778,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "mode": "Mode 2: Structured LLM",
             "latency_ms": 178200,
             "latency_disp": "178.2s",
-            "width_pct": 85,
+            "width_pct": 90,
             "status": "❌ Price Error",
             "color": "#EF4444",
         },
@@ -711,7 +786,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "mode": "Mode 3: Pure Symbolic",
             "latency_ms": solve_latency_ms,
             "latency_disp": f"{solve_latency_ms:.1f}ms",
-            "width_pct": max(6, min(25, int(solve_latency_ms * 2))),
+            "width_pct": max(1.5, min(3.5, round((solve_latency_ms / 193400.0) * 100, 1))),
             "status": "✅ 100% Optimal",
             "color": "#3B82F6",
         },
@@ -719,7 +794,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "mode": "Mode 4: Neuro-Symbolic",
             "latency_ms": total_latency_ms,
             "latency_disp": f"{total_latency_ms:.1f}ms",
-            "width_pct": max(10, min(35, int(total_latency_ms * 2))),
+            "width_pct": max(2.5, min(5.5, round((total_latency_ms / 193400.0) * 100, 1))),
             "status": "✅ Provably Sound",
             "color": "#22C55E",
         },
@@ -843,8 +918,6 @@ with st.sidebar:
 # PAGE 1: LANDING PAGE
 # =============================================================================
 if st.session_state["current_page"] == "landing":
-    render_html('<div class="wordmark">neurasym<span class="terminal-cursor">_</span></div>')
-
     # Hero Section
     render_html(
         """
@@ -928,8 +1001,14 @@ if st.session_state["current_page"] == "landing":
 # PAGE 2: BENCHMARK DASHBOARD
 # =============================================================================
 else:
-    render_html('<div class="wordmark">neurasym<span class="terminal-cursor">_</span></div>')
-    st.markdown("## Benchmark Dashboard")
+    render_html(
+        """
+        <div style="margin-bottom: 20px;">
+            <h1 style="font-size: 1.65rem; font-weight: 700; color: var(--text-primary); margin: 0 0 6px 0; letter-spacing: -0.02em; font-family: var(--font-sans);">Benchmark Dashboard</h1>
+            <div style="font-size: 0.88rem; color: var(--text-secondary); margin: 0;">Test representative enterprise workloads and inspect the real pipeline trace.</div>
+        </div>
+        """
+    )
 
     # 1. Query Input Area
     col_input, col_run = st.columns([5, 1])
@@ -974,7 +1053,7 @@ else:
         render_html(
             f"""
             <div class="metric-tile">
-                <div class="metric-value">${live_result['savings_usd']:.2f} <span style="font-size: 0.95rem; font-weight: 500; color: var(--accent-primary);">({live_result['savings_pct']:.1f}%)</span></div>
+                <div class="metric-value">${live_result['savings_usd']:.2f} <span style="font-size: 0.82rem; font-weight: 500; color: var(--accent-primary);">({live_result['savings_pct']:.1f}%)</span></div>
                 <div class="metric-label">Net Budget Savings</div>
             </div>
             """
@@ -992,7 +1071,7 @@ else:
         render_html(
             f"""
             <div class="metric-tile">
-                <div class="metric-value" style="font-size: 1.15rem; padding-top: 6px;">{live_result['solver_engine']}</div>
+                <div class="metric-value" style="font-size: clamp(1.05rem, 1.5vw, 1.35rem); font-family: var(--font-sans); padding-top: 4px;">{live_result['solver_engine']}</div>
                 <div class="metric-label">Active Solver Engine</div>
             </div>
             """
@@ -1121,6 +1200,7 @@ else:
         f'<span style="background: rgba(34, 197, 94, 0.12); color: var(--accent-primary); border: 1px solid rgba(34, 197, 94, 0.3); padding: 2px 7px; border-radius: 3px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-mono); margin-right: 4px;">{p}</span>'
         for p in live_result["contract"].cloud_providers
     )
+    highlighted_query = highlight_query_terms(st.session_state["active_query_text"])
     render_html(
         f"""
         <div class="clean-card">
@@ -1129,6 +1209,10 @@ else:
                 <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono);">SCOPE Grammar Extractor</span>
             </div>
             <div class="card-subtitle">Disentangles colloquial terms, currency indicators, and compute units into normalized parameters.</div>
+            <div style="background: #050505; border: 1px solid var(--border-default); border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5; font-family: var(--font-sans);">
+                <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; display: block; margin-bottom: 4px;">Extracted Semantic Substrings:</span>
+                "{highlighted_query}"
+            </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 6px;">
                 <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
                     <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Target Cloud</div>
