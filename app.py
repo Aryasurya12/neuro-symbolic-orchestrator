@@ -1,5 +1,5 @@
 """neurasym: Neuro-Symbolic Cloud FinOps Orchestrator
-Academic Demonstration & Benchmark Studio (Black / Neon Green Terminal Theme)
+Academic Demonstration & Benchmark Studio (Argon-Style Dark Dashboard Theme)
 Connected to Real-Time Neuro-Symbolic Optimization Logic.
 """
 
@@ -13,6 +13,7 @@ import textwrap
 import time
 from typing import Any, Dict, List, Optional, Set
 
+import plotly.graph_objects as go
 import streamlit as st
 
 # Configure Streamlit page
@@ -34,7 +35,7 @@ def render_html(html_str: str) -> None:
 
 
 # =============================================================================
-# Black / Neon Green Terminal Theme CSS
+# Argon-Style Dark Dashboard Theme CSS
 # =============================================================================
 render_html(
     """
@@ -42,30 +43,28 @@ render_html(
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
     :root {
-        --bg-primary: #0A0A0A;
-        --bg-surface: #121212;
-        --bg-surface-hover: #1A1A1A;
-        --border-default: #262626;
-        --border-accent: rgba(34, 197, 94, 0.2);
+        --bg-primary:       #172142;   /* deep navy, main page background */
+        --bg-surface:       #1E2A4A;   /* card background, one step lighter than primary */
+        --bg-surface-hover: #253358;
+        --border-default:   #2C3B63;
 
-        --text-primary: #E5E5E5;
-        --text-secondary: #8A8A8A;
-        --text-disabled: #4A4A4A;
+        --text-primary:     #FFFFFF;
+        --text-secondary:   #9BA6C4;   /* muted blue-gray for labels/secondary text */
+        --text-disabled:    #5A6789;
 
-        --accent-primary: #22C55E;
-        --accent-dim: #16A34A;
-        --accent-glow: rgba(34, 197, 94, 0.15);
+        --gradient-accent-start: #EC4899;  /* hot pink */
+        --gradient-accent-end:   #8B2FC9;  /* purple */
 
-        --mode1-color: #F59E0B;
-        --mode2-color: #EF4444;
-        --mode3-color: #3B82F6;
-        --mode4-color: #22C55E;
+        --chart-pink:   #F5365C;   /* line chart 1 (e.g. Mode/latency trend) */
+        --chart-blue:   #3B82F6;   /* bar chart fills */
+        --chart-teal:   #2DCE89;   /* line chart 2 (e.g. savings/cost trend) */
 
-        --status-error: #EF4444;
-        --status-warning: #F59E0B;
+        --status-success: #2DCE89;
+        --status-warning: #FB6340;
+        --status-error:   #F5365C;
 
-        --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-        --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+        --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Inter, sans-serif;
+        --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
     }
 
     html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
@@ -74,23 +73,68 @@ render_html(
         font-family: var(--font-sans);
     }
 
-    /* Strict Global Overrides: Absolutely no white code or box backgrounds */
+    /* Strict Global Overrides: Inset dark backgrounds for code blocks */
     pre, code, kbd, samp, tt, .clean-pre, [data-testid="stCodeBlock"], .stCode, pre *, code * {
-        background-color: #0E0E0E !important;
-        background: #0E0E0E !important;
+        background-color: #131B33 !important;
+        background: #131B33 !important;
         color: var(--text-primary) !important;
         border: 1px solid var(--border-default) !important;
+        border-radius: 8px !important;
         box-shadow: none !important;
         font-family: var(--font-mono) !important;
     }
 
+    /* Sidebar - Pink-to-Purple Diagonal Gradient */
     section[data-testid="stSidebar"] {
-        background-color: #0A0A0A !important;
-        border-right: 1px solid var(--border-default) !important;
+        background: linear-gradient(135deg, var(--gradient-accent-start), var(--gradient-accent-end)) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+
+    section[data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
     }
 
     section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: var(--text-secondary);
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+
+    /* Sidebar Radio Navigation - Solid Pill Active State */
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 9999px !important;
+        padding: 8px 16px !important;
+        margin-bottom: 6px !important;
+        transition: all 150ms ease !important;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
+    section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+        background: rgba(255, 255, 255, 0.25) !important;
+        border-color: rgba(255, 255, 255, 0.5) !important;
+        font-weight: 600 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Sidebar Preset Buttons - Clean Pill Style */
+    section[data-testid="stSidebar"] div.stButton > button {
+        background: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        border-radius: 9999px !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        padding: 6px 14px !important;
+        transition: all 150ms ease !important;
+    }
+
+    section[data-testid="stSidebar"] div.stButton > button:hover {
+        background: rgba(255, 255, 255, 0.28) !important;
+        border-color: #FFFFFF !important;
     }
 
     .main .block-container {
@@ -107,19 +151,19 @@ render_html(
     }
 
     .wordmark {
-        font-size: 1.25rem;
+        font-size: 1.3rem;
         font-weight: 700;
         letter-spacing: -0.03em;
-        color: var(--text-primary);
+        color: #FFFFFF;
         display: inline-flex;
         align-items: center;
         margin-bottom: 0.25rem;
-        font-family: var(--font-mono);
+        font-family: var(--font-sans);
     }
 
     .terminal-cursor {
         display: inline-block;
-        color: var(--accent-primary);
+        color: #FFFFFF;
         font-weight: 700;
         margin-left: 2px;
         animation: cursor-blink 1s step-start infinite;
@@ -132,8 +176,8 @@ render_html(
 
     .wordmark-sub {
         font-size: 0.82rem;
-        color: var(--text-secondary);
-        font-family: var(--font-mono);
+        color: rgba(255, 255, 255, 0.85);
+        font-family: var(--font-sans);
         margin-bottom: 1.5rem;
     }
 
@@ -163,14 +207,14 @@ render_html(
     .clean-card {
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
-        border-radius: 6px;
+        border-radius: 12px;
         padding: 22px;
         margin-bottom: 16px;
-        transition: border-color 150ms ease;
+        transition: border-color 150ms ease, background-color 150ms ease;
     }
 
     .clean-card:hover {
-        border-color: #383838;
+        border-color: #3B4D7A;
     }
 
     .card-header-title {
@@ -193,7 +237,7 @@ render_html(
     .step-number {
         font-size: 0.78rem;
         font-weight: 700;
-        color: var(--accent-primary);
+        color: var(--gradient-accent-start);
         font-family: var(--font-mono);
         letter-spacing: 0.05em;
         margin-bottom: 6px;
@@ -212,45 +256,63 @@ render_html(
         line-height: 1.5;
     }
 
+    /* Metric Cards */
     .metric-tile {
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
-        border-radius: 6px;
-        padding: 16px 18px;
+        border-radius: 12px;
+        padding: 18px 20px;
         text-align: left;
-        min-height: 104px;
+        min-height: 112px;
         height: 100%;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
         box-sizing: border-box;
-        transition: border-color 150ms ease;
+        transition: border-color 150ms ease, background-color 150ms ease;
     }
 
     .metric-tile:hover {
-        border-color: var(--border-accent);
+        border-color: #3B4D7A;
+        background-color: var(--bg-surface-hover);
+    }
+
+    .metric-tag {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+    }
+
+    .metric-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
     }
 
     .metric-value {
-        font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+        font-size: clamp(1.2rem, 1.8vw, 1.6rem);
         font-weight: 700;
-        color: var(--accent-primary);
-        font-family: var(--font-mono);
+        color: var(--text-primary);
+        font-family: var(--font-sans);
         font-variant-numeric: tabular-nums;
         line-height: 1.2;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     .metric-label {
-        font-size: 0.75rem;
+        font-size: 0.76rem;
         color: var(--text-secondary);
         font-family: var(--font-sans);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+        font-weight: 500;
         line-height: 1.3;
     }
 
@@ -268,31 +330,30 @@ render_html(
     }
 
     .carm-bar-track {
-        background-color: #1F1F1F;
-        border-radius: 3px;
+        background-color: #131B33;
+        border-radius: 6px;
         height: 8px;
         width: 100%;
         overflow: hidden;
     }
 
     .carm-bar-fill {
-        background-color: var(--accent-primary);
+        background: linear-gradient(90deg, var(--gradient-accent-start), var(--gradient-accent-end));
         height: 100%;
-        border-radius: 3px;
-        box-shadow: 0 0 8px var(--accent-glow);
+        border-radius: 6px;
     }
 
     .carm-bar-fill-secondary {
-        background-color: #4A4A4A;
+        background-color: #2C3B63;
         height: 100%;
-        border-radius: 3px;
+        border-radius: 6px;
     }
 
     /* Race Track Visualizer */
     .race-track-container {
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
-        border-radius: 6px;
+        border-radius: 12px;
         padding: 22px;
         margin-bottom: 24px;
     }
@@ -320,9 +381,9 @@ render_html(
 
     .race-bar-bg {
         flex: 1;
-        background-color: #161616;
+        background-color: #131B33;
         height: 16px;
-        border-radius: 4px;
+        border-radius: 6px;
         overflow: hidden;
         border: 1px solid var(--border-default);
         display: flex;
@@ -332,9 +393,8 @@ render_html(
 
     .race-bar-fill {
         height: 100%;
-        border-radius: 3px;
-        min-width: 4px;
-        box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+        border-radius: 5px;
+        min-width: 6px;
         transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -359,35 +419,6 @@ render_html(
         font-weight: 600;
     }
 
-    /* Mode Pill Selector */
-    .mode-pill-bar {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 18px;
-        flex-wrap: wrap;
-    }
-
-    .mode-pill {
-        background-color: var(--bg-surface);
-        border: 1px solid var(--border-default);
-        padding: 8px 14px;
-        border-radius: 4px;
-        font-size: 0.84rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all 150ms ease;
-        font-family: var(--font-sans);
-    }
-
-    .mode-pill.active {
-        background-color: var(--bg-surface);
-        border-color: var(--border-default);
-        border-left: 3px solid var(--accent-primary);
-        color: var(--accent-primary);
-        font-weight: 600;
-    }
-
     /* Clean Tables */
     .clean-table {
         width: 100%;
@@ -398,8 +429,8 @@ render_html(
 
     .clean-table th {
         text-align: left;
-        padding: 10px 12px;
-        background-color: #0E0E0E;
+        padding: 12px 14px;
+        background-color: #131B33;
         color: var(--text-secondary);
         font-weight: 600;
         border-bottom: 1px solid var(--border-default);
@@ -409,7 +440,7 @@ render_html(
     }
 
     .clean-table td {
-        padding: 10px 12px;
+        padding: 12px 14px;
         border-bottom: 1px solid var(--border-default);
         color: var(--text-primary);
     }
@@ -420,23 +451,122 @@ render_html(
 
     .status-tag {
         display: inline-block;
-        padding: 2px 6px;
-        border-radius: 3px;
+        padding: 2px 7px;
+        border-radius: 9999px;
         font-size: 0.72rem;
         font-weight: 600;
         font-family: var(--font-mono);
     }
 
     .status-tag-recorded {
-        background-color: #1F1F1F;
+        background-color: #253358;
         color: var(--text-secondary);
         border: 1px solid var(--border-default);
     }
 
+    /* =========================================================================
+       MOTION & ANIMATION (Pure CSS - Zero JS-Timing Risk)
+       ========================================================================= */
+
+    @keyframes fadeSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes pulseDot {
+        0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 0.35;
+            transform: scale(0.8);
+        }
+    }
+
+    /* Page-level entrance cross-fade */
+    .main .block-container, #page-landing, #page-dashboard, .page-content {
+        animation: fadeSlideIn 0.35s ease-out;
+    }
+
+    /* Base Card Animation */
+    .clean-card, .metric-tile, .race-track-container, .chart-card, .trace-card {
+        animation: fadeSlideIn 0.5s ease-out both;
+    }
+
+    /* 1. Staggered Delays for Metric Cards (4 cards) */
+    div[data-testid="column"]:nth-child(1) .metric-tile {
+        animation-delay: 0.05s;
+    }
+    div[data-testid="column"]:nth-child(2) .metric-tile {
+        animation-delay: 0.15s;
+    }
+    div[data-testid="column"]:nth-child(3) .metric-tile {
+        animation-delay: 0.25s;
+    }
+    div[data-testid="column"]:nth-child(4) .metric-tile {
+        animation-delay: 0.35s;
+    }
+
+    /* Staggered Delays for Sequential Pipeline Stages (1 through 5) */
+    .stage-card-1 { animation-delay: 0.35s; }
+    .stage-card-2 { animation-delay: 0.45s; }
+    .stage-card-3 { animation-delay: 0.55s; }
+    .stage-card-4 { animation-delay: 0.65s; }
+    .stage-card-5 { animation-delay: 0.75s; }
+    .matrix-card   { animation-delay: 0.85s; }
+
+    /* 2. Smooth Transitions on Interactive Elements */
+    .preset-button, .preset-pill, .mode-tab, .mode-pill, button, div.stButton > button, .nav-btn, input, div[data-baseweb="input"] > div {
+        transition: background-color 0.2s ease, border-color 0.2s ease,
+                    transform 0.15s ease, box-shadow 0.2s ease, color 0.15s ease !important;
+    }
+
+    .preset-pill:hover, .mode-pill:hover, div.stButton > button:hover, .nav-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .preset-pill:active, .mode-pill:active, div.stButton > button:active, .nav-btn:active {
+        transform: translateY(0);
+    }
+
+    /* 3. Mode selector tab indicator / transition */
+    .mode-pill-bar, .nav-tabs {
+        position: relative;
+    }
+
+    .mode-pill, .nav-btn {
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* 4. Subtle pulse on LIVE status badges only */
+    .status-tag-live::before, .badge-live::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--status-success);
+        margin-right: 5px;
+        vertical-align: middle;
+        animation: pulseDot 1.5s ease-in-out infinite;
+    }
+
+    /* 5. Race Bar Fill Transition */
+    .race-bar-fill {
+        transition: width 1.0s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
     .status-tag-live {
-        background-color: rgba(34, 197, 94, 0.1);
-        color: var(--accent-primary);
-        border: 1px solid rgba(34, 197, 94, 0.3);
+        background-color: rgba(45, 206, 137, 0.15);
+        color: var(--status-success);
+        border: 1px solid rgba(45, 206, 137, 0.3);
     }
 
     .caveat-text {
@@ -445,56 +575,64 @@ render_html(
         margin-top: 2.5rem;
         padding-top: 1rem;
         border-top: 1px solid var(--border-default);
-        font-family: var(--font-mono);
+        font-family: var(--font-sans);
     }
 
     .active-query-banner {
         background-color: var(--bg-surface);
         border: 1px solid var(--border-default);
-        border-left: 3px solid var(--accent-primary);
-        border-radius: 4px;
-        padding: 14px 18px;
+        border-left: 4px solid var(--gradient-accent-start);
+        border-radius: 12px;
+        padding: 16px 20px;
         margin-bottom: 20px;
     }
 
+    /* Buttons: Primary Button Gradient Pill, Secondary Pill */
     div.stButton > button[kind="primary"] {
-        background-color: var(--accent-primary) !important;
-        color: #0A0A0A !important;
-        border: 1px solid var(--accent-primary) !important;
+        background: linear-gradient(135deg, var(--gradient-accent-start), var(--gradient-accent-end)) !important;
+        color: #FFFFFF !important;
+        border: none !important;
         font-weight: 600 !important;
         font-family: var(--font-sans) !important;
-        box-shadow: 0 0 12px var(--accent-glow) !important;
-        border-radius: 4px !important;
+        border-radius: 9999px !important;
+        padding: 10px 24px !important;
+        box-shadow: 0 4px 14px rgba(236, 72, 153, 0.25) !important;
         transition: all 150ms ease !important;
     }
 
     div.stButton > button[kind="primary"]:hover {
-        background-color: var(--accent-dim) !important;
-        border-color: var(--accent-dim) !important;
+        opacity: 0.95;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(236, 72, 153, 0.4) !important;
     }
 
     div.stButton > button[kind="secondary"], div.stButton > button:not([kind="primary"]) {
         background-color: var(--bg-surface) !important;
         color: var(--text-primary) !important;
         border: 1px solid var(--border-default) !important;
-        border-radius: 4px !important;
-        transition: border-color 150ms ease !important;
+        border-radius: 9999px !important;
+        font-size: 0.86rem !important;
+        font-weight: 500 !important;
+        transition: all 150ms ease !important;
     }
 
     div.stButton > button[kind="secondary"]:hover, div.stButton > button:not([kind="primary"]):hover {
-        border-color: var(--accent-primary) !important;
-        color: var(--text-primary) !important;
+        background-color: var(--bg-surface-hover) !important;
+        border-color: var(--gradient-accent-start) !important;
+        color: #FFFFFF !important;
     }
 
     div[data-baseweb="input"] > div {
         background-color: var(--bg-surface) !important;
         border-color: var(--border-default) !important;
-        border-radius: 4px !important;
+        border-radius: 9999px !important;
         color: var(--text-primary) !important;
+        padding: 2px 14px !important;
     }
 
     input.stTextInput {
         color: var(--text-primary) !important;
+        font-family: var(--font-sans) !important;
     }
     </style>
     """
@@ -547,25 +685,25 @@ WORKLOAD_PRESETS = {
 
 
 # =============================================================================
-# Semantic Query Highlighting Helper (Part 2A)
+# Semantic Query Highlighting Helper (Argon Palette)
 # =============================================================================
 def highlight_query_terms(query: str) -> str:
-    """Highlights parsed semantic substrings within query text using restrained palette colors:
-
-    - Blue (#38BDF8): Cloud Providers
-    - Neon Green (#22C55E): Currency / Budget mentions
-    - Amber (#F59E0B): Percentage / SLA targets
-    - Cyan / Purple (#2DD4BF / #C084FC): Compute, memory, latency, and architecture parameters
+    """Highlights parsed semantic substrings within query text using Argon palette tokens:
+    - Blue (#3B82F6): Cloud Providers
+    - Teal (#2DCE89): Currency / Budget mentions
+    - Orange (#FB6340): Percentage / SLA targets
+    - Pink (#F5365C): Latency mentions
+    - Purple (#C084FC): Compute, memory, latency, and architecture parameters
     """
     categories = [
         # Cloud Providers (Blue)
-        (r"\b(AWS|GCP|Azure|Google Cloud|Amazon Web Services)\b", "#38BDF8", "Cloud Provider"),
-        # Currency / Budget Mention (Neon Green)
-        (r"(\$\d+(?:\.\d+)?|\b\d+\s*(?:dollars|usd|bucks|rupees)\b|saste mein|\bunders?\s*\$?\d+(?:\s*(?:dollars|usd|bucks|rupees))?)", "#22C55E", "Budget/Currency"),
-        # Percentage / SLA Mention (Amber)
-        (r"(\b\d+(?:\.\d+)?%\s*(?:SLA|availability)?|\b99\.99%?\b)", "#F59E0B", "SLA Target"),
-        # Latency Mention (Cyan)
-        (r"(\b\d+\s*ms\b|\bunder\s*\d+\s*ms\b|\blatency\s*(?:under|<=)?\s*\d+\s*ms\b)", "#2DD4BF", "Latency SLA"),
+        (r"\b(AWS|GCP|Azure|Google Cloud|Amazon Web Services)\b", "#3B82F6", "Cloud Provider"),
+        # Currency / Budget Mention (Teal)
+        (r"(\$\d+(?:\.\d+)?|\b\d+\s*(?:dollars|usd|bucks|rupees)\b|saste mein|\bunders?\s*\$?\d+(?:\s*(?:dollars|usd|bucks|rupees))?)", "#2DCE89", "Budget/Currency"),
+        # Percentage / SLA Mention (Orange)
+        (r"(\b\d+(?:\.\d+)?%\s*(?:SLA|availability)?|\b99\.99%?\b)", "#FB6340", "SLA Target"),
+        # Latency Mention (Pink)
+        (r"(\b\d+\s*ms\b|\bunder\s*\d+\s*ms\b|\blatency\s*(?:under|<=)?\s*\d+\s*ms\b)", "#F5365C", "Latency SLA"),
         # Compute / Resources / Architecture (Purple)
         (r"(\b\d+\s*(?:high-memory\s+nodes|nodes|vCPUs|GB\s+RAM|instances)\b|\b\d+GB\s+RAM\b|\bus-[a-z]+-\d+\b|\bactive-passive\s+DR\b|\bbatch processing\b)", "#C084FC", "Compute / Architecture"),
     ]
@@ -605,7 +743,6 @@ def highlight_query_terms(query: str) -> str:
 # =============================================================================
 def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     """Executes real-time SCOPE semantic extraction, CARM Jaccard matching,
-
     formal Pydantic contract synthesis, symbolic solver execution, and FinOps explanation.
     """
     from templates.Graph_SMT_Z3_MultiRegion_Placement import (
@@ -707,6 +844,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
                     "latency": f"{lat:.1f} ms",
                     "sla": f"{comp_sla:.4f}%",
                     "budget": f"${tot_c:.2f}",
+                    "cost_val": tot_c,
                     "result": res_str,
                     "is_pass": is_pass,
                 })
@@ -772,7 +910,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "latency_disp": "193.4s",
             "width_pct": 98,
             "status": "❌ Hallucinated",
-            "color": "#F59E0B",
+            "color": "#FB6340",
         },
         {
             "mode": "Mode 2: Structured LLM",
@@ -780,13 +918,13 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "latency_disp": "178.2s",
             "width_pct": 90,
             "status": "❌ Price Error",
-            "color": "#EF4444",
+            "color": "#F5365C",
         },
         {
             "mode": "Mode 3: Pure Symbolic",
             "latency_ms": solve_latency_ms,
             "latency_disp": f"{solve_latency_ms:.1f}ms",
-            "width_pct": max(1.5, min(3.5, round((solve_latency_ms / 193400.0) * 100, 1))),
+            "width_pct": max(2.0, min(4.0, round((solve_latency_ms / 193400.0) * 100, 1))),
             "status": "✅ 100% Optimal",
             "color": "#3B82F6",
         },
@@ -794,9 +932,9 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "mode": "Mode 4: Neuro-Symbolic",
             "latency_ms": total_latency_ms,
             "latency_disp": f"{total_latency_ms:.1f}ms",
-            "width_pct": max(2.5, min(5.5, round((total_latency_ms / 193400.0) * 100, 1))),
+            "width_pct": max(3.0, min(6.0, round((total_latency_ms / 193400.0) * 100, 1))),
             "status": "✅ Provably Sound",
-            "color": "#22C55E",
+            "color": "#2DCE89",
         },
     ]
 
@@ -809,7 +947,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "math": "⚠️ Hallucinated Pricing",
             "latency": "193.4s",
             "cost": f"~${optimal_cost * 1.8:.2f} (Est)",
-            "cost_color": "#F59E0B",
+            "cost_color": "#FB6340",
         },
         {
             "mode": "Mode 2: Structured LLM (Pydantic)",
@@ -818,7 +956,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "math": "❌ Token Arithmetic Error",
             "latency": "178.2s",
             "cost": f"${optimal_cost * 1.4:.2f} (Claimed)",
-            "cost_color": "#EF4444",
+            "cost_color": "#F5365C",
         },
         {
             "mode": "Mode 3: Pure Symbolic (Solver)",
@@ -827,7 +965,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "math": "🟢 100% Provably Optimal",
             "latency": f"{solve_latency_ms:.1f}ms",
             "cost": f"${optimal_cost:.2f}",
-            "cost_color": "#22C55E",
+            "cost_color": "#2DCE89",
         },
         {
             "mode": "Mode 4: Full Neuro-Symbolic",
@@ -836,7 +974,7 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
             "math": "🟢 100% Provably Optimal",
             "latency": f"{total_latency_ms:.1f}ms",
             "cost": f"${optimal_cost:.2f}",
-            "cost_color": "#22C55E",
+            "cost_color": "#2DCE89",
         },
     ]
 
@@ -860,6 +998,182 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
         "race_data": race_data,
         "modes_comparison": modes_comparison,
     }
+
+
+# =============================================================================
+# Argon Chart Rendering Helpers (Plotly Offline)
+# =============================================================================
+def create_smooth_latency_line_chart(race_data: List[Dict[str, Any]]) -> go.Figure:
+    """Chart Type 1: Smooth line chart with circular dot markers in --chart-pink (#F5365C)
+
+    with subtle gradient area fill underneath.
+    """
+    labels = [r["mode"].split(":")[0] for r in race_data]
+    # Log-scale or direct seconds display for clear contrast
+    latencies_sec = [r["latency_ms"] / 1000.0 for r in race_data]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=labels,
+            y=latencies_sec,
+            mode="lines+markers+text",
+            name="Execution Time (s)",
+            line=dict(color="#F5365C", width=3, shape="spline", smoothing=1.1),
+            marker=dict(
+                color="#F5365C",
+                size=10,
+                symbol="circle",
+                line=dict(color="#FFFFFF", width=2),
+            ),
+            text=[f"{v:.1f}s" if v >= 1.0 else f"{v*1000:.1f}ms" for v in latencies_sec],
+            textposition="top center",
+            textfont=dict(family="-apple-system, Segoe UI, sans-serif", color="#FFFFFF", size=11),
+            fill="tozeroy",
+            fillcolor="rgba(245, 54, 92, 0.15)",
+        )
+    )
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#1E2A4A",
+        plot_bgcolor="#1E2A4A",
+        margin=dict(l=35, r=35, t=30, b=30),
+        font=dict(family="-apple-system, Segoe UI, sans-serif", color="#9BA6C4", size=12),
+        xaxis=dict(
+            gridcolor="rgba(44, 59, 99, 0.4)",
+            showgrid=False,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            gridcolor="rgba(44, 59, 99, 0.4)",
+            showgrid=True,
+            zeroline=False,
+            title=dict(text="Latency (Seconds)", font=dict(color="#9BA6C4", size=11)),
+        ),
+        height=260,
+        showlegend=False,
+    )
+    return fig
+
+
+def create_argon_bar_chart(allocations: List[Dict[str, Any]], region_pairs: List[Dict[str, Any]], problem_type: str) -> go.Figure:
+    """Chart Type 2: Rounded Bar Chart in --chart-blue (#3B82F6) for allocation / candidate cost."""
+    fig = go.Figure()
+
+    if problem_type == "Z3_Graph_Disaster_Recovery" and region_pairs:
+        # Show top candidate pairs
+        top_candidates = region_pairs[:6]
+        labels = [f"{rp['region_a'].split(' ')[0]} + {rp['region_b'].split(' ')[0]}" for rp in top_candidates]
+        costs = [rp["cost_val"] for rp in top_candidates]
+        colors = ["#2DCE89" if rp["is_pass"] else "#3B82F6" for rp in top_candidates]
+
+        fig.add_trace(
+            go.Bar(
+                x=labels,
+                y=costs,
+                marker=dict(
+                    color=colors,
+                    line=dict(color="rgba(255,255,255,0.1)", width=1),
+                ),
+                text=[f"${c:.1f}" for c in costs],
+                textposition="outside",
+                textfont=dict(color="#FFFFFF", size=11),
+                name="Pair Cost",
+            )
+        )
+        y_title = "Monthly Topology Cost ($)"
+    else:
+        labels = [a["sku"] for a in allocations]
+        costs = [a["monthly_cost"] for a in allocations]
+
+        fig.add_trace(
+            go.Bar(
+                x=labels,
+                y=costs,
+                marker=dict(
+                    color="#3B82F6",
+                    line=dict(color="rgba(255,255,255,0.1)", width=1),
+                ),
+                text=[f"${c:.2f}" for c in costs],
+                textposition="outside",
+                textfont=dict(color="#FFFFFF", size=11),
+                name="SKU Monthly Cost",
+            )
+        )
+        y_title = "Allocated Monthly Cost ($)"
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#1E2A4A",
+        plot_bgcolor="#1E2A4A",
+        margin=dict(l=35, r=35, t=30, b=30),
+        font=dict(family="-apple-system, Segoe UI, sans-serif", color="#9BA6C4", size=12),
+        xaxis=dict(gridcolor="rgba(44, 59, 99, 0.4)", showgrid=False),
+        yaxis=dict(
+            gridcolor="rgba(44, 59, 99, 0.4)",
+            showgrid=True,
+            title=dict(text=y_title, font=dict(color="#9BA6C4", size=11)),
+        ),
+        height=260,
+        bargap=0.35,
+        showlegend=False,
+    )
+    return fig
+
+
+def create_smooth_cost_trend_chart(budget: float, optimal_cost: float) -> go.Figure:
+    """Chart Type 3: Second smooth line chart in --chart-teal (#2DCE89)
+
+    with subtle gradient area fill for Cost Savings and Budget Convergence.
+    """
+    stages = ["Stated Cap", "LLM Mode 1", "Structured 2", "Pure Solver 3", "Neurasym Optimal"]
+    costs = [
+        budget,
+        budget * 1.05,
+        budget * 0.95,
+        optimal_cost,
+        optimal_cost,
+    ]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=stages,
+            y=costs,
+            mode="lines+markers+text",
+            name="Cost Trend",
+            line=dict(color="#2DCE89", width=3, shape="spline", smoothing=1.1),
+            marker=dict(
+                color="#2DCE89",
+                size=10,
+                symbol="circle",
+                line=dict(color="#FFFFFF", width=2),
+            ),
+            text=[f"${c:.1f}" for c in costs],
+            textposition="top center",
+            textfont=dict(family="-apple-system, Segoe UI, sans-serif", color="#FFFFFF", size=11),
+            fill="tozeroy",
+            fillcolor="rgba(45, 206, 137, 0.15)",
+        )
+    )
+
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#1E2A4A",
+        plot_bgcolor="#1E2A4A",
+        margin=dict(l=35, r=35, t=30, b=30),
+        font=dict(family="-apple-system, Segoe UI, sans-serif", color="#9BA6C4", size=12),
+        xaxis=dict(gridcolor="rgba(44, 59, 99, 0.4)", showgrid=False),
+        yaxis=dict(
+            gridcolor="rgba(44, 59, 99, 0.4)",
+            showgrid=True,
+            title=dict(text="Monthly Cost ($)", font=dict(color="#9BA6C4", size=11)),
+        ),
+        height=260,
+        showlegend=False,
+    )
+    return fig
 
 
 # =============================================================================
@@ -896,7 +1210,7 @@ with st.sidebar:
 
     if st.session_state["current_page"] == "dashboard":
         st.markdown("---")
-        render_html("<p style='font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-secondary); text-transform: uppercase;'>Workload Presets</p>")
+        render_html("<p style='font-size: 0.8rem; font-family: var(--font-sans); color: rgba(255,255,255,0.85); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;'>Workload Presets</p>")
         for p_key, p_data in WORKLOAD_PRESETS.items():
             btn_text = f"{p_data['title']}"
             if st.button(btn_text, use_container_width=True, key=f"preset_btn_{p_key}"):
@@ -904,7 +1218,7 @@ with st.sidebar:
                 st.session_state["active_query_text"] = p_data["query"]
 
         st.markdown("---")
-        render_html("<p style='font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-secondary); text-transform: uppercase;'>Engine Status</p>")
+        render_html("<p style='font-size: 0.8rem; font-family: var(--font-sans); color: rgba(255,255,255,0.85); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;'>Engine Status</p>")
         st.caption(
             "• SEM-1: SCOPE Grammar Parser\n"
             "• SEM-2: CARM Jaccard Matcher\n"
@@ -947,7 +1261,7 @@ if st.session_state["current_page"] == "landing":
     with col1:
         render_html(
             """
-            <div class="clean-card">
+            <div class="clean-card" style="animation-delay: 0.1s;">
                 <div class="step-number">STEP 01</div>
                 <div class="step-title">Parse</div>
                 <div class="step-desc">Extracts compute resources, budgets, SLAs, and cloud providers from natural language.</div>
@@ -958,7 +1272,7 @@ if st.session_state["current_page"] == "landing":
     with col2:
         render_html(
             """
-            <div class="clean-card">
+            <div class="clean-card" style="animation-delay: 0.2s;">
                 <div class="step-number">STEP 02</div>
                 <div class="step-title">Match</div>
                 <div class="step-desc">Computes Jaccard similarity across the CARM archetype index to select the sound solver template.</div>
@@ -969,7 +1283,7 @@ if st.session_state["current_page"] == "landing":
     with col3:
         render_html(
             """
-            <div class="clean-card">
+            <div class="clean-card" style="animation-delay: 0.3s;">
                 <div class="step-number">STEP 03</div>
                 <div class="step-title">Solve</div>
                 <div class="step-desc">Executes exact mathematical optimization (MILP, PSO, Z3 SMT) with hard constraint verification.</div>
@@ -980,7 +1294,7 @@ if st.session_state["current_page"] == "landing":
     with col4:
         render_html(
             """
-            <div class="clean-card">
+            <div class="clean-card" style="animation-delay: 0.4s;">
                 <div class="step-number">STEP 04</div>
                 <div class="step-title">Explain</div>
                 <div class="step-desc">Translates solver proofs, slack variables, and costs into deterministic plain English summaries.</div>
@@ -1032,18 +1346,22 @@ else:
     render_html(
         f"""
         <div class="active-query-banner">
-            <div style="font-size: 0.75rem; font-weight: 600; color: var(--accent-primary); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">ACTIVE TARGET QUERY ({live_result['problem_type'].replace('_', ' ').upper()})</div>
+            <div style="font-size: 0.75rem; font-weight: 700; color: var(--gradient-accent-start); font-family: var(--font-sans); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">ACTIVE TARGET QUERY ({live_result['problem_type'].replace('_', ' ').upper()})</div>
             <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 500;">"{st.session_state['active_query_text']}"</div>
         </div>
         """
     )
 
-    # 4 Metric Summary Cards
+    # 4 Metric Summary Cards with Argon Categorical Accent Dots & Badges
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         render_html(
             f"""
             <div class="metric-tile">
+                <div class="metric-tag" style="color: var(--chart-pink);">
+                    <span class="metric-dot" style="background-color: var(--chart-pink);"></span>
+                    Cost Category
+                </div>
                 <div class="metric-value">${live_result['optimal_cost_usd']:.2f}</div>
                 <div class="metric-label">Optimal Monthly Cost</div>
             </div>
@@ -1053,7 +1371,11 @@ else:
         render_html(
             f"""
             <div class="metric-tile">
-                <div class="metric-value">${live_result['savings_usd']:.2f} <span style="font-size: 0.82rem; font-weight: 500; color: var(--accent-primary);">({live_result['savings_pct']:.1f}%)</span></div>
+                <div class="metric-tag" style="color: var(--chart-teal);">
+                    <span class="metric-dot" style="background-color: var(--chart-teal);"></span>
+                    Savings Category
+                </div>
+                <div class="metric-value">${live_result['savings_usd']:.2f} <span style="font-size: 0.82rem; font-weight: 600; color: var(--chart-teal);">({live_result['savings_pct']:.1f}%)</span></div>
                 <div class="metric-label">Net Budget Savings</div>
             </div>
             """
@@ -1062,6 +1384,10 @@ else:
         render_html(
             """
             <div class="metric-tile">
+                <div class="metric-tag" style="color: var(--chart-blue);">
+                    <span class="metric-dot" style="background-color: var(--chart-blue);"></span>
+                    Soundness Verification
+                </div>
                 <div class="metric-value">0</div>
                 <div class="metric-label">Constraint Violations</div>
             </div>
@@ -1071,6 +1397,10 @@ else:
         render_html(
             f"""
             <div class="metric-tile">
+                <div class="metric-tag" style="color: var(--gradient-accent-start);">
+                    <span class="metric-dot" style="background-color: var(--gradient-accent-start);"></span>
+                    Symbolic Engine
+                </div>
                 <div class="metric-value" style="font-size: clamp(1.05rem, 1.5vw, 1.35rem); font-family: var(--font-sans); padding-top: 4px;">{live_result['solver_engine']}</div>
                 <div class="metric-label">Active Solver Engine</div>
             </div>
@@ -1080,12 +1410,44 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # =========================================================================
-    # PART 2: SIMULATED RACE VISUALIZATION & MODE SELECTOR
+    # PART 2: SIMULATED RACE VISUALIZATION & MODERN CHARTS
     # =========================================================================
-    st.markdown("### 🏁 Execution Latency Race Simulation")
+    st.markdown("### 🏁 Execution Latency Race & Trend Analysis")
     st.caption("Contrasting sub-second exact symbolic resolution against multi-turn LLM reasoning iterations.")
 
-    # Render 4 stacked animated race bars
+    # Side-by-side Argon Charts: Smooth Spline Latency Line Chart & Cost Curve Chart
+    c_col1, c_col2 = st.columns(2)
+    with c_col1:
+        render_html(
+            """
+            <div class="clean-card" style="margin-bottom: 0; padding-bottom: 12px;">
+                <div class="card-header-title">
+                    <span>Paradigm Latency Breakdown</span>
+                    <span style="font-size: 0.75rem; color: var(--chart-pink); font-family: var(--font-mono); font-weight: 600;">Spline Trend</span>
+                </div>
+                <div class="card-subtitle">Smooth latency curve comparing multi-turn LLM vs sub-second symbolic solver.</div>
+            </div>
+            """
+        )
+        fig_latency = create_smooth_latency_line_chart(live_result["race_data"])
+        st.plotly_chart(fig_latency, use_container_width=True, config={"displayModeBar": False})
+
+    with c_col2:
+        render_html(
+            """
+            <div class="clean-card" style="margin-bottom: 0; padding-bottom: 12px;">
+                <div class="card-header-title">
+                    <span>Budget vs Optimal Cost Curve</span>
+                    <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-mono); font-weight: 600;">Cost Convergence</span>
+                </div>
+                <div class="card-subtitle">Teal gradient area showing guaranteed budget headroom and solver minimum.</div>
+            </div>
+            """
+        )
+        fig_cost = create_smooth_cost_trend_chart(live_result["budget_usd"], live_result["optimal_cost_usd"])
+        st.plotly_chart(fig_cost, use_container_width=True, config={"displayModeBar": False})
+
+    # Render 4 stacked animated race bars (Restored Clean Horizontal Bars)
     race_rows_html = ""
     for r in live_result["race_data"]:
         race_rows_html += f"""
@@ -1105,7 +1467,7 @@ else:
         f"""
         <div class="race-track-container">
             {race_rows_html}
-            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-default); font-family: var(--font-mono);">
+            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-default); font-family: var(--font-sans);">
                 ⚡ <em>Mode 3 and Mode 4 reflect real-time live execution latencies on your hardware ({live_result['total_latency_ms']:.1f}ms total pipeline). Modes 1 & 2 show recorded multi-turn baseline latencies.</em>
             </div>
         </div>
@@ -1134,8 +1496,8 @@ else:
     if "Mode 1" in active_detail_mode:
         render_html(
             """
-            <div class="clean-card" style="border-left: 3px solid var(--mode1-color);">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--mode1-color); margin-bottom: 6px;">Mode 1: Pure LLM (Unstructured Text)</div>
+            <div class="clean-card" style="border-left: 4px solid var(--status-warning);">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-warning); margin-bottom: 6px;">Mode 1: Pure LLM (Unstructured Text)</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • <strong>Capability:</strong> Interprets unstructured Hinglish and English requests seamlessly.<br>
                     • <strong>Failure Mode:</strong> Hallucinates monthly pricing ($204 est vs $384 real AWS catalog). No formal constraint guarantee.<br>
@@ -1147,8 +1509,8 @@ else:
     elif "Mode 2" in active_detail_mode:
         render_html(
             """
-            <div class="clean-card" style="border-left: 3px solid var(--mode2-color);">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--mode2-color); margin-bottom: 6px;">Mode 2: Structured LLM (Pydantic Schema Only)</div>
+            <div class="clean-card" style="border-left: 4px solid var(--status-error);">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-error); margin-bottom: 6px;">Mode 2: Structured LLM (Pydantic Schema Only)</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • <strong>Capability:</strong> Forces output into strict JSON schema.<br>
                     • <strong>Failure Mode:</strong> Token-level arithmetic error claims $194.20 while real catalog SKUs total $489.00.<br>
@@ -1160,8 +1522,8 @@ else:
     elif "Mode 3" in active_detail_mode:
         render_html(
             f"""
-            <div class="clean-card" style="border-left: 3px solid var(--mode3-color);">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--mode3-color); margin-bottom: 6px;">Mode 3: Pure Symbolic (Traditional Solver)</div>
+            <div class="clean-card" style="border-left: 4px solid var(--chart-blue);">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--chart-blue); margin-bottom: 6px;">Mode 3: Pure Symbolic (Traditional Solver)</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • <strong>Capability:</strong> Provably optimal mathematical resolution ({live_result['solve_latency_ms']:.1f}ms live solver execution).<br>
                     • <strong>Failure Mode:</strong> 0% NLU capability. Immediately crashes on raw natural language or colloquial input.<br>
@@ -1173,8 +1535,8 @@ else:
     else:
         render_html(
             f"""
-            <div class="clean-card" style="border-left: 3px solid var(--mode4-color);">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--mode4-color); margin-bottom: 6px;">Mode 4: Full Neuro-Symbolic Orchestrator (Neurasym)</div>
+            <div class="clean-card" style="border-left: 4px solid var(--chart-teal);">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--chart-teal); margin-bottom: 6px;">Mode 4: Full Neuro-Symbolic Orchestrator (Neurasym)</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • <strong>Capability:</strong> Combines 100% NLU flexibility with provably sound mathematical solvers.<br>
                     • <strong>Result:</strong> Exact global minimum (${live_result['optimal_cost_usd']:.2f}/mo) with 0 constraint violations and {live_result['savings_pct']:.1f}% net savings.<br>
@@ -1190,45 +1552,42 @@ else:
     # PIPELINE TRACE (5 Stages)
     # =========================================================================
     st.markdown("### Pipeline Execution Trace")
-    st.markdown(
-        '<div style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">Sequential execution trace showing exact input, CARM retrieval, contract verification, solver execution, and explanation generation.</div>',
-        unsafe_allow_html=True,
-    )
+    render_html('<div style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">Sequential execution trace showing exact input, CARM retrieval, contract verification, solver execution, and explanation generation.</div>')
 
     # Stage 1: Parse
     c_prov_badges = "".join(
-        f'<span style="background: rgba(34, 197, 94, 0.12); color: var(--accent-primary); border: 1px solid rgba(34, 197, 94, 0.3); padding: 2px 7px; border-radius: 3px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-mono); margin-right: 4px;">{p}</span>'
+        f'<span style="background: rgba(59, 130, 246, 0.15); color: var(--chart-blue); border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 8px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-sans); margin-right: 4px;">{p}</span>'
         for p in live_result["contract"].cloud_providers
     )
     highlighted_query = highlight_query_terms(st.session_state["active_query_text"])
     render_html(
         f"""
-        <div class="clean-card">
+        <div class="clean-card stage-card-1">
             <div class="card-header-title">
                 <span>Stage 1: Parse (Natural Language → Sizing Parameters)</span>
                 <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono);">SCOPE Grammar Extractor</span>
             </div>
             <div class="card-subtitle">Disentangles colloquial terms, currency indicators, and compute units into normalized parameters.</div>
-            <div style="background: #050505; border: 1px solid var(--border-default); border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5; font-family: var(--font-sans);">
-                <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; display: block; margin-bottom: 4px;">Extracted Semantic Substrings:</span>
+            <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5; font-family: var(--font-sans);">
+                <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; display: block; margin-bottom: 4px;">Extracted Semantic Substrings:</span>
                 "{highlighted_query}"
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 6px;">
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Target Cloud</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Target Cloud</div>
                     <div>{c_prov_badges}</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Budget Ceiling</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">${live_result['budget_usd']:.2f} / month</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Budget Ceiling</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">${live_result['budget_usd']:.2f} / month</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Compute Target</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">{live_result['contract'].required_vcpus} vCPUs • {live_result['contract'].required_ram_gb:.0f} GB RAM</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Compute Target</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">{live_result['contract'].required_vcpus} vCPUs • {live_result['contract'].required_ram_gb:.0f} GB RAM</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">SLA & Latency</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">{live_result['contract'].sla_availability_pct:.2f}% SLA • ≤{live_result['contract'].latency_max_ms:.0f}ms</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">SLA & Latency</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">{live_result['contract'].sla_availability_pct:.2f}% SLA • ≤{live_result['contract'].latency_max_ms:.0f}ms</div>
                 </div>
             </div>
         </div>
@@ -1256,15 +1615,15 @@ else:
 
     render_html(
         f"""
-        <div class="clean-card">
+        <div class="clean-card stage-card-2">
             <div class="card-header-title">
                 <span>Stage 2: Context-Aware Retrieval Module (CARM Match)</span>
-                <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">Selected: {live_result['problem_type']}</span>
+                <span style="font-size: 0.75rem; color: var(--gradient-accent-start); font-family: var(--font-sans); font-weight: 600;">Selected: {live_result['problem_type']}</span>
             </div>
-            <div class="card-subtitle">Computes Jaccard similarity across optimization archetype templates: <span style="font-family: var(--font-mono); color: var(--accent-primary);">|Intersection| / |Union|</span>.</div>
+            <div class="card-subtitle">Computes Jaccard similarity across optimization archetype templates: <span style="font-family: var(--font-mono); color: var(--chart-teal);">|Intersection| / |Union|</span>.</div>
             {carm_bars_code}
             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-default); font-family: var(--font-mono);">
-                <strong>Template Dispatch:</strong> <span style="color: var(--accent-primary);">templates/{live_result['matched_template']}</span>
+                <strong>Template Dispatch:</strong> <span style="color: var(--gradient-accent-start);">templates/{live_result['matched_template']}</span>
             </div>
         </div>
         """
@@ -1273,39 +1632,39 @@ else:
     # Stage 3: Contract Schema
     render_html(
         f"""
-        <div class="clean-card">
+        <div class="clean-card stage-card-3">
             <div class="card-header-title">
                 <span>Stage 3: Formal Optimization Contract</span>
-                <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">Status: Verified</span>
+                <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">Status: Verified</span>
             </div>
             <div class="card-subtitle">Pydantic contract enforcing mathematical type invariants and physical resource bounds.</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 6px;">
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Optimization Archetype</div>
-                    <div style="font-size: 0.95rem; color: var(--accent-primary); font-weight: 600;">{live_result['problem_type']}</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Optimization Archetype</div>
+                    <div style="font-size: 0.95rem; color: var(--chart-blue); font-weight: 600;">{live_result['problem_type']}</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Hard Budget Ceiling</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">∑(Cost_i × x_i) ≤ ${live_result['budget_usd']:.2f}</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Hard Budget Ceiling</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">∑(Cost_i × x_i) ≤ ${live_result['budget_usd']:.2f}</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Resource Constraints</div>
-                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">vCPU ≥ {live_result['contract'].required_vcpus} • RAM ≥ {live_result['contract'].required_ram_gb:.0f} GB</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Resource Constraints</div>
+                    <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">vCPU ≥ {live_result['contract'].required_vcpus} • RAM ≥ {live_result['contract'].required_ram_gb:.0f} GB</div>
                 </div>
-                <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Verification Status</div>
-                    <div style="font-size: 0.95rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">✅ Pydantic Validated (v2.4)</div>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Verification Status</div>
+                    <div style="font-size: 0.95rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">✅ Pydantic Validated (v2.4)</div>
                 </div>
             </div>
         </div>
         """
     )
 
-    # Stage 4: Solve Execution
+    # Stage 4: Solve Execution + Chart Type 2 (Bar Chart)
     if live_result["problem_type"] == "Z3_Graph_Disaster_Recovery" and live_result["region_pairs"]:
         rp_rows_html = ""
         for rp in live_result["region_pairs"]:
-            res_color = "var(--accent-primary)" if rp["is_pass"] else "var(--status-error)"
+            res_color = "var(--chart-teal)" if rp["is_pass"] else "var(--status-error)"
             rp_rows_html += f"""
             <tr>
                 <td><strong>{rp['region_a']}</strong></td>
@@ -1320,10 +1679,10 @@ else:
 
         render_html(
             f"""
-            <div class="clean-card">
+            <div class="clean-card stage-card-4">
                 <div class="card-header-title">
                     <span>Stage 4: Symbolic Solver Execution ({live_result['solver_engine']})</span>
-                    <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">Optimal Result: ${live_result['optimal_cost_usd']:.2f}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
+                    <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-mono); font-weight: 600;">Optimal Result: ${live_result['optimal_cost_usd']:.2f}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
                 </div>
                 <div class="card-subtitle">{live_result['solver_desc']}</div>
                 <table class="clean-table">
@@ -1345,6 +1704,9 @@ else:
             </div>
             """
         )
+        # Visualizing region pair candidates with Chart Type 2 (Bar chart)
+        fig_bar = create_argon_bar_chart(live_result["allocations"], live_result["region_pairs"], live_result["problem_type"])
+        st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
     else:
         alloc_rows_html = ""
         for alloc in live_result["allocations"]:
@@ -1355,16 +1717,16 @@ else:
                 <td style="font-family: var(--font-mono);">{alloc['qty']}</td>
                 <td style="font-family: var(--font-mono);">{alloc['vcpus']}</td>
                 <td style="font-family: var(--font-mono);">{alloc['ram']}</td>
-                <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent-primary);">${alloc['monthly_cost']:.2f}</td>
+                <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--chart-teal);">${alloc['monthly_cost']:.2f}</td>
             </tr>
             """
 
         render_html(
             f"""
-            <div class="clean-card">
+            <div class="clean-card stage-card-4">
                 <div class="card-header-title">
                     <span>Stage 4: Symbolic Solver Execution ({live_result['solver_engine']})</span>
-                    <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">Optimal Result: ${live_result['optimal_cost_usd']:.2f}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
+                    <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-mono); font-weight: 600;">Optimal Result: ${live_result['optimal_cost_usd']:.2f}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
                 </div>
                 <div class="card-subtitle">{live_result['solver_desc']}</div>
                 <table class="clean-table">
@@ -1385,17 +1747,20 @@ else:
             </div>
             """
         )
+        # Visualizing allocations with Chart Type 2 (Bar chart)
+        fig_bar = create_argon_bar_chart(live_result["allocations"], live_result["region_pairs"], live_result["problem_type"])
+        st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
     # Stage 5: Explain
     render_html(
         f"""
-        <div class="clean-card">
+        <div class="clean-card stage-card-5">
             <div class="card-header-title">
                 <span>Stage 5: Explain (Deterministic FinOps Explanation)</span>
-                <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">FinOpsExplainer Engine</span>
+                <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">FinOpsExplainer Engine</span>
             </div>
             <div class="card-subtitle">Natural language synthesis generated directly from the mathematical solver proof.</div>
-            <div style="font-size: 0.92rem; color: var(--text-primary); line-height: 1.6; background: #050505; border: 1px solid var(--border-default); border-radius: 4px; padding: 14px 16px;">
+            <div style="font-size: 0.92rem; color: var(--text-primary); line-height: 1.6; background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 14px 16px;">
                 {live_result['explanation']}
             </div>
         </div>
@@ -1408,10 +1773,7 @@ else:
     # 4-WAY COMPARISON TABLE
     # =========================================================================
     st.markdown("### Paradigm Performance Matrix (4-Way Comparison)")
-    st.markdown(
-        '<div style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">Direct evaluation of LLM-only, Schema-only, Pure Solver, and Neurasym Neuro-Symbolic execution modes.</div>',
-        unsafe_allow_html=True,
-    )
+    render_html('<div style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 16px;">Direct evaluation of LLM-only, Schema-only, Pure Solver, and Neurasym Neuro-Symbolic execution modes.</div>')
 
     comp_rows_html = ""
     for row in live_result["modes_comparison"]:
@@ -1432,7 +1794,7 @@ else:
 
     render_html(
         f"""
-        <div class="clean-card" style="padding: 0; overflow: hidden;">
+        <div class="clean-card matrix-card" style="padding: 0; overflow: hidden;">
             <table class="clean-table" style="margin: 0;">
                 <thead>
                     <tr>
@@ -1456,7 +1818,7 @@ else:
     with col_w:
         render_html(
             """
-            <div class="clean-card" style="border-left: 3px solid var(--status-error);">
+            <div class="clean-card" style="border-left: 4px solid var(--status-error);">
                 <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-error); margin-bottom: 8px;">❌ Pure / Structured LLMs</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • High natural language flexibility on colloquial input.<br>
@@ -1469,8 +1831,8 @@ else:
     with col_s:
         render_html(
             """
-            <div class="clean-card" style="border-left: 3px solid var(--accent-primary);">
-                <div style="font-size: 0.95rem; font-weight: 600; color: var(--accent-primary); margin-bottom: 8px;">🟢 Full Neuro-Symbolic Pipeline</div>
+            <div class="clean-card" style="border-left: 4px solid var(--chart-teal);">
+                <div style="font-size: 0.95rem; font-weight: 600; color: var(--chart-teal); margin-bottom: 8px;">🟢 Full Neuro-Symbolic Pipeline</div>
                 <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
                     • Bridges natural language to formal mathematical contracts.<br>
                     • Zero constraint violations via SciPy MILP and Z3 SMT.<br>

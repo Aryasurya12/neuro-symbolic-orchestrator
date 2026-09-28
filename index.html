@@ -8,30 +8,28 @@
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
         :root {
-            --bg-primary: #0A0A0A;
-            --bg-surface: #121212;
-            --bg-surface-hover: #1A1A1A;
-            --border-default: #262626;
-            --border-accent: rgba(34, 197, 94, 0.2);
+            --bg-primary:       #172142;   /* deep navy, main page background */
+            --bg-surface:       #1E2A4A;   /* card background, one step lighter than primary */
+            --bg-surface-hover: #253358;
+            --border-default:   #2C3B63;
 
-            --text-primary: #E5E5E5;
-            --text-secondary: #8A8A8A;
-            --text-disabled: #4A4A4A;
+            --text-primary:     #FFFFFF;
+            --text-secondary:   #9BA6C4;   /* muted blue-gray for labels/secondary text */
+            --text-disabled:    #5A6789;
 
-            --accent-primary: #22C55E;
-            --accent-dim: #16A34A;
-            --accent-glow: rgba(34, 197, 94, 0.15);
+            --gradient-accent-start: #EC4899;  /* hot pink */
+            --gradient-accent-end:   #8B2FC9;  /* purple */
 
-            --mode1-color: #F59E0B;
-            --mode2-color: #EF4444;
-            --mode3-color: #3B82F6;
-            --mode4-color: #22C55E;
+            --chart-pink:   #F5365C;   /* line chart 1 (e.g. Mode/latency trend) */
+            --chart-blue:   #3B82F6;   /* bar chart fills */
+            --chart-teal:   #2DCE89;   /* line chart 2 (e.g. savings/cost trend) */
 
-            --status-error: #EF4444;
-            --status-warning: #F59E0B;
+            --status-success: #2DCE89;
+            --status-warning: #FB6340;
+            --status-error:   #F5365C;
 
-            --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Inter, sans-serif;
+            --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
         }
 
         * {
@@ -49,33 +47,35 @@
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1140px;
             margin: 0 auto;
-            padding: 32px 0 64px 0;
+            padding: 28px 0 64px 0;
         }
 
-        /* Top Navigation */
+        /* Top Navigation Header - Pink-to-Purple Diagonal Gradient */
         .top-nav {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-bottom: 24px;
-            border-bottom: 1px solid var(--border-default);
+            padding: 16px 24px;
+            background: linear-gradient(135deg, var(--gradient-accent-start), var(--gradient-accent-end));
+            border-radius: 16px;
             margin-bottom: 32px;
+            box-shadow: 0 8px 24px rgba(236, 72, 153, 0.2);
         }
 
         .wordmark {
-            font-size: 1.25rem;
+            font-size: 1.3rem;
             font-weight: 700;
             letter-spacing: -0.03em;
-            color: var(--text-primary);
-            font-family: var(--font-mono);
+            color: #FFFFFF;
+            font-family: var(--font-sans);
             display: inline-flex;
             align-items: center;
         }
 
         .terminal-cursor {
-            color: var(--accent-primary);
+            color: #FFFFFF;
             font-weight: 700;
             margin-left: 2px;
             animation: cursor-blink 1s step-start infinite;
@@ -92,40 +92,38 @@
         }
 
         .nav-btn {
-            background: none;
-            border: 1px solid transparent;
-            padding: 6px 14px;
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 18px;
+            border-radius: 9999px;
             font-size: 0.88rem;
             font-weight: 500;
-            color: var(--text-secondary);
+            color: #FFFFFF;
             cursor: pointer;
             transition: all 0.15s ease;
             font-family: var(--font-sans);
         }
 
         .nav-btn.active {
-            background-color: var(--bg-surface);
-            border-color: var(--border-default);
-            border-left: 3px solid var(--accent-primary);
-            color: var(--accent-primary);
+            background-color: rgba(255, 255, 255, 0.28);
+            border-color: #FFFFFF;
             font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .nav-btn:hover:not(.active) {
-            color: var(--text-primary);
-            background-color: var(--bg-surface-hover);
+            background-color: rgba(255, 255, 255, 0.2);
         }
 
         /* Hero Section */
         .hero {
             padding: 24px 0 40px 0;
             border-bottom: 1px solid var(--border-default);
-            margin-bottom: 48px;
+            margin-bottom: 40px;
         }
 
         .hero-title {
-            font-size: 2.4rem;
+            font-size: 2.3rem;
             font-weight: 700;
             letter-spacing: -0.03em;
             color: var(--text-primary);
@@ -143,22 +141,24 @@
 
         .btn-primary {
             display: inline-block;
-            background-color: var(--accent-primary);
-            color: #0A0A0A;
-            padding: 10px 20px;
-            border-radius: 4px;
+            background: linear-gradient(135deg, var(--gradient-accent-start), var(--gradient-accent-end));
+            color: #FFFFFF;
+            padding: 10px 24px;
+            border-radius: 9999px;
             font-size: 0.92rem;
             font-weight: 600;
             text-decoration: none;
             cursor: pointer;
             border: none;
             font-family: var(--font-sans);
-            box-shadow: 0 0 12px var(--accent-glow);
-            transition: background-color 150ms ease;
+            box-shadow: 0 4px 14px rgba(236, 72, 153, 0.3);
+            transition: all 150ms ease;
         }
 
         .btn-primary:hover {
-            background-color: var(--accent-dim);
+            opacity: 0.95;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(236, 72, 153, 0.45);
         }
 
         .section-title {
@@ -185,19 +185,19 @@
         .clean-card {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
+            border-radius: 12px;
             padding: 24px;
-            transition: border-color 150ms ease;
+            transition: border-color 150ms ease, background-color 150ms ease;
         }
 
         .clean-card:hover {
-            border-color: #383838;
+            border-color: #3B4D7A;
         }
 
         .step-num {
             font-size: 0.78rem;
             font-weight: 700;
-            color: var(--accent-primary);
+            color: var(--gradient-accent-start);
             font-family: var(--font-mono);
             letter-spacing: 0.05em;
             margin-bottom: 6px;
@@ -226,25 +226,27 @@
         .preset-pill {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            padding: 6px 14px;
-            border-radius: 4px;
+            padding: 7px 16px;
+            border-radius: 9999px;
             font-size: 0.85rem;
             font-weight: 500;
             color: var(--text-primary);
             cursor: pointer;
-            transition: border-color 150ms ease;
+            transition: all 150ms ease;
             font-family: var(--font-sans);
         }
 
         .preset-pill:hover {
-            border-color: var(--accent-primary);
+            background-color: var(--bg-surface-hover);
+            border-color: var(--gradient-accent-start);
         }
 
         .preset-pill.active {
-            border-color: var(--accent-primary);
-            color: var(--accent-primary);
+            border-color: var(--gradient-accent-start);
+            color: #FFFFFF;
             font-weight: 600;
-            background-color: var(--bg-surface);
+            background-color: var(--bg-surface-hover);
+            box-shadow: 0 0 0 1px var(--gradient-accent-start);
         }
 
         .query-input-row {
@@ -255,18 +257,19 @@
 
         .query-input {
             flex: 1;
-            padding: 10px 14px;
+            padding: 10px 18px;
             border: 1px solid var(--border-default);
-            border-radius: 4px;
+            border-radius: 9999px;
             font-size: 0.95rem;
             background-color: var(--bg-surface);
             color: var(--text-primary);
             font-family: var(--font-sans);
+            transition: border-color 150ms ease;
         }
 
         .query-input:focus {
             outline: none;
-            border-color: var(--accent-primary);
+            border-color: var(--gradient-accent-start);
         }
 
         .metric-grid {
@@ -279,50 +282,75 @@
         .metric-card {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
-            padding: 16px 18px;
+            border-radius: 12px;
+            padding: 18px 20px;
             text-align: left;
-            min-height: 104px;
+            min-height: 112px;
             height: 100%;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             box-sizing: border-box;
-            transition: border-color 150ms ease;
+            transition: border-color 150ms ease, background-color 150ms ease;
         }
 
         .metric-card:hover {
-            border-color: var(--border-accent);
+            border-color: #3B4D7A;
+            background-color: var(--bg-surface-hover);
+        }
+
+        .metric-tag {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .metric-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
         }
 
         .metric-val {
-            font-size: clamp(1.15rem, 1.8vw, 1.55rem);
+            font-size: clamp(1.2rem, 1.8vw, 1.6rem);
             font-weight: 700;
-            color: var(--accent-primary);
-            font-family: var(--font-mono);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
             font-variant-numeric: tabular-nums;
             line-height: 1.2;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
         .metric-lbl {
-            font-size: 0.75rem;
+            font-size: 0.76rem;
             color: var(--text-secondary);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            font-weight: 500;
             line-height: 1.3;
             font-family: var(--font-sans);
         }
 
-        /* Race Track Visualizer */
+        /* Race Track & Chart Containers */
+        .chart-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
         .race-track-container {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
+            border-radius: 12px;
             padding: 22px;
             margin-bottom: 28px;
         }
@@ -350,9 +378,9 @@
 
         .race-bar-bg {
             flex: 1;
-            background-color: #161616;
+            background-color: #131B33;
             height: 16px;
-            border-radius: 4px;
+            border-radius: 6px;
             overflow: hidden;
             border: 1px solid var(--border-default);
             display: flex;
@@ -362,9 +390,8 @@
 
         .race-bar-fill {
             height: 100%;
-            border-radius: 3px;
-            min-width: 4px;
-            box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+            min-width: 6px;
             transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -400,8 +427,8 @@
         .mode-pill {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            padding: 8px 14px;
-            border-radius: 4px;
+            padding: 8px 16px;
+            border-radius: 9999px;
             font-size: 0.84rem;
             font-weight: 500;
             color: var(--text-secondary);
@@ -411,23 +438,23 @@
         }
 
         .mode-pill.active {
-            border-color: var(--border-default);
-            border-left: 3px solid var(--accent-primary);
-            color: var(--accent-primary);
+            border-color: var(--gradient-accent-start);
+            color: #FFFFFF;
             font-weight: 600;
+            background-color: var(--bg-surface-hover);
         }
 
         .trace-card {
             background-color: var(--bg-surface);
             border: 1px solid var(--border-default);
-            border-radius: 6px;
+            border-radius: 12px;
             padding: 24px;
             margin-bottom: 16px;
             transition: border-color 150ms ease;
         }
 
         .trace-card:hover {
-            border-color: #383838;
+            border-color: #3B4D7A;
         }
 
         .trace-header {
@@ -446,18 +473,6 @@
             margin-bottom: 16px;
         }
 
-        pre.code-block {
-            background-color: #050505;
-            border: 1px solid var(--border-default);
-            border-radius: 4px;
-            padding: 12px 16px;
-            font-family: var(--font-mono);
-            font-size: 0.82rem;
-            color: var(--text-primary);
-            overflow-x: auto;
-            line-height: 1.45;
-        }
-
         .carm-row {
             margin-bottom: 12px;
         }
@@ -470,21 +485,20 @@
         }
 
         .carm-track {
-            background-color: #1F1F1F;
+            background-color: #131B33;
             height: 8px;
-            border-radius: 3px;
+            border-radius: 6px;
             overflow: hidden;
         }
 
         .carm-fill {
-            background-color: var(--accent-primary);
+            background: linear-gradient(90deg, var(--gradient-accent-start), var(--gradient-accent-end));
             height: 100%;
-            box-shadow: 0 0 8px var(--accent-glow);
+            border-radius: 6px;
         }
 
         .carm-fill.secondary {
-            background-color: #4A4A4A;
-            box-shadow: none;
+            background-color: #2C3B63;
         }
 
         .table-wrap {
@@ -499,11 +513,11 @@
         }
 
         table.data-table th {
-            background-color: #0E0E0E;
+            background-color: #131B33;
             color: var(--text-secondary);
             font-weight: 600;
             text-align: left;
-            padding: 10px 12px;
+            padding: 12px 14px;
             border-bottom: 1px solid var(--border-default);
             font-size: 0.78rem;
             text-transform: uppercase;
@@ -511,7 +525,7 @@
         }
 
         table.data-table td {
-            padding: 10px 12px;
+            padding: 12px 14px;
             border-bottom: 1px solid var(--border-default);
             color: var(--text-primary);
         }
@@ -520,10 +534,107 @@
             border-bottom: none;
         }
 
+        /* =========================================================================
+           MOTION & ANIMATION (Pure CSS - Zero JS-Timing Risk)
+           ========================================================================= */
+
+        @keyframes fadeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulseDot {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.35;
+                transform: scale(0.8);
+            }
+        }
+
+        /* Page / Section transition */
+        #page-landing:not(.hidden), #page-dashboard:not(.hidden), .page-content {
+            animation: fadeSlideIn 0.35s ease-out;
+        }
+
+        /* Base Card Entrance Animation */
+        .clean-card, .metric-card, .trace-card, .chart-card, .race-track-container {
+            animation: fadeSlideIn 0.5s ease-out both;
+        }
+
+        /* 1. Staggered Entrance for Metric Cards (4 cards) */
+        .metric-card:nth-child(1) { animation-delay: 0.05s; }
+        .metric-card:nth-child(2) { animation-delay: 0.15s; }
+        .metric-card:nth-child(3) { animation-delay: 0.25s; }
+        .metric-card:nth-child(4) { animation-delay: 0.35s; }
+
+        /* Staggered Entrance for Pipeline Stage Cards (1 through 5) */
+        .stage-card-1 { animation-delay: 0.35s; }
+        .stage-card-2 { animation-delay: 0.45s; }
+        .stage-card-3 { animation-delay: 0.55s; }
+        .stage-card-4 { animation-delay: 0.65s; }
+        .stage-card-5 { animation-delay: 0.75s; }
+        .matrix-card   { animation-delay: 0.85s; }
+
+        /* Staggered Entrance for Landing Page Steps */
+        .steps-grid .clean-card:nth-child(1) { animation-delay: 0.1s; }
+        .steps-grid .clean-card:nth-child(2) { animation-delay: 0.2s; }
+        .steps-grid .clean-card:nth-child(3) { animation-delay: 0.3s; }
+        .steps-grid .clean-card:nth-child(4) { animation-delay: 0.4s; }
+
+        /* 2. Smooth Transitions on Interactive Elements */
+        .preset-pill, .mode-pill, .nav-btn, .btn-primary, button, .query-input {
+            transition: background-color 0.2s ease, border-color 0.2s ease,
+                        transform 0.15s ease, box-shadow 0.2s ease, color 0.15s ease;
+        }
+
+        .preset-pill:hover, .mode-pill:hover, .nav-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .preset-pill:active, .mode-pill:active, .nav-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 3. Mode selector tab smooth transition */
+        .mode-pill-bar, .nav-tabs {
+            position: relative;
+        }
+
+        .mode-pill {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 4. Subtle pulse on LIVE status badges only */
+        .badge-live::before, .status-tag-live::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--status-success);
+            margin-right: 5px;
+            vertical-align: middle;
+            animation: pulseDot 1.5s ease-in-out infinite;
+        }
+
+        /* 5. Race Bar Fill Transition */
+        .race-bar-fill {
+            transition: width 1.0s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         .badge-tag {
             display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
+            padding: 2px 7px;
+            border-radius: 9999px;
             font-size: 0.72rem;
             font-weight: 600;
             margin-left: 6px;
@@ -531,15 +642,15 @@
         }
 
         .badge-recorded {
-            background-color: #1F1F1F;
+            background-color: #253358;
             color: var(--text-secondary);
             border: 1px solid var(--border-default);
         }
 
         .badge-live {
-            background-color: rgba(34, 197, 94, 0.1);
-            color: var(--accent-primary);
-            border: 1px solid rgba(34, 197, 94, 0.3);
+            background-color: rgba(45, 206, 137, 0.15);
+            color: var(--status-success);
+            border: 1px solid rgba(45, 206, 137, 0.3);
         }
 
         .caveat {
@@ -548,7 +659,7 @@
             border-top: 1px solid var(--border-default);
             font-size: 0.8rem;
             color: var(--text-secondary);
-            font-family: var(--font-mono);
+            font-family: var(--font-sans);
         }
 
         .hidden {
@@ -609,7 +720,7 @@
         <!-- PAGE 2: BENCHMARK DASHBOARD -->
         <div id="page-dashboard">
             <section style="margin-bottom: 24px;">
-                <h1 class="section-title" style="font-size: 1.6rem;">Benchmark Dashboard</h1>
+                <h1 class="section-title" style="font-size: 1.65rem;">Benchmark Dashboard</h1>
                 <p class="section-subtitle" style="margin-bottom: 16px;">Test representative enterprise workloads and inspect the real pipeline trace.</p>
 
                 <!-- Presets -->
@@ -630,34 +741,71 @@
             <!-- Metrics Summary Cards -->
             <div class="metric-grid">
                 <div class="metric-card">
+                    <div class="metric-tag" style="color: var(--chart-pink);">
+                        <span class="metric-dot" style="background-color: var(--chart-pink);"></span>
+                        Cost Category
+                    </div>
                     <div class="metric-val" id="metric-cost">$97.82</div>
                     <div class="metric-lbl">Optimal Monthly Cost</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-val" id="metric-savings">$202.18 <span style="font-size: 0.95rem; font-weight: 500; color: var(--accent-primary);">({savingsPct}%)</span></div>
+                    <div class="metric-tag" style="color: var(--chart-teal);">
+                        <span class="metric-dot" style="background-color: var(--chart-teal);"></span>
+                        Savings Category
+                    </div>
+                    <div class="metric-val" id="metric-savings">$202.18 <span style="font-size: 0.82rem; font-weight: 600; color: var(--chart-teal);">(67.4%)</span></div>
                     <div class="metric-lbl">Net Budget Savings</div>
                 </div>
                 <div class="metric-card">
+                    <div class="metric-tag" style="color: var(--chart-blue);">
+                        <span class="metric-dot" style="background-color: var(--chart-blue);"></span>
+                        Soundness Verification
+                    </div>
                     <div class="metric-val">0</div>
                     <div class="metric-lbl">Constraint Violations</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-val" style="font-size: 1.15rem; padding-top: 6px;" id="metric-engine">ILP Knapsack</div>
+                    <div class="metric-tag" style="color: var(--gradient-accent-start);">
+                        <span class="metric-dot" style="background-color: var(--gradient-accent-start);"></span>
+                        Symbolic Engine
+                    </div>
+                    <div class="metric-val" style="font-size: 1.15rem; padding-top: 4px;" id="metric-engine">ILP Knapsack</div>
                     <div class="metric-lbl">Active Solver Engine</div>
                 </div>
             </div>
 
-            <!-- PART 2: SIMULATED RACE VISUALIZATION -->
+            <!-- Modern Argon Charts (Smooth Spline Latency & Cost Convergence) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div class="chart-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Paradigm Latency Breakdown</span>
+                        <span style="font-size: 0.75rem; color: var(--chart-pink); font-family: var(--font-mono); font-weight: 600;">Spline Trend</span>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px;">Smooth curve with dot markers & pink gradient area fill.</div>
+                    <div id="svg-latency-chart" style="width: 100%; height: 210px;"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary);">Budget vs Optimal Cost Curve</span>
+                        <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-mono); font-weight: 600;">Cost Convergence</span>
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 14px;">Teal gradient area showing guaranteed budget headroom.</div>
+                    <div id="svg-cost-chart" style="width: 100%; height: 210px;"></div>
+                </div>
+            </div>
+
+            <!-- Execution Latency Race Bars -->
             <section style="margin-bottom: 32px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h2 class="section-title" style="margin-bottom: 0;">🏁 Execution Latency Race Simulation</h2>
-                    <button class="btn-primary" style="padding: 6px 14px; font-size: 0.82rem;" onclick="runRaceAnimation()">Run Race</button>
+                    <button class="btn-primary" style="padding: 6px 16px; font-size: 0.82rem;" onclick="runRaceAnimation()">Run Race</button>
                 </div>
                 <p class="section-subtitle">Contrasting sub-second exact symbolic resolution against multi-turn LLM reasoning iterations.</p>
 
                 <div class="race-track-container">
                     <div id="race-rows-container"></div>
-                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-default); font-family: var(--font-mono);">
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--border-default); font-family: var(--font-sans);">
                         ⚡ <em>Latencies shown are from recorded benchmark runs. Live LLM calls are disabled in this demo to ensure reliability — you can view the raw recorded transcripts in the appendix tab.</em>
                     </div>
                 </div>
@@ -678,56 +826,57 @@
             <!-- Pipeline Trace -->
             <section style="margin-bottom: 40px;">
                 <h2 class="section-title">Pipeline Execution Trace</h2>
-                <p class="section-subtitle">Real intermediate artifacts from each stage of the orchestrator.</p>
+                <p class="section-subtitle">Sequential execution trace showing exact input, CARM retrieval, contract verification, solver execution, and explanation generation.</p>
 
                 <!-- Stage 1 -->
-                <div class="trace-card">
+                <div class="trace-card stage-card-1">
                     <div class="trace-header">
                         <span>Stage 1: Parse (Natural Language → Sizing Parameters)</span>
                         <span style="font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-mono);">SCOPE Grammar Extractor</span>
                     </div>
-                    <div class="trace-subtitle">Disentangles colloquial terms and compute units into structured parameters.</div>
+                    <div class="trace-subtitle">Disentangles colloquial terms, currency indicators, and compute units into normalized parameters.</div>
                     <div id="trace-stage1"></div>
                 </div>
 
                 <!-- Stage 2 -->
-                <div class="trace-card">
+                <div class="trace-card stage-card-2">
                     <div class="trace-header">
                         <span>Stage 2: Context-Aware Retrieval Module (CARM Match)</span>
-                        <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;" id="carm-selected-label">Selected: ILP_VM_Allocation</span>
+                        <span style="font-size: 0.75rem; color: var(--gradient-accent-start); font-family: var(--font-sans); font-weight: 600;" id="carm-selected-label">Selected: ILP_VM_Allocation</span>
                     </div>
-                    <div class="trace-subtitle">Jaccard similarity scoring across optimization archetype templates: <span style="font-family: var(--font-mono); color: var(--accent-primary);">|Intersection| / |Union|</span>.</div>
+                    <div class="trace-subtitle">Jaccard similarity scoring across optimization archetype templates: <span style="font-family: var(--font-mono); color: var(--chart-teal);">|Intersection| / |Union|</span>.</div>
                     <div id="carm-bars-container"></div>
                 </div>
 
                 <!-- Stage 3 -->
-                <div class="trace-card">
+                <div class="trace-card stage-card-3">
                     <div class="trace-header">
                         <span>Stage 3: Formal Optimization Contract</span>
-                        <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">Status: Verified</span>
+                        <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">Status: Verified</span>
                     </div>
                     <div class="trace-subtitle">Pydantic contract enforcing mathematical type invariants and physical resource bounds.</div>
                     <div id="trace-stage3"></div>
                 </div>
 
                 <!-- Stage 4 -->
-                <div class="trace-card">
+                <div class="trace-card stage-card-4">
                     <div class="trace-header">
                         <span id="stage4-title">Stage 4: Symbolic Solver Execution</span>
-                        <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;" id="stage4-cost-badge">Optimal Result: $97.82/mo</span>
+                        <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-mono); font-weight: 600;" id="stage4-cost-badge">Optimal Result: $97.82/mo</span>
                     </div>
                     <div class="trace-subtitle" id="stage4-desc">Exact solver evaluation verifying hard physical bounds and cost optimality.</div>
                     <div class="table-wrap" id="stage4-table-container"></div>
+                    <div id="stage4-barchart-container" style="margin-top: 18px;"></div>
                 </div>
 
                 <!-- Stage 5 -->
-                <div class="trace-card">
+                <div class="trace-card stage-card-5">
                     <div class="trace-header">
                         <span>Stage 5: Explain (Deterministic FinOps Explanation)</span>
-                        <span style="font-size: 0.75rem; color: var(--accent-primary); font-family: var(--font-mono); font-weight: 600;">FinOpsExplainer Engine</span>
+                        <span style="font-size: 0.75rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">FinOpsExplainer Engine</span>
                     </div>
                     <div class="trace-subtitle">Natural language synthesis generated directly from the mathematical solver proof.</div>
-                    <div style="font-size: 0.92rem; color: var(--text-primary); line-height: 1.6; background: #050505; border: 1px solid var(--border-default); border-radius: 4px; padding: 14px 16px;" id="trace-stage5-text"></div>
+                    <div style="font-size: 0.92rem; color: var(--text-primary); line-height: 1.6; background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 14px 16px;" id="trace-stage5-text"></div>
                 </div>
             </section>
 
@@ -736,7 +885,7 @@
                 <h2 class="section-title">Paradigm Performance Matrix (4-Way Comparison)</h2>
                 <p class="section-subtitle">Direct evaluation of LLM-only, Schema-only, Pure Solver, and Neurasym Neuro-Symbolic modes.</p>
 
-                <div class="clean-card" style="padding: 0; overflow: hidden;">
+                <div class="clean-card matrix-card" style="padding: 0; overflow: hidden;">
                     <div class="table-wrap" style="margin-top: 0;">
                         <table class="data-table" id="comparison-table">
                             <thead>
@@ -783,20 +932,20 @@
                 solver_engine: "SciPy HiGHS MILP",
                 optimal_cost_usd: 97.82,
                 race_data: [
-                    { mode: "Mode 1: Pure LLM", latency_disp: "193.4s", width_pct: 98, status: "❌ Hallucinated", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM", latency_disp: "178.2s", width_pct: 90, status: "❌ Price Error ($489)", color: "#EF4444" },
+                    { mode: "Mode 1: Pure LLM", latency_disp: "193.4s", width_pct: 98, status: "❌ Hallucinated", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM", latency_disp: "178.2s", width_pct: 90, status: "❌ Price Error ($489)", color: "#F5365C" },
                     { mode: "Mode 3: Pure Symbolic", latency_disp: "3.5ms", width_pct: 2, status: "✅ 100% Optimal", color: "#3B82F6" },
-                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "98.7ms", width_pct: 3, status: "✅ Provably Optimal", color: "#22C55E" }
+                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "98.7ms", width_pct: 3, status: "✅ Provably Optimal", color: "#2DCE89" }
                 ],
                 allocations: [
                     { sku: "t3.large", provider: "AWS", qty: 2, vcpus: 4, ram: "16 GB", monthly_cost: 60.74 },
                     { sku: "t3.medium", provider: "AWS", qty: 2, vcpus: 4, ram: "8 GB", monthly_cost: 37.08 }
                 ],
                 modes_comparison: [
-                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / Hinglish)", math: "⚠️ Hallucinated Pricing", latency: "193.4s", cost: "~$204.00 (Est)", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ Arithmetic Error ($489 Real)", latency: "178.2s", cost: "$194.20 (Claimed)", color: "#EF4444" },
-                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "3.5ms", cost: "$97.82", color: "#22C55E" },
-                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / Hinglish)", math: "🟢 100% Provably Optimal", latency: "98.7ms", cost: "$97.82", color: "#22C55E" }
+                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / Hinglish)", math: "⚠️ Hallucinated Pricing", latency: "193.4s", cost: "~$204.00 (Est)", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ Arithmetic Error ($489 Real)", latency: "178.2s", cost: "$194.20 (Claimed)", color: "#F5365C" },
+                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "3.5ms", cost: "$97.82", color: "#2DCE89" },
+                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / Hinglish)", math: "🟢 100% Provably Optimal", latency: "98.7ms", cost: "$97.82", color: "#2DCE89" }
                 ],
                 explanation: "Allocated 4 instances across 2 x t3.large and 2 x t3.medium providing 8 vCPUs and 24 GB RAM on AWS for $97.82/month. This guarantees 0 constraint violations and achieves $202.18/month (67.4%) net savings under the $300.00 monthly budget cap."
             },
@@ -819,20 +968,20 @@
                 solver_engine: "Continuous PSO",
                 optimal_cost_usd: 97.82,
                 race_data: [
-                    { mode: "Mode 1: Pure LLM", latency_disp: "182.1s", width_pct: 94, status: "⚠️ Unverified Tier", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM", latency_disp: "165.4s", width_pct: 85, status: "❌ Rate Error ($442)", color: "#EF4444" },
+                    { mode: "Mode 1: Pure LLM", latency_disp: "182.1s", width_pct: 94, status: "⚠️ Unverified Tier", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM", latency_disp: "165.4s", width_pct: 85, status: "❌ Rate Error ($442)", color: "#F5365C" },
                     { mode: "Mode 3: Pure Symbolic", latency_disp: "2.8ms", width_pct: 2, status: "✅ 100% Optimal", color: "#3B82F6" },
-                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "92.3ms", width_pct: 3, status: "✅ Provably Optimal", color: "#22C55E" }
+                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "92.3ms", width_pct: 3, status: "✅ Provably Optimal", color: "#2DCE89" }
                 ],
                 allocations: [
                     { sku: "e2-medium", provider: "GCP", qty: 2, vcpus: 4, ram: "8 GB", monthly_cost: 50.40 },
                     { sku: "e2-small", provider: "GCP", qty: 2, vcpus: 2, ram: "4 GB", monthly_cost: 47.42 }
                 ],
                 modes_comparison: [
-                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Unverified Discounts", latency: "182.1s", cost: "~$215.00 (Est)", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ CPU Rate Error ($442 Real)", latency: "165.4s", cost: "$189.50 (Claimed)", color: "#EF4444" },
-                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "2.8ms", cost: "$97.82", color: "#22C55E" },
-                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "92.3ms", cost: "$97.82", color: "#22C55E" }
+                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Unverified Discounts", latency: "182.1s", cost: "~$215.00 (Est)", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ CPU Rate Error ($442 Real)", latency: "165.4s", cost: "$189.50 (Claimed)", color: "#F5365C" },
+                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "2.8ms", cost: "$97.82", color: "#2DCE89" },
+                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "92.3ms", cost: "$97.82", color: "#2DCE89" }
                 ],
                 explanation: "Continuous PSO dynamic scaling optimized GCP batch compute capacity to 4.8 baseline vCPUs at $97.82/month. Delivers 60.9% ($152.18/mo) budget headroom with strictly bounded convergence in 42 iterations."
             },
@@ -855,19 +1004,19 @@
                 solver_engine: "SciPy HiGHS MILP",
                 optimal_cost_usd: 198.40,
                 race_data: [
-                    { mode: "Mode 1: Pure LLM", latency_disp: "195.0s", width_pct: 98, status: "⚠️ Underestimates >$220", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM", latency_disp: "184.7s", width_pct: 92, status: "❌ RAM Deficit (48GB)", color: "#EF4444" },
+                    { mode: "Mode 1: Pure LLM", latency_disp: "195.0s", width_pct: 98, status: "⚠️ Underestimates >$220", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM", latency_disp: "184.7s", width_pct: 92, status: "❌ RAM Deficit (48GB)", color: "#F5365C" },
                     { mode: "Mode 3: Pure Symbolic", latency_disp: "4.1ms", width_pct: 2, status: "✅ 100% Optimal", color: "#3B82F6" },
-                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "104.2ms", width_pct: 3, status: "✅ Provably Optimal", color: "#22C55E" }
+                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "104.2ms", width_pct: 3, status: "✅ Provably Optimal", color: "#2DCE89" }
                 ],
                 allocations: [
                     { sku: "e2-standard-8", provider: "GCP", qty: 2, vcpus: 16, ram: "64 GB", monthly_cost: 198.40 }
                 ],
                 modes_comparison: [
-                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Underestimates by >$220", latency: "195.0s", cost: "~$390.00 (Est)", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ RAM Deficit Violation (48GB)", latency: "184.7s", cost: "$345.00 (Claimed)", color: "#EF4444" },
-                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "4.1ms", cost: "$198.40", color: "#22C55E" },
-                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "104.2ms", cost: "$198.40", color: "#22C55E" }
+                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Underestimates by >$220", latency: "195.0s", cost: "~$390.00 (Est)", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ RAM Deficit Violation (48GB)", latency: "184.7s", cost: "$345.00 (Claimed)", color: "#F5365C" },
+                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "4.1ms", cost: "$198.40", color: "#2DCE89" },
+                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "104.2ms", cost: "$198.40", color: "#2DCE89" }
                 ],
                 explanation: "Exact integer linear programming placed 2 x e2-standard-8 on GCP, satisfying exact 16 vCPUs and 64 GB RAM constraints at $198.40/month ($301.60 net monthly savings under $500.00 ceiling)."
             },
@@ -890,27 +1039,27 @@
                 solver_engine: "Z3 SMT Graph",
                 optimal_cost_usd: 250.00,
                 race_data: [
-                    { mode: "Mode 1: Pure LLM", latency_disp: "210.5s", width_pct: 98, status: "⚠️ Ignores Egress Fee", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM", latency_disp: "191.0s", width_pct: 90, status: "❌ Over Budget ($1095)", color: "#EF4444" },
+                    { mode: "Mode 1: Pure LLM", latency_disp: "210.5s", width_pct: 98, status: "⚠️ Ignores Egress Fee", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM", latency_disp: "191.0s", width_pct: 90, status: "❌ Over Budget ($1095)", color: "#F5365C" },
                     { mode: "Mode 3: Pure Symbolic", latency_disp: "5.2ms", width_pct: 2, status: "✅ 100% Optimal", color: "#3B82F6" },
-                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "115.8ms", width_pct: 3, status: "✅ Provably Optimal", color: "#22C55E" }
+                    { mode: "Mode 4: Neuro-Symbolic", latency_disp: "115.8ms", width_pct: 3, status: "✅ Provably Optimal", color: "#2DCE89" }
                 ],
                 region_pairs: [
-                    { region_a: "us-east-1 (AWS)", region_b: "us-west-2 (AWS)", same_provider: "Yes (AWS)", latency: "65.0 ms", sla: "99.9975%", budget: "$250.00", result: "FEASIBLE (OPTIMAL)", is_pass: true },
-                    { region_a: "us-east-1 (AWS)", region_b: "eu-west-1 (AWS)", same_provider: "Yes (AWS)", latency: "85.0 ms", sla: "99.9975%", budget: "$260.00", result: "FEASIBLE ($260.00)", is_pass: true },
-                    { region_a: "us-west-2 (AWS)", region_b: "eu-west-1 (AWS)", same_provider: "Yes (AWS)", latency: "135.0 ms", sla: "99.9975%", budget: "$270.00", result: "INFEASIBLE (Latency > 100ms)", is_pass: false },
-                    { region_a: "us-east-1 (AWS)", region_b: "eastus (Azure)", same_provider: "No (Cross-Cloud)", latency: "12.0 ms", sla: "99.9975%", budget: "$245.00", result: "INFEASIBLE (Cross-Provider)", is_pass: false },
-                    { region_a: "us-east-1 (AWS)", region_b: "us-central1 (GCP)", same_provider: "No (Cross-Cloud)", latency: "32.0 ms", sla: "99.9975%", budget: "$235.00", result: "INFEASIBLE (Cross-Provider)", is_pass: false }
+                    { region_a: "us-east-1 (AWS)", region_b: "us-west-2 (AWS)", same_provider: "Yes (AWS)", latency: "65.0 ms", sla: "99.9975%", budget: "$250.00", result: "FEASIBLE (OPTIMAL)", is_pass: true, cost_val: 250 },
+                    { region_a: "us-east-1 (AWS)", region_b: "eu-west-1 (AWS)", same_provider: "Yes (AWS)", latency: "85.0 ms", sla: "99.9975%", budget: "$260.00", result: "FEASIBLE ($260.00)", is_pass: true, cost_val: 260 },
+                    { region_a: "us-west-2 (AWS)", region_b: "eu-west-1 (AWS)", same_provider: "Yes (AWS)", latency: "135.0 ms", sla: "99.9975%", budget: "$270.00", result: "INFEASIBLE (Latency > 100ms)", is_pass: false, cost_val: 270 },
+                    { region_a: "us-east-1 (AWS)", region_b: "eastus (Azure)", same_provider: "No (Cross-Cloud)", latency: "12.0 ms", sla: "99.9975%", budget: "$245.00", result: "INFEASIBLE (Cross-Provider)", is_pass: false, cost_val: 245 },
+                    { region_a: "us-east-1 (AWS)", region_b: "us-central1 (GCP)", same_provider: "No (Cross-Cloud)", latency: "32.0 ms", sla: "99.9975%", budget: "$235.00", result: "INFEASIBLE (Cross-Provider)", is_pass: false, cost_val: 235 }
                 ],
                 allocations: [
                     { sku: "c5.xlarge", provider: "AWS (us-east-1)", qty: 2, vcpus: 8, ram: "16 GB", monthly_cost: 155.60 },
                     { sku: "t3.medium", provider: "AWS (us-west-2)", qty: 2, vcpus: 4, ram: "8 GB", monthly_cost: 94.40 }
                 ],
                 modes_comparison: [
-                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Ignores Inter-AZ Egress", latency: "210.5s", cost: "~$720.00 (Est)", color: "#F59E0B" },
-                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ Violates Budget ($1095 Real)", latency: "191.0s", cost: "$680.00 (Claimed)", color: "#EF4444" },
-                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "5.2ms", cost: "$250.00", color: "#22C55E" },
-                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "115.8ms", cost: "$250.00", color: "#22C55E" }
+                    { mode: "Mode 1: Pure LLM (Unstructured)", source: "recorded", nlu: "100% (High / English)", math: "⚠️ Ignores Inter-AZ Egress", latency: "210.5s", cost: "~$720.00 (Est)", color: "#FB6340" },
+                    { mode: "Mode 2: Structured LLM (Pydantic)", source: "recorded", nlu: "100% (Schema Valid)", math: "❌ Violates Budget ($1095 Real)", latency: "191.0s", cost: "$680.00 (Claimed)", color: "#F5365C" },
+                    { mode: "Mode 3: Pure Symbolic (Solver)", source: "live", nlu: "0% (Fails Raw Text)", math: "🟢 100% Provably Optimal", latency: "5.2ms", cost: "$250.00", color: "#2DCE89" },
+                    { mode: "Mode 4: Full Neuro-Symbolic", source: "live", nlu: "100% (High / English)", math: "🟢 100% Provably Optimal", latency: "115.8ms", cost: "$250.00", color: "#2DCE89" }
                 ],
                 explanation: "Z3 SMT solver validated multi-region topology across AWS us-east-1 and us-west-2. Inter-region latency of 65.0 ms satisfies the <= 100.0 ms SLA, composite availability reaches 99.9975% (exceeding the 99.99% target), and total monthly cost of $250.00 stays $600.00 under the $850.00 budget."
             }
@@ -919,22 +1068,22 @@
         const MODE_DETAILS = {
             1: {
                 title: "Mode 1: Pure LLM (Unstructured Text)",
-                color: "var(--mode1-color)",
+                color: "var(--status-warning)",
                 body: "• <strong>Capability:</strong> Interprets unstructured Hinglish and English requests seamlessly.<br>• <strong>Failure Mode:</strong> Hallucinates monthly pricing ($204 est vs $384 real AWS catalog). No formal constraint guarantee.<br>• <strong>Latency:</strong> ~193.4s due to multi-turn token sampling and reasoning loops."
             },
             2: {
                 title: "Mode 2: Structured LLM (Pydantic Schema Only)",
-                color: "var(--mode2-color)",
+                color: "var(--status-error)",
                 body: "• <strong>Capability:</strong> Forces output into strict JSON schema.<br>• <strong>Failure Mode:</strong> Token-level arithmetic error claims $194.20 while real catalog SKUs total $489.00.<br>• <strong>Latency:</strong> ~178.2s constrained decoding time."
             },
             3: {
                 title: "Mode 3: Pure Symbolic (Traditional Solver)",
-                color: "var(--mode3-color)",
+                color: "var(--chart-blue)",
                 body: "• <strong>Capability:</strong> Provably optimal mathematical resolution (3.5ms execution).<br>• <strong>Failure Mode:</strong> 0% NLU capability. Immediately crashes on raw natural language or colloquial input.<br>• <strong>Latency:</strong> Sub-5ms instant branch & bound."
             },
             4: {
                 title: "Mode 4: Full Neuro-Symbolic Orchestrator (Neurasym)",
-                color: "var(--mode4-color)",
+                color: "var(--chart-teal)",
                 body: "• <strong>Capability:</strong> Combines 100% NLU flexibility with provably sound mathematical solvers.<br>• <strong>Result:</strong> Exact global minimum ($97.82/mo) with 0 constraint violations and 67.4% net savings.<br>• <strong>Latency:</strong> Sub-100ms end-to-end parse, match, solve, and explain pipeline."
             }
         };
@@ -972,7 +1121,6 @@
             const rawQuery = document.getElementById('query-input-field').value.trim();
             const lower = rawQuery.toLowerCase();
             
-            // Check for match or dynamically adapt preset
             let data = PRESET_DATA[currentPreset];
             
             if (lower.includes('disaster') || lower.includes('dr') || lower.includes('multi-region') || lower.includes('sla')) {
@@ -985,7 +1133,6 @@
                 data = JSON.parse(JSON.stringify(PRESET_DATA['hinglish']));
             }
 
-            // Extract custom budget if present (e.g. $400 or 400 dollars)
             const budgetMatch = rawQuery.match(/(?:\$|₹|rs\.?)\s*(\d+)/i) || rawQuery.match(/(\d+)\s*(?:dollars|usd|bucks)/i);
             if (budgetMatch && budgetMatch[1]) {
                 data.budget_usd = parseFloat(budgetMatch[1]);
@@ -1002,7 +1149,7 @@
 
             const d = MODE_DETAILS[modeNum];
             document.getElementById('mode-detail-card-container').innerHTML = `
-                <div class="clean-card" style="border-left: 3px solid ${d.color};">
+                <div class="clean-card" style="border-left: 4px solid ${d.color};">
                     <div style="font-size: 0.95rem; font-weight: 600; color: ${d.color}; margin-bottom: 6px;">${d.title}</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">${d.body}</div>
                 </div>
@@ -1022,10 +1169,10 @@
 
         function highlightQueryTerms(query) {
             const categories = [
-                { regex: /\b(AWS|GCP|Azure|Google Cloud|Amazon Web Services)\b/gi, color: '#38BDF8', label: 'Cloud Provider' },
-                { regex: /(\$\d+(?:\.\d+)?|\b\d+\s*(?:dollars|usd|bucks|rupees)\b|saste mein|\bunders?\s*\$?\d+(?:\s*(?:dollars|usd|bucks|rupees))?)/gi, color: '#22C55E', label: 'Budget/Currency' },
-                { regex: /(\b\d+(?:\.\d+)?%\s*(?:SLA|availability)?|\b99\.99%?\b)/gi, color: '#F59E0B', label: 'SLA Target' },
-                { regex: /(\b\d+\s*ms\b|\bunder\s*\d+\s*ms\b|\blatency\s*(?:under|<=)?\s*\d+\s*ms\b)/gi, color: '#2DD4BF', label: 'Latency SLA' },
+                { regex: /\b(AWS|GCP|Azure|Google Cloud|Amazon Web Services)\b/gi, color: '#3B82F6', label: 'Cloud Provider' },
+                { regex: /(\$\d+(?:\.\d+)?|\b\d+\s*(?:dollars|usd|bucks|rupees)\b|saste mein|\bunders?\s*\$?\d+(?:\s*(?:dollars|usd|bucks|rupees))?)/gi, color: '#2DCE89', label: 'Budget/Currency' },
+                { regex: /(\b\d+(?:\.\d+)?%\s*(?:SLA|availability)?|\b99\.99%?\b)/gi, color: '#FB6340', label: 'SLA Target' },
+                { regex: /(\b\d+\s*ms\b|\bunder\s*\d+\s*ms\b|\blatency\s*(?:under|<=)?\s*\d+\s*ms\b)/gi, color: '#F5365C', label: 'Latency SLA' },
                 { regex: /(\b\d+\s*(?:high-memory\s+nodes|nodes|vCPUs|GB\s+RAM|instances)\b|\b\d+GB\s+RAM\b|\bus-[a-z]+-\d+\b|\bactive-passive\s+DR\b|\bbatch processing\b)/gi, color: '#C084FC', label: 'Compute / Architecture' }
             ];
 
@@ -1068,13 +1215,139 @@
             return out.join('');
         }
 
+        // Render Native Offline SVG Smooth Spline Charts
+        function renderNativeSVGCharts(data) {
+            // 1. Latency Spline Chart in #F5365C (Pink)
+            const latSvg = `
+                <svg viewBox="0 0 450 170" width="100%" height="100%" style="overflow: visible;">
+                    <defs>
+                        <linearGradient id="pinkGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#F5365C" stop-opacity="0.22"/>
+                            <stop offset="100%" stop-color="#F5365C" stop-opacity="0.0"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Grid Lines -->
+                    <line x1="30" y1="30" x2="430" y2="30" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                    <line x1="30" y1="80" x2="430" y2="80" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                    <line x1="30" y1="130" x2="430" y2="130" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+
+                    <!-- Spline Area Fill -->
+                    <path d="M 50 35 C 130 38, 170 42, 210 46 C 260 90, 310 130, 370 130 L 370 140 L 50 140 Z" fill="url(#pinkGradient)"/>
+
+                    <!-- Spline Stroke -->
+                    <path d="M 50 35 C 130 38, 170 42, 210 46 C 260 90, 310 130, 370 130" fill="none" stroke="#F5365C" stroke-width="3" stroke-linecap="round"/>
+
+                    <!-- Circular Dot Markers -->
+                    <circle cx="50" cy="35" r="5" fill="#F5365C" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="50" y="24" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">193.4s</text>
+                    <text x="50" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">Mode 1</text>
+
+                    <circle cx="160" cy="42" r="5" fill="#F5365C" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="160" y="30" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">178.2s</text>
+                    <text x="160" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">Mode 2</text>
+
+                    <circle cx="270" cy="128" r="5" fill="#F5365C" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="270" y="118" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">3.5ms</text>
+                    <text x="270" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">Mode 3</text>
+
+                    <circle cx="370" cy="130" r="5" fill="#F5365C" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="370" y="118" text-anchor="middle" fill="#2DCE89" font-size="11" font-family="var(--font-sans)" font-weight="700">98.7ms</text>
+                    <text x="370" y="155" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">Mode 4</text>
+                </svg>
+            `;
+            document.getElementById('svg-latency-chart').innerHTML = latSvg;
+
+            // 2. Cost Convergence Spline Chart in #2DCE89 (Teal)
+            const b = data.budget_usd;
+            const c = data.optimal_cost_usd;
+            const costSvg = `
+                <svg viewBox="0 0 450 170" width="100%" height="100%" style="overflow: visible;">
+                    <defs>
+                        <linearGradient id="tealGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#2DCE89" stop-opacity="0.22"/>
+                            <stop offset="100%" stop-color="#2DCE89" stop-opacity="0.0"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Grid Lines -->
+                    <line x1="30" y1="30" x2="430" y2="30" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                    <line x1="30" y1="80" x2="430" y2="80" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+                    <line x1="30" y1="130" x2="430" y2="130" stroke="#2C3B63" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+
+                    <!-- Spline Area Fill -->
+                    <path d="M 50 40 C 130 35, 170 50, 210 65 C 260 95, 310 115, 370 115 L 370 140 L 50 140 Z" fill="url(#tealGradient)"/>
+
+                    <!-- Spline Stroke -->
+                    <path d="M 50 40 C 130 35, 170 50, 210 65 C 260 95, 310 115, 370 115" fill="none" stroke="#2DCE89" stroke-width="3" stroke-linecap="round"/>
+
+                    <!-- Circular Dot Markers -->
+                    <circle cx="50" cy="40" r="5" fill="#2DCE89" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="50" y="28" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">$${b.toFixed(0)}</text>
+                    <text x="50" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">Budget Cap</text>
+
+                    <circle cx="160" cy="45" r="5" fill="#2DCE89" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="160" y="32" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">$${(b*0.95).toFixed(0)}</text>
+                    <text x="160" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">LLM Claim</text>
+
+                    <circle cx="270" cy="115" r="5" fill="#2DCE89" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="270" y="102" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">$${c.toFixed(1)}</text>
+                    <text x="270" y="155" text-anchor="middle" fill="#9BA6C4" font-size="11" font-family="var(--font-sans)">Solver Sol</text>
+
+                    <circle cx="370" cy="115" r="5" fill="#2DCE89" stroke="#FFFFFF" stroke-width="2"/>
+                    <text x="370" y="102" text-anchor="middle" fill="#2DCE89" font-size="11" font-family="var(--font-sans)" font-weight="700">$${c.toFixed(2)}</text>
+                    <text x="370" y="155" text-anchor="middle" fill="#FFFFFF" font-size="11" font-family="var(--font-sans)" font-weight="600">Optimal</text>
+                </svg>
+            `;
+            document.getElementById('svg-cost-chart').innerHTML = costSvg;
+
+            // 3. Stage 4 Allocation / Pair Bar Chart in #3B82F6 (Blue)
+            let barItems = [];
+            if (data.region_pairs) {
+                barItems = data.region_pairs.slice(0, 4).map(rp => ({
+                    label: `${rp.region_a.split(' ')[0]} + ${rp.region_b.split(' ')[0]}`,
+                    cost: rp.cost_val,
+                    is_pass: rp.is_pass
+                }));
+            } else {
+                barItems = (data.allocations || []).map(a => ({
+                    label: a.sku,
+                    cost: a.monthly_cost,
+                    is_pass: true
+                }));
+            }
+
+            let maxCost = Math.max(...barItems.map(i => i.cost), 100);
+            let barsHtml = barItems.map(item => {
+                const heightPct = Math.max(15, Math.min(100, (item.cost / maxCost) * 100));
+                const barColor = item.is_pass ? 'var(--chart-blue)' : '#5A6789';
+                return `
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; height: 140px; justify-content: flex-end;">
+                        <span style="font-size: 0.78rem; font-weight: 600; color: #FFFFFF; font-family: var(--font-mono); margin-bottom: 6px;">$${item.cost.toFixed(1)}</span>
+                        <div style="width: 42px; height: ${heightPct}%; background-color: ${barColor}; border-radius: 6px 6px 0 0; transition: height 0.5s ease;"></div>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px;">${item.label}</span>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('stage4-barchart-container').innerHTML = `
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 16px; margin-top: 14px;">
+                    <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); margin-bottom: 12px; letter-spacing: 0.04em;">Candidate Cost Allocation Breakdown (Argon Bar Chart)</div>
+                    <div style="display: flex; gap: 16px; align-items: flex-end; justify-content: space-around;">
+                        ${barsHtml}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderDashboard(data) {
             // Metrics
             const savings = Math.max(0, data.budget_usd - data.optimal_cost_usd);
             const savingsPct = ((savings / data.budget_usd) * 100).toFixed(1);
             document.getElementById('metric-cost').textContent = `$${data.optimal_cost_usd.toFixed(2)}`;
-            document.getElementById('metric-savings').innerHTML = `$${savings.toFixed(2)} <span style="font-size: 0.82rem; font-weight: 500; color: var(--accent-primary);">(${savingsPct}%)</span>`;
+            document.getElementById('metric-savings').innerHTML = `$${savings.toFixed(2)} <span style="font-size: 0.82rem; font-weight: 600; color: var(--chart-teal);">(${savingsPct}%)</span>`;
             document.getElementById('metric-engine').textContent = data.badge;
+
+            // Render Charts
+            renderNativeSVGCharts(data);
 
             // Race track
             let raceHtml = '';
@@ -1083,7 +1356,7 @@
                     <div class="race-row">
                         <div class="race-label">${r.mode}</div>
                         <div class="race-bar-bg">
-                            <div class="race-bar-fill" style="width: ${r.width_pct}%; background-color: ${r.color};"></div>
+                            <div class="race-bar-fill" style="width: ${r.width_pct}% !important; background-color: ${r.color};"></div>
                         </div>
                         <div class="race-meta">
                             <span class="race-time">${r.latency_disp}</span>
@@ -1099,32 +1372,32 @@
 
             // Stage 1
             const provBadges = (data.cloud_providers || ['AWS']).map(p => 
-                `<span style="background: rgba(34, 197, 94, 0.12); color: var(--accent-primary); border: 1px solid rgba(34, 197, 94, 0.3); padding: 2px 7px; border-radius: 3px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-mono); margin-right: 4px;">${p}</span>`
+                `<span style="background: rgba(59, 130, 246, 0.15); color: var(--chart-blue); border: 1px solid rgba(59, 130, 246, 0.3); padding: 2px 8px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; font-family: var(--font-sans); margin-right: 4px;">${p}</span>`
             ).join('');
 
             const highlightedQuery = highlightQueryTerms(data.query || document.getElementById('query-input-field').value);
 
             document.getElementById('trace-stage1').innerHTML = `
-                <div style="background: #050505; border: 1px solid var(--border-default); border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5; font-family: var(--font-sans);">
-                    <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; display: block; margin-bottom: 4px;">Extracted Semantic Substrings:</span>
+                <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5; font-family: var(--font-sans);">
+                    <span style="color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; display: block; margin-bottom: 4px;">Extracted Semantic Substrings:</span>
                     "${highlightedQuery}"
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 6px;">
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Target Cloud</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Target Cloud</div>
                         <div>${provBadges}</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Budget Ceiling</div>
-                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">$${data.budget_usd.toFixed(2)} / month</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Budget Ceiling</div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">$${data.budget_usd.toFixed(2)} / month</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Compute Target</div>
-                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">${data.required_vcpus || 4} vCPUs • ${(data.required_ram_gb || 16).toFixed(0)} GB RAM</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Compute Target</div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">${data.required_vcpus || 4} vCPUs • ${(data.required_ram_gb || 16).toFixed(0)} GB RAM</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">SLA & Latency</div>
-                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">99.99% SLA • ≤100ms</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">SLA & Latency</div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">99.99% SLA • ≤100ms</div>
                     </div>
                 </div>
             `;
@@ -1148,27 +1421,27 @@
                     </div>
                 `;
             }
-            carmHtml += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-default); font-family: var(--font-mono);"><strong>Template Dispatch:</strong> <span style="color: var(--accent-primary);">templates/${data.matched_template}</span></div>`;
+            carmHtml += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-default); font-family: var(--font-mono);"><strong>Template Dispatch:</strong> <span style="color: var(--gradient-accent-start);">templates/${data.matched_template}</span></div>`;
             document.getElementById('carm-bars-container').innerHTML = carmHtml;
 
             // Stage 3 Contract
             document.getElementById('trace-stage3').innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 6px;">
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Optimization Archetype</div>
-                        <div style="font-size: 0.95rem; color: var(--accent-primary); font-weight: 600;">${data.problem_type}</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Optimization Archetype</div>
+                        <div style="font-size: 0.95rem; color: var(--chart-blue); font-weight: 600;">${data.problem_type}</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Hard Budget Ceiling</div>
-                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">∑(Cost_i × x_i) ≤ $${data.budget_usd.toFixed(2)}</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Hard Budget Ceiling</div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">∑(Cost_i × x_i) ≤ $${data.budget_usd.toFixed(2)}</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Resource Constraints</div>
-                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-mono); font-weight: 600;">vCPU ≥ ${data.required_vcpus || 4} • RAM ≥ ${(data.required_ram_gb || 16).toFixed(0)} GB</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Resource Constraints</div>
+                        <div style="font-size: 0.95rem; color: var(--text-primary); font-family: var(--font-sans); font-weight: 600;">vCPU ≥ ${data.required_vcpus || 4} • RAM ≥ ${(data.required_ram_gb || 16).toFixed(0)} GB</div>
                     </div>
-                    <div style="background: #0E0E0E; border: 1px solid var(--border-default); border-radius: 4px; padding: 12px 14px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-mono); font-weight: 600; margin-bottom: 4px;">Verification Status</div>
-                        <div style="font-size: 0.95rem; color: var(--accent-primary); font-weight: 600;">✅ Pydantic Validated (v2.4)</div>
+                    <div style="background: #131B33; border: 1px solid var(--border-default); border-radius: 8px; padding: 12px 14px;">
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Verification Status</div>
+                        <div style="font-size: 0.95rem; color: var(--chart-teal); font-family: var(--font-sans); font-weight: 600;">✅ Pydantic Validated (v2.4)</div>
                     </div>
                 </div>
             `;
@@ -1196,7 +1469,7 @@
                         <tbody>
                 `;
                 for (const rp of data.region_pairs) {
-                    const color = rp.is_pass ? 'var(--accent-primary)' : 'var(--status-error)';
+                    const color = rp.is_pass ? 'var(--chart-teal)' : 'var(--status-error)';
                     tableHtml += `
                         <tr>
                             <td><strong>${rp.region_a}</strong></td>
@@ -1234,7 +1507,7 @@
                             <td style="font-family: var(--font-mono);">${alloc.qty}</td>
                             <td style="font-family: var(--font-mono);">${alloc.vcpus}</td>
                             <td style="font-family: var(--font-mono);">${alloc.ram}</td>
-                            <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent-primary);">$${alloc.monthly_cost.toFixed(2)}</td>
+                            <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--chart-teal);">$${alloc.monthly_cost.toFixed(2)}</td>
                         </tr>
                     `;
                 }
