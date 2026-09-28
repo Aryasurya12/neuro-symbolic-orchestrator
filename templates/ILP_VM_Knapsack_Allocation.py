@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 import numpy as np
 
+from config.settings import settings
+
 
 @dataclass(frozen=True)
 class VMSku:
@@ -23,30 +25,51 @@ class VMSku:
     ram_gb: float
     hourly_cost_usd: float
 
-    def monthly_cost(self) -> float:
-        """Approximate monthly cost assuming a 730-hour month."""
-        return round(self.hourly_cost_usd * 730.0, 2)
+    def monthly_cost(self, hours_per_month: float = getattr(settings, "HOURS_PER_MONTH", 730.0)) -> float:
+        """Approximate monthly cost assuming the configured hours per month."""
+        return round(self.hourly_cost_usd * hours_per_month, 2)
 
 
-_VM_CATALOG: List[VMSku] = [
-    VMSku(name="t3.medium", provider="AWS", vcpus=2, ram_gb=4.0, hourly_cost_usd=0.0416),
-    VMSku(name="t3.large", provider="AWS", vcpus=2, ram_gb=8.0, hourly_cost_usd=0.0832),
-    VMSku(name="t3.xlarge", provider="AWS", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1664),
-    VMSku(name="c5.large", provider="AWS", vcpus=2, ram_gb=4.0, hourly_cost_usd=0.0850),
-    VMSku(name="c5.xlarge", provider="AWS", vcpus=4, ram_gb=8.0, hourly_cost_usd=0.1700),
-    VMSku(name="m5.large", provider="AWS", vcpus=2, ram_gb=8.0, hourly_cost_usd=0.0960),
-    VMSku(name="m5.xlarge", provider="AWS", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1920),
-    VMSku(name="m5.2xlarge", provider="AWS", vcpus=8, ram_gb=32.0, hourly_cost_usd=0.3840),
-    VMSku(name="Standard_D4s_v5", provider="Azure", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1920),
-    VMSku(name="e2-standard-4", provider="GCP", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1340),
-]
+def _load_default_vm_catalog() -> List[VMSku]:
+    """Dynamically loads the VM catalog from the centralized domain catalog/database repository."""
+    try:
+        from src.symbolic.optimizers.domain_catalog import VM_CATALOG
+
+        return [
+            VMSku(
+                name=sku.name,
+                provider=sku.provider,
+                vcpus=sku.vcpus,
+                ram_gb=sku.ram_gb,
+                hourly_cost_usd=sku.hourly_cost_usd,
+            )
+            for sku in VM_CATALOG
+        ]
+    except Exception:
+        # Fallback for standalone/isolated execution
+        return [
+            VMSku(name="t3.medium", provider="AWS", vcpus=2, ram_gb=4.0, hourly_cost_usd=0.0416),
+            VMSku(name="t3.large", provider="AWS", vcpus=2, ram_gb=8.0, hourly_cost_usd=0.0832),
+            VMSku(name="t3.xlarge", provider="AWS", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1664),
+            VMSku(name="c5.large", provider="AWS", vcpus=2, ram_gb=4.0, hourly_cost_usd=0.0850),
+            VMSku(name="c5.xlarge", provider="AWS", vcpus=4, ram_gb=8.0, hourly_cost_usd=0.1700),
+            VMSku(name="m5.large", provider="AWS", vcpus=2, ram_gb=8.0, hourly_cost_usd=0.0960),
+            VMSku(name="m5.xlarge", provider="AWS", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1920),
+            VMSku(name="m5.2xlarge", provider="AWS", vcpus=8, ram_gb=32.0, hourly_cost_usd=0.3840),
+            VMSku(name="Standard_D4s_v5", provider="Azure", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1920),
+            VMSku(name="e2-standard-4", provider="GCP", vcpus=4, ram_gb=16.0, hourly_cost_usd=0.1340),
+        ]
+
+
+_VM_CATALOG: List[VMSku] = _load_default_vm_catalog()
 
 
 def solve_ilp_vm_knapsack(
-    required_vcpus: int,
-    required_ram_gb: float,
-    budget_max_usd: float,
+    required_vcpus: Optional[int] = 4,
+    required_ram_gb: Optional[float] = 8.0,
+    budget_max_usd: float = getattr(settings, "DEFAULT_BUDGET_USD", 500.0),
     target_providers: Optional[List[str]] = None,
+    catalog: Optional[List[VMSku]] = None,
 ) -> Dict[str, Any]:
     """Solves the ILP VM allocation knapsack problem.
 
@@ -60,16 +83,20 @@ def solve_ilp_vm_knapsack(
     """
     start = time.perf_counter()
 
-    catalog = _VM_CATALOG
-    if target_providers:
-        filtered = [sku for sku in catalog if sku.provider in target_providers]
-        if filtered:
-            catalog = filtered
+    vcpus_target = 4 if required_vcpus is None else int(required_vcpus)
+    ram_target = 8.0 if required_ram_gb is None else float(required_ram_gb)
 
-    n = len(catalog)
-    costs = np.array([sku.monthly_cost() for sku in catalog])
-    vcpus = np.array([sku.vcpus for sku in catalog])
-    ram = np.array([sku.ram_gb for sku in catalog])
+    sku_catalog = catalog if catalog is not None else _VM_CATALOG
+    if target_providers:
+        target_upper = {p.upper() for p in target_providers}
+        filtered = [sku for sku in sku_catalog if sku.provider.upper() in target_upper]
+        if filtered:
+            sku_catalog = filtered
+
+    n = len(sku_catalog)
+    costs = np.array([sku.monthly_cost() for sku in sku_catalog])
+    vcpus = np.array([sku.vcpus for sku in sku_catalog])
+    ram = np.array([sku.ram_gb for sku in sku_catalog])
 
     best_allocation = None
     best_cost = float("inf")
@@ -81,7 +108,7 @@ def solve_ilp_vm_knapsack(
 
         A = np.vstack([-vcpus, -ram, costs])
         lhs = np.array([-np.inf, -np.inf, 0.0])
-        rhs = np.array([-required_vcpus, -required_ram_gb, budget_max_usd])
+        rhs = np.array([-vcpus_target, -ram_target, budget_max_usd])
         constraints = LinearConstraint(A, lhs, rhs)
         integrality = np.ones(n)
 
@@ -98,7 +125,8 @@ def solve_ilp_vm_knapsack(
 
     # Exact Branch-and-Bound solver using NumPy
     if best_allocation is None or best_cost > budget_max_usd:
-        max_units = min(8, max(1, int(np.ceil(required_vcpus / min(vcpus)))))
+        min_v = max(1, int(min(vcpus)))
+        max_units = min(8, max(1, int(np.ceil(vcpus_target / min_v))))
 
         # Search homogeneous and dual-SKU combinations
         for i in range(n):
@@ -107,7 +135,7 @@ def solve_ilp_vm_knapsack(
                 tot_r = ram[i] * c1
                 tot_c = costs[i] * c1
 
-                if tot_v >= required_vcpus and tot_r >= required_ram_gb:
+                if tot_v >= vcpus_target and tot_r >= ram_target:
                     if tot_c <= budget_max_usd and tot_c < best_cost:
                         best_cost = tot_c
                         alloc = np.zeros(n, dtype=int)
@@ -121,7 +149,7 @@ def solve_ilp_vm_knapsack(
                         tot_r2 = tot_r + ram[j] * c2
                         tot_c2 = tot_c + costs[j] * c2
 
-                        if tot_v2 >= required_vcpus and tot_r2 >= required_ram_gb:
+                        if tot_v2 >= vcpus_target and tot_r2 >= ram_target:
                             if tot_c2 <= budget_max_usd and tot_c2 < best_cost:
                                 best_cost = tot_c2
                                 alloc = np.zeros(n, dtype=int)
@@ -132,9 +160,15 @@ def solve_ilp_vm_knapsack(
     elapsed_ms = (time.perf_counter() - start) * 1000.0
 
     if best_allocation is None or best_cost > budget_max_usd:
-        # Fallback allocation showing minimum capacity needed
-        unit_count = max(1, int(np.ceil(max(required_vcpus / 4, required_ram_gb / 16))))
-        sku = catalog[2]  # t3.xlarge
+        # Dynamically select candidate SKU with balanced vCPU/RAM for fallback baseline
+        balanced_skus = sorted(sku_catalog, key=lambda s: (s.monthly_cost() / max(1, s.vcpus)))
+        sku = balanced_skus[0]
+        for cand in balanced_skus:
+            if cand.vcpus >= 4 or cand.ram_gb >= 8.0:
+                sku = cand
+                break
+
+        unit_count = max(1, int(np.ceil(max(vcpus_target / max(1, sku.vcpus), ram_target / max(1.0, sku.ram_gb)))))
         fallback_cost = round(sku.monthly_cost() * unit_count, 2)
         status = "INFEASIBLE_BUDGET_EXCEEDED" if fallback_cost > budget_max_usd else "FEASIBLE"
         return {
@@ -150,9 +184,9 @@ def solve_ilp_vm_knapsack(
                 "monthly_cost": fallback_cost,
             }],
             "total_vcpus": sku.vcpus * unit_count,
-            "total_ram_gb": sku.ram_gb * unit_count,
+            "total_ram_gb": round(sku.ram_gb * unit_count, 2),
             "budget_max_usd": budget_max_usd,
-            "budget_utilized_pct": round((fallback_cost / budget_max_usd) * 100, 2),
+            "budget_utilized_pct": round((fallback_cost / budget_max_usd) * 100, 2) if budget_max_usd > 0 else 0.0,
             "cost_savings_usd": round(max(0.0, budget_max_usd - fallback_cost), 2),
             "solve_time_ms": round(elapsed_ms, 3),
         }
@@ -162,7 +196,7 @@ def solve_ilp_vm_knapsack(
     tot_r = 0.0
     for idx, count in enumerate(best_allocation):
         if count > 0:
-            sku = catalog[idx]
+            sku = sku_catalog[idx]
             sku_cost = round(sku.monthly_cost() * int(count), 2)
             tot_v += sku.vcpus * int(count)
             tot_r += sku.ram_gb * int(count)
@@ -184,7 +218,7 @@ def solve_ilp_vm_knapsack(
         "total_vcpus": int(tot_v),
         "total_ram_gb": round(float(tot_r), 2),
         "budget_max_usd": budget_max_usd,
-        "budget_utilized_pct": round((final_cost / budget_max_usd) * 100, 2),
+        "budget_utilized_pct": round((final_cost / budget_max_usd) * 100, 2) if budget_max_usd > 0 else 0.0,
         "cost_savings_usd": round(max(0.0, budget_max_usd - final_cost), 2),
         "solve_time_ms": round(elapsed_ms, 3),
     }

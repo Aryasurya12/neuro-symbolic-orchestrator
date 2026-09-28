@@ -45,3 +45,36 @@ def test_exactly_two_regions_constraint():
     solver.add(vars["eu-west-1"] == False)
     solver.add(vars["us-central1"] == False)
     assert solver.check() == z3.sat
+
+def test_z3_cross_provider_constraint():
+    graph = InfrastructureGraph()
+    vars = {n.id: z3.Bool(n.id) for n in graph.get_all_nodes()}
+    
+    # 1. Multi-provider request: ["AWS", "GCP"]
+    multi_constraints = Z3ConstraintFactory.cross_provider_constraint(vars, graph, ["AWS", "GCP"])
+    solver = z3.Solver()
+    solver.add(multi_constraints)
+    
+    # Forcing two AWS regions (same provider) -> UNSAT
+    solver.push()
+    solver.add(vars["us-east-1"] == True)
+    solver.add(vars["us-west-2"] == True)
+    assert solver.check() == z3.unsat
+    solver.pop()
+    
+    # Forcing AWS + GCP (different providers) -> SAT
+    solver.push()
+    solver.add(vars["us-east-1"] == True)
+    solver.add(vars["us-central1"] == True)
+    assert solver.check() == z3.sat
+    solver.pop()
+    
+    # 2. Single-provider request: ["AWS"] (must be a no-op / allow same-provider)
+    single_constraints = Z3ConstraintFactory.cross_provider_constraint(vars, graph, ["AWS"])
+    assert len(single_constraints) == 0
+    solver_single = z3.Solver()
+    solver_single.add(single_constraints)
+    solver_single.add(vars["us-east-1"] == True)
+    solver_single.add(vars["us-west-2"] == True)
+    assert solver_single.check() == z3.sat
+

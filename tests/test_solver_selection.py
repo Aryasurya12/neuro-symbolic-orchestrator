@@ -113,7 +113,37 @@ def test_noisy_data_experiment():
     retention_rate = successes / trials
     print(f"Noisy Data Retention Rate: {retention_rate * 100}%")
     
-    # We don't artificially enforce >95%. We just assert it works decently > 70% 
-    # depending on the noise level. With N(0,5), 80 vs 90 has 10 units difference, 
-    # 2 standard deviations, so it should be very high (>90%).
     assert retention_rate > 0.80
+
+
+def test_optihive_forwarding_module():
+    """Verify src.symbolic.optihive_selector exports OptiHiveSelector and related components."""
+    from src.symbolic.optihive_selector import OptiHiveSelector as ForwardedSelector
+    from src.symbolic.optihive_selector import EMSelector, ILPSyntacticFilter
+
+    selector = ForwardedSelector(seed=42)
+    assert selector is not None
+    assert isinstance(selector.em_selector, EMSelector)
+
+
+def test_orchestrator_model_hoisting_and_optihive_selection():
+    """Verify NeuroSymbolicOrchestrator hoists GraphSteeringLayer and routes through OptiHiveSelector."""
+    from src.orchestrator.service import NeuroSymbolicOrchestrator
+    from src.semantic.schemas import CloudOptimizationContract
+
+    orchestrator = NeuroSymbolicOrchestrator()
+    assert hasattr(orchestrator, "graph_steering_layer")
+    assert orchestrator.z3_solver.steering is orchestrator.graph_steering_layer
+
+    contract = CloudOptimizationContract(
+        problem_type="ILP_VM_Allocation",
+        cloud_providers=["AWS"],
+        budget_max_usd=300.0,
+        service_count=1,
+        required_vcpus=4,
+        required_ram_gb=8.0,
+    )
+    result = orchestrator.optimize_contract(contract)
+    assert result["status"] == "Feasible"
+    assert result["solver"] == "OptiHive_Selector"
+    assert "allocated_vms" in result

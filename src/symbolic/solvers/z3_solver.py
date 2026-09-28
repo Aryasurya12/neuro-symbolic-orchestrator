@@ -13,7 +13,8 @@ from src.symbolic.models import (
     OptimizationResult,
     OptimizationCandidate,
     OptimizationMetrics,
-    ConstraintStatus
+    ConstraintStatus,
+    FeasibilityStatus,
 )
 from src.symbolic.interfaces import OptimizationEngine
 from .graph_model import InfrastructureGraph, RegionNode
@@ -23,15 +24,21 @@ from .constraints import Z3ConstraintFactory
 class GraphSteeredZ3Solver(OptimizationEngine):
     """Z3 SMT Solver directed by graph-based soft preferences."""
 
-    def __init__(self, timeout_ms: int = 5000, steering_mode: str = "learned"):
+    def __init__(
+        self,
+        timeout_ms: int = 5000,
+        steering_mode: str = "learned",
+        steering_layer: Optional[GraphSteeringLayer] = None,
+        graph: Optional[InfrastructureGraph] = None,
+    ):
         self.timeout_ms = timeout_ms
         self.steering_mode = steering_mode
-        self.graph = InfrastructureGraph()
+        self.graph = graph or (steering_layer.graph if steering_layer else InfrastructureGraph())
         
-        # We handle initialization of the steering layer based on mode
-        self.steering = None
+        # We handle initialization of the steering layer based on mode or injected instance
+        self.steering = steering_layer
         self.last_stats = {}
-        if self.steering_mode != "none":
+        if self.steering is None and self.steering_mode != "none":
             self.steering = GraphSteeringLayer(self.graph)
             # If deterministic is requested, we actively suppress the learned model
             if self.steering_mode == "deterministic" and self.steering.model:
@@ -60,6 +67,10 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         
         # Provider validity
         for c in Z3ConstraintFactory.provider_constraint(selected_vars, self.graph, request.cloud_providers):
+            solver.add(c)
+
+        # Cross-provider disjointness (true multi-cloud DR when 2+ providers requested)
+        for c in Z3ConstraintFactory.cross_provider_constraint(selected_vars, self.graph, request.cloud_providers):
             solver.add(c)
             
         # Budget
@@ -114,21 +125,106 @@ class GraphSteeredZ3Solver(OptimizationEngine):
             model = solver.model()
             candidate = self._extract_and_validate_candidate(model, selected_vars, request)
             if candidate is None or not candidate.is_feasible:
-                # Post-validation failed
-                return self._infeasible_result("Post-solve validation failed.", runtime_ms)
+                error_msg, cstatus = self._diagnose_infeasibility(request)
+                return self._infeasible_result(error_msg, runtime_ms, cstatus)
                 
             return OptimizationResult(
                 best_candidate=candidate,
                 is_feasible=True,
+                status=FeasibilityStatus.FEASIBLE,
                 metrics=OptimizationMetrics(runtime_ms=runtime_ms),
                 solver_name="GraphSteeredZ3"
             )
         elif result == z3.unsat:
-            return self._infeasible_result("UNSAT: No configuration satisfies all hard constraints.", runtime_ms)
+            error_msg, cstatus = self._diagnose_infeasibility(request)
+            return self._infeasible_result(error_msg, runtime_ms, cstatus)
         else:
             return self._infeasible_result("UNKNOWN: Solver timed out or failed to resolve.", runtime_ms)
 
+    def _diagnose_infeasibility(self, request: SymbolicOptimizationRequest) -> Tuple[str, ConstraintStatus]:
+        """Diagnoses exactly which hard constraint(s) caused UNSAT across candidate graph pairs."""
+        from config.settings import settings
+        latency_cost_factor = getattr(settings, "LATENCY_COST_PER_MS", 0.25)
+
+        nodes = self.graph.get_all_nodes()
+        allowed_upper = {p.upper() for p in request.cloud_providers}
+        is_multi_cloud = len(allowed_upper) >= 2
+
+        valid_pairs = []
+        for i, a in enumerate(nodes):
+            for j, b in enumerate(nodes):
+                if i < j:
+                    if a.provider.upper() not in allowed_upper or b.provider.upper() not in allowed_upper:
+                        continue
+                    if is_multi_cloud and a.provider.upper() == b.provider.upper():
+                        continue
+                    valid_pairs.append((a, b))
+
+        if not valid_pairs:
+            details = f"Provider disjointness violated: No valid region pairs for {request.cloud_providers}"
+            return f"UNSAT: {details}", ConstraintStatus(
+                is_feasible=False,
+                budget_ok=True,
+                vcpu_ok=True,
+                ram_ok=True,
+                latency_ok=True,
+                sla_ok=True,
+                details=details,
+            )
+
+        min_cost = float("inf")
+        min_lat = float("inf")
+        max_sla = 0.0
+
+        for a, b in valid_pairs:
+            lat = self.graph.get_latency(a.id, b.id)
+            cost = a.base_cost_usd + b.base_cost_usd + (lat * latency_cost_factor)
+            unavail_a = 1.0 - (a.sla_pct / 100.0)
+            unavail_b = 1.0 - (b.sla_pct / 100.0)
+            sla = (1.0 - (unavail_a * unavail_b)) * 100.0
+
+            if cost < min_cost:
+                min_cost = cost
+            if lat < min_lat:
+                min_lat = lat
+            if sla > max_sla:
+                max_sla = sla
+
+        violations = []
+        budget_ok = True
+        latency_ok = True
+        sla_ok = True
+
+        if min_cost > request.budget_max_usd:
+            budget_ok = False
+            violations.append(f"Budget cap of ${request.budget_max_usd:.2f} violated (minimum cost is ${min_cost:.2f})")
+
+        if request.latency_max_ms > 0 and min_lat > request.latency_max_ms:
+            latency_ok = False
+            violations.append(f"Latency threshold of {request.latency_max_ms:.1f}ms violated (minimum latency is {min_lat:.1f}ms)")
+
+        if request.sla_availability_pct > 0 and max_sla < request.sla_availability_pct:
+            sla_ok = False
+            violations.append(f"SLA target of {request.sla_availability_pct:.3f}% is unreachable (maximum achievable is {max_sla:.5f}%)")
+
+        if not violations:
+            violations.append("Simultaneous satisfaction of budget, latency, and SLA constraints is impossible")
+
+        msg = "UNSAT: " + "; ".join(violations)
+        cstatus = ConstraintStatus(
+            is_feasible=False,
+            budget_ok=budget_ok,
+            vcpu_ok=True,
+            ram_ok=True,
+            latency_ok=latency_ok,
+            sla_ok=sla_ok,
+            details=msg,
+        )
+        return msg, cstatus
+
     def _build_cost_expr(self, selected_vars: Dict[str, z3.BoolRef], nodes: list[RegionNode]) -> z3.ArithRef:
+        from config.settings import settings
+        latency_cost_factor = getattr(settings, "LATENCY_COST_PER_MS", 0.25)
         cost_exprs = []
         for node in nodes:
             cost_exprs.append(z3.If(selected_vars[node.id], node.base_cost_usd, 0.0))
@@ -137,7 +233,7 @@ class GraphSteeredZ3Solver(OptimizationEngine):
             for j, b in enumerate(nodes):
                 if i < j:
                     lat = self.graph.get_latency(a.id, b.id)
-                    lat_cost = lat * 0.25
+                    lat_cost = lat * latency_cost_factor
                     both_selected = z3.And(selected_vars[a.id], selected_vars[b.id])
                     cost_exprs.append(z3.If(both_selected, lat_cost, 0.0))
         return z3.Sum(cost_exprs)
@@ -160,6 +256,8 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         self, model: z3.ModelRef, selected_vars: Dict[str, z3.BoolRef], request: SymbolicOptimizationRequest
     ) -> OptimizationCandidate | None:
         """Extracts the solution and performs Python-side post-validation."""
+        from config.settings import settings
+        latency_cost_factor = getattr(settings, "LATENCY_COST_PER_MS", 0.25)
         selected_nodes = []
         for node_id, var in selected_vars.items():
             if z3.is_true(model[var]):
@@ -174,6 +272,11 @@ class GraphSteeredZ3Solver(OptimizationEngine):
         allowed_upper = {p.upper() for p in request.cloud_providers}
         if reg_a.provider.upper() not in allowed_upper or reg_b.provider.upper() not in allowed_upper:
             return None
+
+        # Validate Cross-Provider Disjointness (defense-in-depth)
+        if len(allowed_upper) >= 2:
+            if reg_a.provider.upper() == reg_b.provider.upper():
+                return None
             
         latency = self.graph.get_latency(reg_a.id, reg_b.id)
         
@@ -190,7 +293,7 @@ class GraphSteeredZ3Solver(OptimizationEngine):
             return None
             
         # Validate Budget
-        cost = reg_a.base_cost_usd + reg_b.base_cost_usd + (latency * 0.25)
+        cost = reg_a.base_cost_usd + reg_b.base_cost_usd + (latency * latency_cost_factor)
         if cost > request.budget_max_usd:
             return None
             
@@ -209,18 +312,23 @@ class GraphSteeredZ3Solver(OptimizationEngine):
                 "primary_region": reg_a.id,
                 "secondary_region": reg_b.id,
                 "provider_a": reg_a.provider,
-                "provider_b": reg_b.provider
+                "provider_b": reg_b.provider,
+                "latency_ms": latency,
+                "achieved_sla": composite_sla,
             },
             objective_cost_usd=cost,
             is_feasible=True,
             constraint_status=status
         )
 
-    def _infeasible_result(self, error_msg: str, runtime_ms: float) -> OptimizationResult:
+    def _infeasible_result(
+        self, error_msg: str, runtime_ms: float, constraint_status: Optional[ConstraintStatus] = None
+    ) -> OptimizationResult:
         return OptimizationResult(
             best_candidate=None,
             is_feasible=False,
+            status=FeasibilityStatus.INFEASIBLE,
             metrics=OptimizationMetrics(runtime_ms=runtime_ms),
             solver_name="GraphSteeredZ3",
-            error_message=error_msg
+            error_message=error_msg,
         )

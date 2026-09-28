@@ -369,6 +369,10 @@ class SCOPEParser:
 
         return params
 
+    def extract_parameters(self, text: str) -> dict:
+        """Public interface for parameter extraction from user query text."""
+        return self._extract_parameters(text)
+
     def parse_query_to_contract(
         self, user_query: str
     ) -> Tuple[CloudOptimizationContract, str, float]:
@@ -465,6 +469,9 @@ def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
         "Extract cloud optimization requirements from the user's natural language query "
         "and return a JSON object that strictly adheres to the following JSON schema:\n\n"
         f"{schema_json}\n\n"
+        "Carefully extract any explicit numbers and constraints mentioned in the query "
+        "(such as budget, node/service count, vCPUs, RAM, latency, SLA percentage). "
+        "If a budget is explicitly mentioned (e.g. $300, ₹25000), set budget_max_usd to that value (converting INR to USD at 85 if needed). "
         "Return ONLY the valid raw JSON object matching the schema. Do not output markdown fences or explanatory text."
     )
 
@@ -487,7 +494,21 @@ def parse_fallback_nemotron(user_query: str) -> CloudOptimizationContract:
                 raw_content = re.sub(r"\s*```$", "", raw_content)
             raw_content = raw_content.strip()
 
-            return CloudOptimizationContract.model_validate_json(raw_content)
+            print("\n" + "=" * 60)
+            print("📄 RAW NEMOTRON LLM OUTPUT:")
+            print("=" * 60)
+            print(raw_content)
+            print("=" * 60)
+
+            contract = CloudOptimizationContract.model_validate_json(raw_content)
+
+            print("\n" + "=" * 60)
+            print("🔒 PYDANTIC VALIDATED JSON CONTRACT:")
+            print("=" * 60)
+            print(contract.model_dump_json(indent=2))
+            print("=" * 60 + "\n")
+
+            return contract
         except Exception as err:
             last_error = err
             continue
@@ -517,7 +538,7 @@ def validate_parsed_numbers(user_query: str, contract: CloudOptimizationContract
             raw_val = m.group(1) or (m.group(2) if len(m.groups()) >= 2 else None)
             if raw_val:
                 num_val = float(raw_val.replace(",", ""))
-                inr_converted = round(num_val / getattr(settings, "USD_TO_INR_RATE", 83.0), 2)
+                inr_converted = round(num_val / getattr(settings, "USD_TO_INR_RATE", 85.0), 2)
                 # If contract budget does not match either direct USD or INR-converted value
                 if abs(contract.budget_max_usd - num_val) > 0.01 and abs(contract.budget_max_usd - inr_converted) > 1.0:
                     raise ValueError(

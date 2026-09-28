@@ -138,6 +138,117 @@ class FinOpsExplainer:
         return recs
 
     @classmethod
+    def _clean_llm_recommendations(cls, raw_text: str) -> List[str]:
+        """Cleans, sanitizes, and filters raw LLM output into a list of 3-4 actionable
+        FinOps recommendations, stripping meta-prompts, reasoning headers, and placeholders.
+        """
+        if not raw_text or not raw_text.strip():
+            return []
+
+        # Strip XML-like thinking/thought tags
+        cleaned_text = re.sub(
+            r"<(?:thinking|thought|think|reasoning)>[\s\S]*?</(?:thinking|thought|think|reasoning)>",
+            "",
+            raw_text,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        lines = [l.strip() for l in cleaned_text.split("\n") if l.strip()]
+        cleaned_recs: List[str] = []
+
+        finops_keywords = [
+            "saving", "discount", "commit", "reserv", "spot", "rightsiz",
+            "scale", "scaling", "tag", "tagging", "monitor", "monitoring",
+            "alert", "reduc", "optimi", "utiliz", "cost", "plan", "egress",
+            "transfer", "headroom", "capacity", "failover", "sla", "budget",
+            "billing", "flapping", "burst", "graviton", "instance", "hpa",
+            "tier", "governance", "attribution", "replication", "cooldown",
+            "consolidat", "density", "container", "bin-pack",
+        ]
+
+        bullet_pattern = re.compile(
+            r"^(?:(?:\d+[\.\)\:\-]\s*)+|(?:\*(?!\*)|[\-\•\–\—\+])\s*)+",
+            re.IGNORECASE,
+        )
+
+        meta_header_pattern = re.compile(
+            r"^(?:(?:\*\*|\*|__)?(?:Analyze (?:the )?(?:Input|Problem|Workload|Deployment|Query|Resources?|User(?:'s)? Request)|"
+            r"(?:Input|Problem|Workload|User) Analysis|Observation|Step \d+|Reasoning|Thought(?:s| process)?|"
+            r"Role|Role: Principal Cloud FinOps Architect|Context|Input Summary|Understanding|Evaluation|"
+            r"Recommendation \d+|Rec \d+|Action Item \d+)"
+            r":?(?:\*\*|\*|__)?\s*)+",
+            re.IGNORECASE,
+        )
+
+        placeholder_pattern = re.compile(
+            r"</?(?:recommendation|recommendations|rec|item|step)>|\[(?:recommendation|recommendations|rec|item|step)\]",
+            re.IGNORECASE,
+        )
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip markdown table borders, separators or code blocks
+            if line.startswith(("-", "=", "`", "#")) and len(line) > 5 and set(line).issubset({"-", "=", "`", " ", "#"}):
+                continue
+
+            # Strip leading bullets / numbering
+            line = bullet_pattern.sub("", line).strip()
+
+            # Check for direct meta-instruction / role echoes / thinking headers
+            if re.match(r"^(?:role|system|prompt|user|problem type|target cloud|required resources|monthly budget cap|optimized monthly cost|placed resources):", line, re.IGNORECASE):
+                continue
+            if re.match(r"^(?:here'?s?\s*(?:a\s+)?(?:thinking|reasoning|analysis|are|is)|thinking\s*process|based on\b|sure,?\b|the following (?:are|is)|to optimize\b)", line, re.IGNORECASE):
+                continue
+            if re.match(r"^(?:finops recommendations|actionable recommendations|recommendations):?$", line, re.IGNORECASE):
+                continue
+
+            # Strip prompt placeholder tokens
+            line = placeholder_pattern.sub("", line).strip()
+
+            # Strip meta-instruction or reasoning headers (e.g. "**Analyze the Input:**")
+            line = meta_header_pattern.sub("", line).strip()
+
+            # Strip leading bullets / numbering again in case of "1. **Step 1:** 1. Migrate..."
+            line = bullet_pattern.sub("", line).strip()
+            line = placeholder_pattern.sub("", line).strip()
+
+            # Clean markdown bold/italic asterisks around prefix (e.g. "**Pricing Strategy:**" or "**Pricing Strategy**:" -> "Pricing Strategy:")
+            line = re.sub(r"^\*{1,2}(.*?):?\*{1,2}:?\s*", r"\1: ", line)
+
+            # Sanitize ASCII/Unicode
+            line = line.encode("ascii", "replace").decode("ascii")
+            line = line.replace("?", "").strip() if line.startswith("?") else line.strip()
+
+            # Clean up residual leading punctuation
+            line = re.sub(r"^[:\-\s]+", "", line).strip()
+
+            # Validation: Word count >= 4 and character length >= 25
+            words = line.split()
+            if len(words) < 4 or len(line) < 25:
+                continue
+
+            # Validation: Must contain at least one FinOps keyword
+            line_lower = line.lower()
+            if not any(kw in line_lower for kw in finops_keywords):
+                continue
+
+            # Skip lines that are purely descriptive echoes of the user input without actionable advice
+            is_pure_input_echo = bool(
+                re.match(r"^(?:The )?(?:workload|problem|request|deployment|user) (?:requires|needs|is requesting|specifies|targets|has)\b", line, re.IGNORECASE)
+                and not any(act in line_lower for act in ["enroll", "commit", "purchase", "activate", "leverage", "consolidate", "rightsize", "track", "set", "enable", "apply", "migrate", "scale", "reduce", "reallocate", "configure"])
+            )
+            if is_pure_input_echo:
+                continue
+
+            if line and line not in cleaned_recs:
+                cleaned_recs.append(line)
+
+        return cleaned_recs[:4]
+
+    @classmethod
     def generate_llm_recommendations(
         cls,
         contract: CloudOptimizationContract,
@@ -173,21 +284,37 @@ class FinOpsExplainer:
         ]
         vms_str = ", ".join(vms) if vms else "Optimized compute instance"
 
-        prompt = (
-            f"You are a Principal FinOps Architect. Analyze this cloud deployment result:\n"
+        system_prompt = (
+            "You are a Principal Cloud FinOps Architect. "
+            "Be concise. Provide the direct technical allocation and recommendations immediately without verbose step-by-step thinking preambles. "
+            "Analyze the given cloud resource deployment contract and solver result, and provide "
+            "exactly 3 to 4 concise, highly-actionable, technical FinOps recommendations.\n\n"
+            "Key Focus Areas:\n"
+            "- Commitment pricing strategies (AWS Savings Plans/RIs, Azure AHB/Reservations, GCP CUDs/Spot)\n"
+            "- Capacity rightsizing and autoscaling thresholds\n"
+            "- Architecture optimization (data transfer, multi-region replication egress)\n"
+            "- Cost governance, monitoring alarms, and allocation tagging\n\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "- Output ONLY direct recommendations, one per line.\n"
+            "- Do NOT include meta-instructions, step-by-step thinking, 'Analyze the Input' headers, or placeholders.\n"
+            "- Do NOT include numbering, bullet points, or introductory/concluding text."
+        )
+
+        user_prompt = (
+            f"Cloud Deployment Details:\n"
             f"- Problem Type: {contract.problem_type}\n"
-            f"- Cloud Provider(s): {', '.join(contract.cloud_providers)}\n"
-            f"- Target Services: {contract.service_count} service(s), {contract.required_vcpus} vCPUs, {contract.required_ram_gb}GB RAM\n"
-            f"- Budget Cap: ${contract.budget_max_usd:.2f} USD\n"
+            f"- Target Cloud Provider(s): {', '.join(contract.cloud_providers)}\n"
+            f"- Required Resources: {contract.service_count} service(s), {contract.required_vcpus} vCPUs, {contract.required_ram_gb}GB RAM\n"
+            f"- Monthly Budget Cap: ${contract.budget_max_usd:.2f} USD\n"
             f"- Optimized Monthly Cost: ${total_cost:.2f} USD ({utilization:.1f}% budget utilized)\n"
             f"- Placed Resources: {vms_str}\n\n"
-            f"Provide exactly 3 concise, highly-actionable, technical FinOps recommendations tailored to this specific result. "
-            f"Include specific pricing models (Savings Plans/RIs/CUDs/Spot), monitoring thresholds, and architecture rightsizing tactics. "
-            f"Output ONLY 3 numbered lines:\n"
-            f"1. <recommendation>\n"
-            f"2. <recommendation>\n"
-            f"3. <recommendation>"
+            f"Provide 3-4 actionable FinOps recommendations tailored specifically to this deployment."
         )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -199,24 +326,32 @@ class FinOpsExplainer:
             try:
                 resp = client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     temperature=0.2,
-                    max_tokens=350,
+                    max_tokens=2048,
                 )
                 if not resp or not resp.choices:
                     continue
-                content = (resp.choices[0].message.content or "").strip()
-                lines = [l.strip() for l in content.split("\n") if l.strip()]
-                recs = []
-                for line in lines:
-                    if re.match(r"^\d+[\.\)]\s+", line):
-                        cleaned = re.sub(r"^\d+[\.\)]\s*", "", line)
-                        # Sanitize any non-standard unicode characters
-                        cleaned = cleaned.encode("ascii", "replace").decode("ascii")
-                        if cleaned:
-                            recs.append(cleaned)
+                choice = resp.choices[0]
+                finish_reason = getattr(choice, "finish_reason", "unknown")
+                raw_content = (choice.message.content or "").strip()
+                recs = cls._clean_llm_recommendations(raw_content)
                 if len(recs) >= 2:
                     return recs[:4]
+                
+                # If truncated and insufficient recommendations, auto-retry once with higher token limit
+                if finish_reason == "length":
+                    retry_resp = client.chat.completions.create(
+                        model=model_name,
+                        messages=messages,
+                        temperature=0.2,
+                        max_tokens=4096,
+                    )
+                    if retry_resp and retry_resp.choices:
+                        retry_content = (retry_resp.choices[0].message.content or "").strip()
+                        retry_recs = cls._clean_llm_recommendations(retry_content)
+                        if len(retry_recs) >= 2:
+                            return retry_recs[:4]
             except Exception:
                 continue
 

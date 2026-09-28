@@ -1,0 +1,97 @@
+{
+  "query": "Bhai AWS pe 6 high-memory nodes saste mein lagade under 450 dollars per month",
+  "results": [
+    {
+      "mode_number": 1,
+      "mode_name": "Pure LLM (Unstructured)",
+      "nlu_capability": "100% (High - Handles Hinglish)",
+      "math_feasibility": "Unverified / Hallucinated",
+      "constraint_violations": "Detected (1 risks: Price hallucination/Math)",
+      "latency_ms": 43070.03,
+      "total_cost_display": "~$450.00 (Est)",
+      "details": {
+        "raw_output_snippet": "Here's a thinking process:\n\n1.  **Analyze User Request:**\n   - Role: Cloud Solutions Architect\n   - Customer wants: \"Bhai AWS pe 6 high-memory nodes saste-memory nodes under 450.50 dollars per month\"\n   - Requirements: \n     - Recommend a concrete cloud VM allocation plan\n     - Provide: \n       1. ...",
+        "extracted_cost_usd": 450.0,
+        "detected_skus": [],
+        "verification_notes": [
+          "Unverified arithmetic / potential pricing hallucination"
+        ]
+      }
+    },
+    {
+      "mode_number": 2,
+      "mode_name": "Structured LLM (Pydantic Only)",
+      "nlu_capability": "100% (High - Schema Guided)",
+      "math_feasibility": "Failed (Invalid JSON)",
+      "constraint_violations": "Schema Parse Failure",
+      "latency_ms": 9520.31,
+      "total_cost_display": "N/A",
+      "details": {
+        "parsed_json": null,
+        "predicted_cost_usd": 0.0,
+        "recalculated_catalog_cost_usd": 0.0,
+        "detected_violations": []
+      }
+    },
+    {
+      "mode_number": 3,
+      "mode_name": "Pure Symbolic (Traditional Solver)",
+      "nlu_capability": "0% (Fails on Raw Text)",
+      "math_feasibility": "100% (Provably Optimal)",
+      "constraint_violations": "0.0% (Zero Violations)",
+      "latency_ms": 381.09,
+      "total_cost_display": "$182.21",
+      "details": {
+        "nlu_raw_text_support": "Failed (Requires hardcoded parameters)",
+        "solver_engine": "SciPy_MILP_HiGHS",
+        "status": "OPTIMAL",
+        "vcpus_allocated": 6,
+        "ram_allocated_gb": 24.0,
+        "allocated_vms": [
+          {
+            "instance_type": "t3.large",
+            "provider": "AWS",
+            "count": 1,
+            "vcpus_per_vm": 2,
+            "ram_gb_per_vm": 8.0,
+            "monthly_cost": 60.74
+          },
+          {
+            "instance_type": "t3.xlarge",
+            "provider": "AWS",
+            "count": 1,
+            "vcpus_per_vm": 4,
+            "ram_gb_per_vm": 16.0,
+            "monthly_cost": 121.47
+          }
+        ]
+      }
+    },
+    {
+      "mode_number": 4,
+      "mode_name": "Full Neuro-Symbolic (Neurasym)",
+      "nlu_capability": "100% (High - Colloquial/Hinglish)",
+      "math_feasibility": "100% (Provably Feasible)",
+      "constraint_violations": "0.0% (Zero Violations)",
+      "latency_ms": 12835.86,
+      "total_cost_display": "$30.37 (Optimal)",
+      "details": {
+        "parsed_contract": {
+          "problem_type": "ILP_VM_Allocation",
+          "cloud_providers": [
+            "AWS"
+          ],
+          "budget_max_usd": 450.0,
+          "service_count": 1,
+          "required_vcpus": 1,
+          "required_ram_gb": 1.0,
+          "latency_max_ms": 100.0,
+          "sla_availability_pct": 99.9
+        },
+        "optimization_status": "Feasible",
+        "solver_name": "Vectorized_GA",
+        "report_snippet": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : ILP_VM_Allocation\n Optimization Engine  : Vectorized_GA\n Fea..."
+      }
+    }
+  ]
+}

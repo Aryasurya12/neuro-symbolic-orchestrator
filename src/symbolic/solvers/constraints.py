@@ -23,6 +23,32 @@ class Z3ConstraintFactory:
         return constraints
 
     @staticmethod
+    def cross_provider_constraint(
+        selected_vars: Dict[str, z3.BoolRef],
+        graph: InfrastructureGraph,
+        required_providers: List[str],
+    ) -> List[z3.BoolRef]:
+        """
+        When the request spans 2+ allowed cloud providers, the two selected
+        regions must belong to DIFFERENT providers (true multi-cloud DR).
+        When only one provider is allowed, this constraint is a no-op —
+        same-provider selection is the only possible outcome and is correct.
+        """
+        constraints = []
+        unique_providers = {p.upper() for p in required_providers}
+        if len(unique_providers) < 2:
+            return constraints
+
+        nodes = graph.get_all_nodes()
+        for i, a in enumerate(nodes):
+            for j, b in enumerate(nodes):
+                if i < j:
+                    if a.provider.upper() == b.provider.upper():
+                        # Forbid selecting two regions from the same provider
+                        constraints.append(z3.Not(z3.And(selected_vars[a.id], selected_vars[b.id])))
+        return constraints
+
+    @staticmethod
     def exactly_two_regions_constraint(selected_vars: Dict[str, z3.BoolRef]) -> z3.BoolRef:
         """Enforces that exactly two distinct regions must be chosen for DR."""
         # Convert Bool to Int (1 if True, 0 if False)
@@ -47,11 +73,13 @@ class Z3ConstraintFactory:
         # Inter-region latency proxy cost (as modeled in Phase-0 prototype)
         # For simplicity in Z3 without Real variables multiplying booleans exponentially, 
         # we sum the pairwise cost penalties if both regions are selected.
+        from config.settings import settings
+        latency_cost_factor = getattr(settings, "LATENCY_COST_PER_MS", 0.25)
         for i, a in enumerate(nodes):
             for j, b in enumerate(nodes):
                 if i < j:
                     lat = graph.get_latency(a.id, b.id)
-                    lat_cost = lat * 0.25
+                    lat_cost = lat * latency_cost_factor
                     both_selected = z3.And(selected_vars[a.id], selected_vars[b.id])
                     cost_exprs.append(z3.If(both_selected, lat_cost, 0.0))
                     

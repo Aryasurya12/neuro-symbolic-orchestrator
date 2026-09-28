@@ -1,5 +1,12 @@
+from enum import Enum
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+
+class FeasibilityStatus(str, Enum):
+    FEASIBLE = "FEASIBLE"
+    INFEASIBLE = "INFEASIBLE"
+    SATISFIABLE = "SATISFIABLE"
+    UNKNOWN = "UNKNOWN"
 
 class SymbolicOptimizationRequest(BaseModel):
     problem_type: str
@@ -37,5 +44,6 @@ class OptimizationResult(BaseModel):
     is_feasible: bool
     metrics: OptimizationMetrics
     solver_name: str
+    status: Optional[FeasibilityStatus] = None
     error_message: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
