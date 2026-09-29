@@ -57,6 +57,10 @@ class CloudOptimizationContract(BaseModel):
         le=99.999,
         description="Target SLA availability percentage",
     )
+    metadata: dict = Field(
+        default_factory=dict,
+        description="Semantic and qualitative intent metadata",
+    )
 
     @field_validator("budget_max_usd")
     @classmethod

@@ -162,6 +162,16 @@ class SCOPEParser:
                 "memory",
                 "gb",
                 "compute",
+                "high compute",
+                "heavy workload",
+                "high memory",
+                "memory intensive",
+                "large ram",
+                "heavy database",
+                "database tier",
+                "enterprise cluster",
+                "large cluster",
+                "intensive batch",
             ]
         ):
             constraints.add("Resource_Min_vCPU")
@@ -312,7 +322,7 @@ class SCOPEParser:
             except ValueError:
                 pass
 
-        # vCPU extraction: e.g. "2 vCPUs", "16 vCPUs", "8 cores"
+        # Explicit vCPU extraction: e.g. "2 vCPUs", "16 vCPUs", "8 cores"
         vcpu_match = re.search(
             r"(\d+)\s*(?:vcpus?|cores?|v-cpu)", text, re.IGNORECASE
         )
@@ -322,7 +332,7 @@ class SCOPEParser:
             except ValueError:
                 pass
 
-        # RAM extraction: e.g. "4GB RAM", "64 GB RAM", "32GB memory"
+        # Explicit RAM extraction: e.g. "4GB RAM", "64 GB RAM", "32GB memory"
         ram_match = re.search(
             r"(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)\s*(?:ram|memory)?",
             text,
@@ -333,6 +343,75 @@ class SCOPEParser:
                 params["required_ram_gb"] = float(ram_match.group(1))
             except ValueError:
                 pass
+
+        # Qualitative Intent Keyword Detection (when explicit numeric values may be missing)
+        lower = text.lower()
+        qualitative_intent = None
+        qual_vcpus = None
+        qual_ram = None
+
+        # 1. Heavy Database / Enterprise Cluster
+        if any(
+            p in lower
+            for p in [
+                "heavy database",
+                "database tier",
+                "enterprise cluster",
+                "large cluster",
+            ]
+        ):
+            qualitative_intent = "Heavy Database / Enterprise Cluster"
+            qual_vcpus = 8
+            qual_ram = 32.0
+        # 2. High Memory
+        elif any(
+            p in lower
+            for p in [
+                "high memory",
+                "memory intensive",
+                "memory-intensive",
+                "large ram",
+                "high-memory",
+            ]
+        ):
+            qualitative_intent = "High Memory"
+            qual_vcpus = 4
+            qual_ram = 32.0
+        # 3. High Compute / Scaling
+        elif any(
+            p in lower
+            for p in [
+                "high compute",
+                "heavy workload",
+                "high compute scaling",
+                "intensive batch",
+                "compute-intensive",
+                "compute intensive",
+            ]
+        ):
+            qualitative_intent = "High Compute Scaling"
+            qual_vcpus = 4
+            qual_ram = 16.0
+
+        metadata = {}
+        if qualitative_intent:
+            metadata["qualitative_intent"] = qualitative_intent
+
+        # Precedence: Explicit numeric constraints strictly take precedence over qualitative defaults.
+        # If no explicit numbers AND no qualitative intensity keywords are matched, maintain fallback (1 vCPU, 1.0 GB RAM).
+        if "required_vcpus" not in params:
+            if qual_vcpus is not None:
+                params["required_vcpus"] = qual_vcpus
+            else:
+                params["required_vcpus"] = 1
+
+        if "required_ram_gb" not in params:
+            if qual_ram is not None:
+                params["required_ram_gb"] = qual_ram
+            else:
+                params["required_ram_gb"] = 1.0
+
+        params["metadata"] = metadata
 
         # Latency extraction: e.g. "50ms", "20ms latency", "max 80 ms"
         latency_match = re.search(
@@ -366,6 +445,58 @@ class SCOPEParser:
                 detected_providers.append(prov)
         if detected_providers:
             params["cloud_providers"] = detected_providers
+
+        # Build Field Provenance Mapping: Explicit vs Inferred vs Default
+        provenance = {}
+
+        # 1. Budget Provenance
+        if inr_budget is not None or "budget_max_usd" in params:
+            provenance["budget_max_usd"] = "[EXPLICIT]"
+        else:
+            provenance["budget_max_usd"] = "[DEFAULT: Baseline Fallback]"
+
+        # 2. Service count Provenance
+        if "service_count" in params:
+            provenance["service_count"] = "[EXPLICIT]"
+        else:
+            provenance["service_count"] = "[DEFAULT: Baseline Fallback]"
+
+        # 3. vCPU Provenance
+        if vcpu_match:
+            provenance["required_vcpus"] = "[EXPLICIT]"
+        elif qual_vcpus is not None:
+            provenance["required_vcpus"] = f"[INFERRED: {qualitative_intent}]"
+        else:
+            provenance["required_vcpus"] = "[DEFAULT: Baseline Fallback]"
+
+        # 4. RAM Provenance
+        if ram_match:
+            provenance["required_ram_gb"] = "[EXPLICIT]"
+        elif qual_ram is not None:
+            provenance["required_ram_gb"] = f"[INFERRED: {qualitative_intent}]"
+        else:
+            provenance["required_ram_gb"] = "[DEFAULT: Baseline Fallback]"
+
+        # 5. Latency Provenance
+        if latency_match:
+            provenance["latency_max_ms"] = "[EXPLICIT]"
+        else:
+            provenance["latency_max_ms"] = "[DEFAULT: Baseline Fallback]"
+
+        # 6. SLA Provenance
+        if sla_match:
+            provenance["sla_availability_pct"] = "[EXPLICIT]"
+        else:
+            provenance["sla_availability_pct"] = "[DEFAULT: Baseline Fallback]"
+
+        # 7. Cloud Providers Provenance
+        if detected_providers:
+            provenance["cloud_providers"] = "[EXPLICIT]"
+        else:
+            provenance["cloud_providers"] = "[DEFAULT: Baseline Fallback]"
+
+        metadata["field_provenance"] = provenance
+        params["metadata"] = metadata
 
         return params
 
@@ -418,6 +549,7 @@ class SCOPEParser:
             required_ram_gb=params.get("required_ram_gb", 1.0),
             latency_max_ms=params.get("latency_max_ms", 100.0),
             sla_availability_pct=params.get("sla_availability_pct", 99.9),
+            metadata=params.get("metadata", {}),
         )
 
         return contract, template_filename, score

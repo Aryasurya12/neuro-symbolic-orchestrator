@@ -27,6 +27,9 @@ class FinOpsExplainer:
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
         exchange_rate: float = settings.USD_TO_INR_RATE,
+        currency_symbol: Optional[str] = None,
+        currency_code: Optional[str] = None,
+        currency_rate: Optional[float] = None,
     ) -> List[str]:
         """Generates dynamic, non-hardcoded FinOps recommendations tailored specifically
         to the cloud provider, allocated instance families, budget headroom, and problem type.
@@ -53,6 +56,18 @@ class FinOpsExplainer:
         allocated_vms = solver_result.get("allocated_vms", [])
         instance_types = [vm.get("instance_type", "") for vm in allocated_vms if vm.get("instance_type")]
         instance_summary = ", ".join(set(instance_types)) if instance_types else "allocated compute"
+
+        # Multi-currency display tag
+        if currency_symbol and currency_rate and currency_code and currency_code != "USD":
+            conv_savings = round(savings * currency_rate, 2)
+            conv_budget = round(budget_max * currency_rate, 2)
+            cur_tag = f"{currency_symbol}{conv_savings:,.2f} {currency_code} (${savings:,.2f} USD)"
+            cur_bud_tag = f"{currency_symbol}{conv_budget:,.2f} {currency_code}"
+            cur_sav_buf = f"{currency_symbol}{conv_savings:,.2f} {currency_code}"
+        else:
+            cur_tag = f"{usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR)"
+            cur_bud_tag = f"{usd_sym}{budget_max:,.2f} USD"
+            cur_sav_buf = f"{usd_sym}{savings:,.2f} USD"
 
         # 1. Cloud Provider & Commitment Strategy
         if "AWS" in providers:
@@ -87,19 +102,19 @@ class FinOpsExplainer:
         if utilization < 30.0:
             recs.append(
                 f"Budget Headroom ({utilization:.1f}% utilized): You have a monthly surplus of "
-                f"{usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR). Reallocate surplus capital toward "
+                f"{cur_tag}. Reallocate surplus capital toward "
                 f"multi-AZ automated failover and managed snapshot replication."
             )
         elif utilization > 75.0:
             recs.append(
-                f"Budget Warning ({utilization:.1f}% utilized): Spending is near the {usd_sym}{budget_max:,.2f} USD cap "
-                f"with only {usd_sym}{savings:,.2f} USD buffer. Configure automated billing alerts and scaling throttles "
+                f"Budget Warning ({utilization:.1f}% utilized): Spending is near the {cur_bud_tag} cap "
+                f"with only {cur_sav_buf} buffer. Configure automated billing alerts and scaling throttles "
                 f"at 85% to prevent overage."
             )
         else:
             recs.append(
-                f"Spend Governance ({utilization:.1f}% utilized): Optimal operating band with {usd_sym}{savings:,.2f} USD "
-                f"({inr_sym}{savings_inr:,.2f} INR)/mo buffer. Establish automated CloudWatch/Prometheus anomaly alerts at 80%."
+                f"Spend Governance ({utilization:.1f}% utilized): Optimal operating band with {cur_tag}/mo buffer. "
+                f"Establish automated CloudWatch/Prometheus anomaly alerts at 80%."
             )
 
         # 3. Problem & Architecture Specific Optimization

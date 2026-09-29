@@ -40,6 +40,11 @@ class NeuroSymbolicOrchestrator:
         # 1. Semantic Layer: Parse Query -> Structured Contract
         contract, matched_template, score = self.parser.parse_query_to_contract(user_query)
         
+        # Stage 1 Logging: Indicate why baseline sizing was selected if qualitative intent was detected
+        if contract.metadata and "qualitative_intent" in contract.metadata:
+            intent = contract.metadata["qualitative_intent"]
+            print(f"🎯 [Stage 1] Qualitative Intent Detected: '{intent}' -> Baseline set to {contract.required_vcpus} vCPUs / {contract.required_ram_gb:.0f}GB RAM")
+
         # 2. Optimization Layer
         result_dict = self.optimize_contract(contract)
 
