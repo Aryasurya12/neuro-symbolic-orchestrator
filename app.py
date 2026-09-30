@@ -1882,6 +1882,38 @@ with st.sidebar:
     )
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+
+    # Live API Status Card
+    from dotenv import load_dotenv
+    load_dotenv()
+    env_api_key = os.getenv("OPENROUTER_API_KEY", "")
+    has_key = bool(env_api_key and len(env_api_key) > 10)
+    key_disp = f"{env_api_key[:8]}...{env_api_key[-4:]}" if has_key else "Missing"
+    status_tag = "ACTIVE (Connected)" if has_key else "NOT CONFIGURED"
+    status_col = "#00D09C" if has_key else "#F5365C"
+    bg_col = "rgba(0, 129, 98, 0.15)" if has_key else "rgba(245, 54, 92, 0.15)"
+    border_col = "rgba(0, 129, 98, 0.4)" if has_key else "rgba(245, 54, 92, 0.4)"
+
+    render_html(
+        f"""
+        <div style="background: {bg_col}; border: 1px solid {border_col}; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: {status_col};">OpenRouter LLM API</span>
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {status_col};"></span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-primary); font-weight: 600;">
+                {status_tag}
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 3px; font-family: var(--font-mono);">
+                Key: {key_disp}
+            </div>
+            <div style="font-size: 0.70rem; color: var(--text-secondary); margin-top: 2px;">
+                Model: nvidia/nemotron-3.5-lightning
+            </div>
+        </div>
+        """
+    )
+
     render_html(
         """
         <div style="padding: 6px 0 10px 0; border-bottom: 1px solid var(--border-default); margin-bottom: 10px;">
@@ -1971,6 +2003,10 @@ if st.session_state["current_page"] == "landing":
 
     if st.button("Open Benchmark →", type="primary", key="landing_open_btn"):
         st.session_state["current_page"] = "dashboard"
+        if not st.session_state["active_query_text"]:
+            st.session_state["active_query_text"] = "AWS active-passive DR across us-east-1 and us-west-2 with 99.99% SLA and $850 budget cap."
+            st.session_state["has_run"] = True
+            st.session_state["is_thinking"] = True
         st.rerun()
 
     # How it works — 4 step cards mapped sequentially
@@ -2117,6 +2153,7 @@ else:
         st.session_state["live_mode2_result"] = None
         st.session_state["mode1_msg"] = None
         st.session_state["mode2_msg"] = None
+        st.rerun()
 
     st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
