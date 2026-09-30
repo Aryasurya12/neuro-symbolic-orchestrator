@@ -278,3 +278,29 @@ def solve_z3_graph_disaster_recovery(
             "provider_ok": True,
         },
     }
+
+
+def solve_z3_sage_gnn_placement(
+    topology_name: str = "WordPress_MultiTier",
+    weight_scale: int = 100,
+    use_gnn_soft_constraints: bool = True,
+    custom_budget_usd: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Solves SAGE-GNN (IJCNN 2024) Cloud Topology MaxSMT Placement Problem with Soft Constraints."""
+    from src.optimizers.sage_gnn_adapter import SageGNNConstraintAdapter
+    from src.optimizers.z3_smt_solver import solve_sage_gnn_placement as _solve_placement
+
+    try:
+        topology = SageGNNConstraintAdapter.get_topology(topology_name)
+    except KeyError:
+        topology = SageGNNConstraintAdapter.get_topology("WordPress_MultiTier")
+
+    if custom_budget_usd is not None and custom_budget_usd > 0:
+        topology.budget_max_usd = custom_budget_usd
+
+    return _solve_placement(
+        topology=topology,
+        weight_scale=weight_scale,
+        use_gnn_soft_constraints=use_gnn_soft_constraints,
+    )
+

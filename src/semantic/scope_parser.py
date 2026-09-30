@@ -350,8 +350,25 @@ class SCOPEParser:
         qual_vcpus = None
         qual_ram = None
 
-        # 1. Heavy Database / Enterprise Cluster
-        if any(
+        # 1. SAGE-GNN Cloud Application Benchmark Topologies
+        if "secure_web_container" in lower:
+            qualitative_intent = "SAGE-GNN Secure Web Container Topology"
+            qual_vcpus = 10
+            qual_ram = 28.0
+        elif "wordpress_multitier" in lower or "wordpress" in lower:
+            qualitative_intent = "SAGE-GNN WordPress MultiTier Topology"
+            qual_vcpus = 18
+            qual_ram = 60.0
+        elif "oryx2_lambda_pipeline" in lower or "oryx2" in lower or "lambda_pipeline" in lower:
+            qualitative_intent = "SAGE-GNN Oryx2 Lambda Pipeline Topology"
+            qual_vcpus = 18
+            qual_ram = 68.0
+        elif any(k in lower for k in ["sage-gnn", "sage_gnn", "anti-affinity", "anti affinity"]):
+            qualitative_intent = "SAGE-GNN Neural Graph Topology"
+            qual_vcpus = 8
+            qual_ram = 32.0
+        # 2. Heavy Database / Enterprise Cluster
+        elif any(
             p in lower
             for p in [
                 "heavy database",
@@ -363,7 +380,7 @@ class SCOPEParser:
             qualitative_intent = "Heavy Database / Enterprise Cluster"
             qual_vcpus = 8
             qual_ram = 32.0
-        # 2. High Memory
+        # 3. High Memory
         elif any(
             p in lower
             for p in [
@@ -377,7 +394,7 @@ class SCOPEParser:
             qualitative_intent = "High Memory"
             qual_vcpus = 4
             qual_ram = 32.0
-        # 3. High Compute / Scaling
+        # 4. High Compute / Scaling
         elif any(
             p in lower
             for p in [
