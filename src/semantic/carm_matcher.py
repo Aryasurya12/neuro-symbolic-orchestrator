@@ -1,6 +1,6 @@
 """SEM-2: Context-Aware Retrieval Module (CARM) Pattern Matcher."""
 
-from typing import Dict, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class CARMMatcher:
@@ -87,3 +87,47 @@ class CARMMatcher:
                 best_filename = str(data["template"])
 
         return best_archetype, best_filename, round(best_score, 4)
+
+    def score_all_archetypes(
+        self, extracted_constraints: Set[str]
+    ) -> List[Dict[str, Any]]:
+        """Computes Jaccard scores for all archetypes in the template index.
+
+        Returns a list of dicts with archetype, template, score, target_constraints,
+        and matched_constraints, sorted by score descending.
+        """
+        results: List[Dict[str, Any]] = []
+        for archetype, data in self.TEMPLATE_INDEX.items():
+            template_constraints = set(data["constraints"])  # type: ignore[arg-type]
+            score = self.compute_jaccard_score(extracted_constraints, template_constraints)
+            matched = extracted_constraints.intersection(template_constraints)
+            results.append({
+                "archetype": archetype,
+                "template": str(data["template"]),
+                "score": round(score, 4),
+                "target_constraints": sorted(template_constraints),
+                "matched_constraints": sorted(matched),
+            })
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results
+
+    def match_template_detailed(
+        self, extracted_constraints: Set[str]
+    ) -> Dict[str, Any]:
+        """Performs full CARM matching returning winner, all scores, runner up, and margin."""
+        scores = self.score_all_archetypes(extracted_constraints)
+        winner = scores[0] if scores else None
+        runner_up = scores[1] if len(scores) > 1 else None
+        margin = round(winner["score"] - runner_up["score"], 4) if (winner and runner_up) else (winner["score"] if winner else 0.0)
+        is_near_tie = margin < 0.10
+        return {
+            "scores": scores,
+            "winner": winner["archetype"] if winner else "ILP_VM_Allocation",
+            "winner_template": winner["template"] if winner else "ilp_vm_allocation_template.py",
+            "winner_score": winner["score"] if winner else 0.0,
+            "runner_up": runner_up["archetype"] if runner_up else None,
+            "runner_up_score": runner_up["score"] if runner_up else 0.0,
+            "margin": margin,
+            "is_near_tie": is_near_tie,
+        }
+

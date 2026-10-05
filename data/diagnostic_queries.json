@@ -1,0 +1,38 @@
+[
+  {
+    "id": "query_ilp_vm_knapsack",
+    "query": "Deploy a web app that requires 8 vCPUs and 16GB RAM for under $300 a month on AWS.",
+    "expected_archetype": "ILP_VM_Allocation",
+    "description": "Standard discrete VM allocation knapsack problem with explicit vCPUs, RAM, and USD budget."
+  },
+  {
+    "id": "query_pso_dynamic_scaling",
+    "query": "Continuous dynamic scaling with target CPU 70% under $1500",
+    "expected_archetype": "PSO_Continuous_Scaling",
+    "description": "Continuous dynamic autoscaling and bandwidth sizing with target CPU utilization."
+  },
+  {
+    "id": "query_z3_multiregion_dr",
+    "query": "We need disaster recovery setup across AWS and GCP with 99.99% SLA and max 50ms latency.",
+    "expected_archetype": "Z3_Graph_Disaster_Recovery",
+    "description": "SMT graph-steered cross-provider multi-region disaster recovery placement."
+  },
+  {
+    "id": "query_inr_currency_conversion",
+    "query": "Deploy 4 microservices on AWS with 4 vCPUs and 8GB RAM, max budget ₹25000",
+    "expected_archetype": "ILP_VM_Allocation",
+    "description": "Dual-currency INR budget extraction and automatic USD conversion."
+  },
+  {
+    "id": "query_infeasible_budget_ceiling",
+    "query": "Deploy a heavy database requiring 64 vCPUs and 256GB RAM on Azure with budget $15",
+    "expected_archetype": "ILP_VM_Allocation",
+    "description": "Infeasible workload exceeding monthly budget ceiling to verify diagnostic reporting."
+  },
+  {
+    "id": "query_qualitative_intent_topology",
+    "query": "Provision a secure_web_container cluster on AWS under $800 budget",
+    "expected_archetype": "ILP_VM_Allocation",
+    "description": "Qualitative intent benchmark topology inference with baseline compute sizing."
+  }
+]
