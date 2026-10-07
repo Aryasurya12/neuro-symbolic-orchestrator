@@ -1,0 +1,370 @@
+{
+  "manifest": {
+    "development_fixture": true,
+    "created_at": "2026-10-06T18:23:25.444361+00:00",
+    "dataset": {
+      "ground_truth_author": "DEVELOPER TEST FIXTURE — NOT USER GROUND TRUTH",
+      "approved_by_user": false,
+      "purpose": "TECHNICAL SMOKE ONLY; not user-approved evaluation",
+      "queries": [
+        {
+          "query_id": "dev_vm",
+          "query_category": "formal_english",
+          "raw_query_text": "Allocate AWS VMs with 4 vCPUs and 16 GB RAM under $300 monthly.",
+          "configs": "CD",
+          "trials": [
+            1
+          ],
+          "truth": {
+            "expected_status": "feasible",
+            "archetype": "vm",
+            "constraints": {
+              "providers": [
+                "AWS"
+              ],
+              "min_vcpus": 4,
+              "min_ram_gb": 16,
+              "budget_max_usd": 300
+            },
+            "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+          }
+        },
+        {
+          "query_id": "dev_dr",
+          "query_category": "formal_english",
+          "raw_query_text": "Disaster recovery across AWS and Azure with SLA 99.99%, max latency 20 ms and budget $300 monthly.",
+          "configs": "CD",
+          "trials": [
+            1
+          ],
+          "truth": {
+            "expected_status": "feasible",
+            "archetype": "dr",
+            "constraints": {
+              "providers": [
+                "AWS",
+                "Azure"
+              ],
+              "cross_provider": true,
+              "max_latency_ms": 20,
+              "min_sla_pct": 99.99,
+              "budget_max_usd": 300
+            },
+            "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+          }
+        },
+        {
+          "query_id": "dev_scale",
+          "query_category": "formal_english",
+          "raw_query_text": "Autoscale bandwidth from 100 to 1000 Mbps with at most 16 replicas and CPU at most 70%, under $500 monthly.",
+          "configs": "CD",
+          "trials": [
+            1
+          ],
+          "truth": {
+            "expected_status": "feasible",
+            "archetype": "scaling",
+            "constraints": {
+              "min_bandwidth_mbps": 100,
+              "max_bandwidth_mbps": 1000,
+              "max_replicas": 16,
+              "max_cpu_pct": 70,
+              "budget_max_usd": 500
+            },
+            "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+          }
+        }
+      ]
+    },
+    "catalog": {
+      "vms": [
+        {
+          "name": "t3.medium",
+          "provider": "AWS",
+          "vcpus": 2,
+          "ram_gb": 4.0,
+          "monthly_cost_usd": 30.37
+        },
+        {
+          "name": "t3.large",
+          "provider": "AWS",
+          "vcpus": 2,
+          "ram_gb": 8.0,
+          "monthly_cost_usd": 60.74
+        },
+        {
+          "name": "t3.xlarge",
+          "provider": "AWS",
+          "vcpus": 4,
+          "ram_gb": 16.0,
+          "monthly_cost_usd": 121.47
+        },
+        {
+          "name": "c5.large",
+          "provider": "AWS",
+          "vcpus": 2,
+          "ram_gb": 4.0,
+          "monthly_cost_usd": 62.05
+        },
+        {
+          "name": "c5.xlarge",
+          "provider": "AWS",
+          "vcpus": 4,
+          "ram_gb": 8.0,
+          "monthly_cost_usd": 124.1
+        },
+        {
+          "name": "m5.large",
+          "provider": "AWS",
+          "vcpus": 2,
+          "ram_gb": 8.0,
+          "monthly_cost_usd": 70.08
+        },
+        {
+          "name": "m5.xlarge",
+          "provider": "AWS",
+          "vcpus": 4,
+          "ram_gb": 16.0,
+          "monthly_cost_usd": 140.16
+        },
+        {
+          "name": "m5.2xlarge",
+          "provider": "AWS",
+          "vcpus": 8,
+          "ram_gb": 32.0,
+          "monthly_cost_usd": 280.32
+        },
+        {
+          "name": "Standard_D4s_v5",
+          "provider": "Azure",
+          "vcpus": 4,
+          "ram_gb": 16.0,
+          "monthly_cost_usd": 140.16
+        },
+        {
+          "name": "e2-standard-4",
+          "provider": "GCP",
+          "vcpus": 4,
+          "ram_gb": 16.0,
+          "monthly_cost_usd": 97.82
+        }
+      ],
+      "regions": [
+        {
+          "id": "us-east-1",
+          "provider": "AWS",
+          "geo": "US_East",
+          "base_cost_usd": 120.0,
+          "sla_pct": 99.95,
+          "peer_latencies_ms": {
+            "us-west-2": 65.0,
+            "eu-west-1": 85.0,
+            "eastus": 12.0,
+            "us-central1": 32.0
+          }
+        },
+        {
+          "id": "us-west-2",
+          "provider": "AWS",
+          "geo": "US_West",
+          "base_cost_usd": 130.0,
+          "sla_pct": 99.95,
+          "peer_latencies_ms": {
+            "us-east-1": 65.0,
+            "eu-west-1": 135.0,
+            "eastus": 70.0,
+            "us-central1": 42.0
+          }
+        },
+        {
+          "id": "eu-west-1",
+          "provider": "AWS",
+          "geo": "Europe",
+          "base_cost_usd": 140.0,
+          "sla_pct": 99.95,
+          "peer_latencies_ms": {
+            "us-east-1": 85.0,
+            "us-west-2": 135.0,
+            "eastus": 90.0,
+            "us-central1": 105.0
+          }
+        },
+        {
+          "id": "eastus",
+          "provider": "Azure",
+          "geo": "US_East",
+          "base_cost_usd": 125.0,
+          "sla_pct": 99.95,
+          "peer_latencies_ms": {
+            "us-east-1": 12.0,
+            "us-west-2": 70.0,
+            "eu-west-1": 90.0,
+            "us-central1": 28.0
+          }
+        },
+        {
+          "id": "us-central1",
+          "provider": "GCP",
+          "geo": "US_Central",
+          "base_cost_usd": 115.0,
+          "sla_pct": 99.95,
+          "peer_latencies_ms": {
+            "us-east-1": 32.0,
+            "us-west-2": 42.0,
+            "eu-west-1": 105.0,
+            "eastus": 28.0
+          }
+        }
+      ],
+      "dr_latency_cost_per_ms": 0.25,
+      "scaling": {
+        "usd_per_mbps": 0.08,
+        "usd_per_replica": 45.0,
+        "capacity_mbps": 75.0
+      },
+      "notes": "Repository sample benchmark catalog; 730-hour month. DR SLA assumes independent failures. Scaling CPU is a synthetic model."
+    },
+    "plan": [
+      {
+        "query_id": "dev_scale",
+        "config": "D",
+        "trial_num": 1
+      },
+      {
+        "query_id": "dev_scale",
+        "config": "C",
+        "trial_num": 1
+      },
+      {
+        "query_id": "dev_vm",
+        "config": "D",
+        "trial_num": 1
+      },
+      {
+        "query_id": "dev_dr",
+        "config": "C",
+        "trial_num": 1
+      },
+      {
+        "query_id": "dev_vm",
+        "config": "C",
+        "trial_num": 1
+      },
+      {
+        "query_id": "dev_dr",
+        "config": "D",
+        "trial_num": 1
+      }
+    ],
+    "provenance": {
+      "files": {
+        "src/__init__.py": "050ae8a5d5dcb82444bded251224863b4d4e5635b0ace193803f17342ed9f762",
+        "src/api/__init__.py": "242a7acc80c31688e8b0b1b5f1b5cfa4423c5affdad0033e2f6aa9373c441ff6",
+        "src/api/app.py": "d5d155035dd2519845203ca0792dcb015184e77f3cc3d455955a3999208acc47",
+        "src/api/routes.py": "65d5649e48c052719d7ecbbc0344447c6ba469f662c859dd44c5a6cafbde7776",
+        "src/api/schemas.py": "9dc0e987be18decc0c10ef402b4dc4554da2b07a41912c6a03c1cbab2a180645",
+        "src/api/service.py": "1a214473eebcdc37247982cb483c05bf76a5ff3ec5ae7a1e51b18a88d0154a0a",
+        "src/api/websocket.py": "472e0de50c33f4a28cf513673cc8ff4638a2a5e7181e44e2c664b40ddfb8804e",
+        "src/optimizers/__init__.py": "474111bc7b57538b62871d51718fcc9c6580cb430dfab37b37f88547fc907d7d",
+        "src/optimizers/raw_symbolic_runner.py": "379cb1959edf57645ad4c7b66af19fa19e3067dd50ec9904f5b94e4e0555ca59",
+        "src/optimizers/sage_gnn_adapter.py": "24bd9189dae8fd795de25f1daece3e29cba67193eb4568134f00b2883d86ae58",
+        "src/optimizers/z3_smt_solver.py": "e636c18a7c1c53526bd467d8a07a69e91c6316bd5171d7b6f609b8622ce491e9",
+        "src/orchestrator/__init__.py": "bdb004bb7b088698310f12727dfbf7ec136a4bc1c2e6cdb3eb57520fb0e10c58",
+        "src/orchestrator/explainer.py": "d3f22176949ae387787322122b12bf40b6ea5a9d6e162347bf3bdb7448bd1b32",
+        "src/orchestrator/service.py": "325ae47db8db94d1a3b189983a5562b2cf25a7bfe1c4466fad5b8d2bc868c31e",
+        "src/schemas/__init__.py": "d1bc8c2685759c54e1ac986448de0ff95a4b4119a9f6a47f55f5ce8a17ea6dc0",
+        "src/schemas/contract.py": "457a082856f03f65eec5f223bcaf67845bd76280b1705d608b28e87ad59728f6",
+        "src/semantic/__init__.py": "acc363e722521584415a54627d6471b03ae1cf429d650a4c8c2c10a151199de2",
+        "src/semantic/carm_matcher.py": "a3d3feba787a994f21bb8f450eadaaeecd84d636dda8df1eca2961ffb84afc33",
+        "src/semantic/explainer.py": "335d344220c24a7e240d1d1e5732762f21d16e4a3e8e06c1819ec26546ad5116",
+        "src/semantic/schemas.py": "955b1821be1d842e4f811c1c89cd039985d6ae0c2d36bce6188c1dea8344310e",
+        "src/semantic/scope_parser.py": "aba937a4e151230215ffb449662d2b3bc5f171846c3e36a79046ab22a7e28ed4",
+        "src/symbolic/__init__.py": "30b356f6cbbb9ce0a4a3c08651d73a7ef18e16c1edb56a695e99d6352d8e3401",
+        "src/symbolic/adapters.py": "7fe6345219548760421025952c519e96b114e83e121133729dc3e7fdcd4d365f",
+        "src/symbolic/data/__init__.py": "d0012ce6ea9698d4a12b747f492c00bcdfc70df9f5984b74e44de9777132ce37",
+        "src/symbolic/data/database.py": "9f93f84c59c3831e5f7ae6b95965c0ec91104c29620bc40477bab3f72e09bf30",
+        "src/symbolic/data/models.py": "cc25fce9e472399d8d572770680540b6891733882600a4f5a9af4f9ea3f61cd5",
+        "src/symbolic/data/repository.py": "105f3962187042f98f7a18d1f3a8c18bf450b8a96536087e92380e03c71390c0",
+        "src/symbolic/data/seed.py": "162aefe08476c1e5eb3a5d323e0bb3ed7733404c314d3a616e2cddcaa673f679",
+        "src/symbolic/interfaces.py": "083e7f575ac5b21fa3e8302c7dcf6e78112e9bc874ac6fa82cf94839ae77ddef",
+        "src/symbolic/models.py": "82b5ea5da135d17d28020f2fcc3ca7b3d89747926230714f0badb4f2910d84f4",
+        "src/symbolic/optihive/__init__.py": "4fe8b9a0ffa6666f15c7dd8fe94576d015caef83253bffe728f1c08c7d932dc1",
+        "src/symbolic/optihive/adaptive_router.py": "afddf6e6b546d104edef0745eaac4e380cd90080b62c0fbdd6209ade36e768da",
+        "src/symbolic/optihive/em_selector.py": "5101daa3cc5378c84249a3f0a2c3de62857d1b3949e5e1bc0d54e7b1b1f450e8",
+        "src/symbolic/optihive/eval_runner.py": "64080d65cfd8bab0c06350d8b84dbc4d58952a0a4c4d22ee37b3a2fa774f2387",
+        "src/symbolic/optihive/ilp_filter.py": "e15ca75865d7fe7583747438e2a0954aac3194d40bbf4f495afd7b715c6992d1",
+        "src/symbolic/optihive/learned_checkpoint.candidate.json": "7d1ad601e4d6a451ac63390a2f37fefc6524237abe851a233363626fed0a8a2f",
+        "src/symbolic/optihive/learned_checkpoint.json": "8c1933e05d92ba06b02a98782a465e69c85400114244c5579b4cad1f7cf456d3",
+        "src/symbolic/optihive/learned_router.py": "d17c38fde1a47c2d95749df1e93c65fcda01fbad2bf5b72beb02a95194860b34",
+        "src/symbolic/optihive/learned_training.py": "1e416ff11e2f03f97a084619217b2242ee5acc626088ad1524e43a5794debad7",
+        "src/symbolic/optihive/outcome_evaluation.py": "0bc0657fb226a64997d1f1c6b3f0fceee25e796383bea90bf70b180244cb4873",
+        "src/symbolic/optihive/safety_arbitration.py": "ecae09c7ae0a39c312299bc10e5af13d53b1059ab4e3ac41ca08de0969844b34",
+        "src/symbolic/optihive/solver_selection.py": "d39f1d69650bdc18940261b5b1c80cb32674113e7e8f25465a088a023647a2c7",
+        "src/symbolic/optihive/telemetry_training.py": "3aed974f99ed25e45aede4abbd2a057e8ca9e24f264e1bd920df040e15a6cb8c",
+        "src/symbolic/optihive_selector.py": "dd3e8c150972146a06b369509df99a8af931d75c95e9978d3d5c2191fe1fab95",
+        "src/symbolic/optimizers/__init__.py": "cf7533d85c92dc95cdd5b9bc06cd5429aed10c53e9bf88e19cca97077b4886a3",
+        "src/symbolic/optimizers/domain_catalog.py": "5454f22784ecf68e795ebe7f62a0db6e6a37c2e27606d1d4aba94781dacc3383",
+        "src/symbolic/optimizers/genetic_algorithm.py": "09d610818368a940e8af73ae15b9c3e6a873683ceef50274062cc52c0458d104",
+        "src/symbolic/optimizers/objective.py": "0da00e0e51524338f2173986a9e23761d933ddbfc4d1d2f17826617ff985b011",
+        "src/symbolic/optimizers/optimizer_race.py": "d09f1275b5d750db52939af557ac6584cd0967af99376870acb6cb8db98c2af9",
+        "src/symbolic/optimizers/particle_swarm.py": "0434698716739213e57c4f07f9aa7ce8e38a51b8cc5922e67687f081b3eaab14",
+        "src/symbolic/optimizers/sage_gnn_adapter.py": "653b8eabb5657cce3c288c58b2efa40e8cf8b3b72e00933148fe6dbf1d34cc3d",
+        "src/symbolic/solvers/__init__.py": "547effe8cda8130219f4a36c642cd2b73d37464bc658c2750d2f10a390989ae6",
+        "src/symbolic/solvers/constraints.py": "3c4f7706c5c756c4b7f3ede1d794d29cb2a75cdba33157785ddd9d1c405729cc",
+        "src/symbolic/solvers/gnn_checkpoint.json": "21a7943460704b4803dafdcdfae64189c6e3721c6b768f9ed0596753bcda2d1c",
+        "src/symbolic/solvers/graph_gnn.py": "07026043b91dcda5725867a2a7be3fcdb0dc9a7320404eb7f53632923653fde7",
+        "src/symbolic/solvers/graph_model.py": "320e1a35d040c70e761875288cdcfa6cf91188972f0e4db708c903fc2beb562d",
+        "src/symbolic/solvers/graph_steering.py": "a9a1c84fbf03d2c73583bf558ea6c7879fb8ad11626c90e45b634aab3b626108",
+        "src/symbolic/solvers/graph_training.py": "83c37a64ddd1148c7e9ac7238be6dacb0b6ee9a6d96b2f941d4c61732b687396",
+        "src/symbolic/solvers/z3_solver.py": "b4f2651516613b07badeaecff05c387d6ee55f0aea16c6c50c6c8bdef1e8838b",
+        "src/symbolic/telemetry/__init__.py": "c0905f9a8a0ef73926e4a8553fc7148dc3758f81a7e871ec868575532b1b33bf",
+        "src/symbolic/telemetry/collector.py": "af2c6d601abc45a6d03a94eeffec27dee680dbfb27b2f057cb0d9d26498cd82f",
+        "src/symbolic/telemetry/feedback.py": "6dca8d3a73e5d4d9763ebbfe10e79ce61a50d90bb6c0b07487da5c54bbce58a8",
+        "src/symbolic/telemetry/models.py": "b04fbac0a151a1a252e5e519e340724dd61bf9df1701a8cd3d46e373f0f17bb5",
+        "src/symbolic/telemetry/repository.py": "37846428f13b1ee5d63be1a40988bc4b78e6b164ee1a6db95966cc7d489d8881",
+        "src/symbolic/z3_solver.py": "af7a361af98abcfc11acedc212215eae27683736e42044803477071de99d5cdc",
+        "src/verifiers/__init__.py": "1c1ed7197a9301cba2edf8094b9e334d94edf4681236b968343213fad3689045",
+        "src/verifiers/proof_engine.py": "e1f533959578000510679258c4abee1d92228249fb1ea4c2f12c01a352384346",
+        "templates/Continuous_PSO_Dynamic_Scaling.py": "bf240fdf3e97a847561ffb5e7f8d0a0e3362bb0174af31237c709c534531d599",
+        "templates/Graph_SMT_Z3_MultiRegion_Placement.py": "4a903a2272ba0f09f85c8f239bf0a3f606aa51eb4e3aa6879850c0d3ce6aa313",
+        "templates/ILP_VM_Knapsack_Allocation.py": "12819aa81d5c7eb9d864dd9fc5cdaeacad8a0d552d470cdc6a10d9e7552bc7ce",
+        "templates/__init__.py": "ffe48fd2c421cb0f13260e87430ca982ae92e3986f52364a8e9ba03c194fa29b",
+        "config/__init__.py": "de0c821b6263cbba799dd31683a4497c60c138077352a933f8b817c9431ddd5c",
+        "config/settings.py": "adb313dfafc72d1982c680754d7cdd033d634d6d69ef845728f4a86660d2dfa9",
+        "benchmarks/audit/__init__.py": "b397ecf2b7a2a4a93f8438e62efad12d23259b1a1ad35fe0ed1a3e8be9dd6ddf",
+        "benchmarks/audit/adapters.py": "d0df71da0aa40a5a013b46c7a902ecf01bfef62e8feb0534d146e8a20c62635b",
+        "benchmarks/audit/checker.py": "57409a8fd62c68a4b66200a1b905cc763df3465734b969ae3928d069fc96bb19",
+        "benchmarks/audit/run.py": "55fbad89806e4c2e795362d9bf06f5f6a3c46048c3c5c714779bceb0cf2fcce3",
+        "benchmarks/audit/test_checker.py": "bf774d18e97ef8b743ad03200d64a9d65c7660a96ea8a04e16a8d2eaf91e1301"
+      },
+      "packages": {
+        "numpy": "2.3.5",
+        "scipy": "1.17.0",
+        "z3-solver": "5.1.0.0",
+        "pydantic": "2.13.5",
+        "openai": "3.25.0",
+        "python-dotenv": "1.2.4"
+      },
+      "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]"
+    },
+    "model": "NOT_USED_LOCAL_ONLY",
+    "max_tokens": 4096,
+    "temperature": 0.0,
+    "timeout_seconds": 360,
+    "base_seed": 20261006,
+    "c_definition": "rule parser + existing templates; not bare symbolic solver",
+    "d_definition": "local parse_query_to_contract + optimize_contract + FinOpsExplainer once",
+    "latency_definition": "cold subprocess end-to-end, initialization and explanation included; grading excluded",
+    "a_policy": "plain prose; blind human transcription, no regex guessing",
+    "retry_policy": "none; interruptions and errors are terminal records; new experiment for reruns",
+    "experiment_hash": "025323f41647b7a74e8094db43f3d7ed6fa23aa6b228811c1a56f6cb38661d47"
+  },
+  "job": {
+    "query_id": "dev_scale",
+    "config": "C",
+    "trial_num": 1
+  },
+  "query": {
+    "raw_query_text": "Autoscale bandwidth from 100 to 1000 Mbps with at most 16 replicas and CPU at most 70%, under $500 monthly."
+  }
+}

@@ -1,0 +1,511 @@
+{
+  "query_id": "query_inr_currency_conversion",
+  "query_text": "Deploy 4 microservices on AWS with 4 vCPUs and 8GB RAM, max budget \u20b925000",
+  "timestamp": "2026-10-05T20:19:06Z",
+  "stages": {
+    "stage_1_scope_parsing": {
+      "raw_query": "Deploy 4 microservices on AWS with 4 vCPUs and 8GB RAM, max budget \u20b925000",
+      "execution_time_ms": 0.41,
+      "extracted_constraint_tokens": [
+        "Bounded_Integer_Variables",
+        "Budget_Limit_Max",
+        "Resource_Min_vCPU"
+      ],
+      "constraint_pattern_evaluations": [
+        {
+          "constraint_token": "Bounded_Integer_Variables",
+          "keywords_checked": [
+            "microservice",
+            "microservices",
+            "vm",
+            "vms",
+            "instance",
+            "instances",
+            "knapsack",
+            "discrete",
+            "integer",
+            "allocate",
+            "allocation",
+            "container",
+            "containers"
+          ],
+          "matched": true,
+          "matched_keywords": [
+            "microservice",
+            "microservices"
+          ],
+          "status": "MATCHED"
+        },
+        {
+          "constraint_token": "Budget_Limit_Max",
+          "keywords_checked": [
+            "budget",
+            "max budget",
+            "cost",
+            "usd",
+            "$",
+            "dollar",
+            "dollars",
+            "spend",
+            "spending",
+            "price limit",
+            "\u20b9",
+            "rs",
+            "rs.",
+            "inr",
+            "rupee",
+            "rupees"
+          ],
+          "matched": true,
+          "matched_keywords": [
+            "budget",
+            "max budget",
+            "\u20b9"
+          ],
+          "status": "MATCHED"
+        },
+        {
+          "constraint_token": "Resource_Min_vCPU",
+          "keywords_checked": [
+            "vcpu",
+            "vcpus",
+            "core",
+            "cores",
+            "v-cpu",
+            "ram",
+            "memory",
+            "gb",
+            "compute",
+            "high compute",
+            "heavy workload",
+            "high memory",
+            "memory intensive",
+            "large ram",
+            "heavy database",
+            "database tier",
+            "enterprise cluster",
+            "large cluster",
+            "intensive batch"
+          ],
+          "matched": true,
+          "matched_keywords": [
+            "vcpu",
+            "vcpus",
+            "ram",
+            "gb"
+          ],
+          "status": "MATCHED"
+        },
+        {
+          "constraint_token": "Latency_Bound_Max / Inter_Node_Latency_Max",
+          "keywords_checked": [
+            "latency",
+            "ms",
+            "response time",
+            "roundtrip",
+            "delay",
+            "ping",
+            "inter-node",
+            "inter-region",
+            "backbone",
+            "edge latency",
+            "sync latency"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        },
+        {
+          "constraint_token": "Continuous_Bandwidth_Range",
+          "keywords_checked": [
+            "bandwidth",
+            "mbps",
+            "gbps",
+            "throughput",
+            "continuous",
+            "stream",
+            "traffic",
+            "dynamic range"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        },
+        {
+          "constraint_token": "CPU_Threshold_Max",
+          "keywords_checked": [
+            "threshold",
+            "utilization",
+            "target cpu",
+            "cpu percent",
+            "autoscale",
+            "autoscaling",
+            "scaling",
+            "pso"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        },
+        {
+          "constraint_token": "Cost_Minimization_Objective",
+          "keywords_checked": [
+            "cost minimization",
+            "minimize cost",
+            "cost objective",
+            "efficient cost"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        },
+        {
+          "constraint_token": "Multi_Region_Disjoint",
+          "keywords_checked": [
+            "disaster recovery",
+            "disaster-recovery",
+            "multi-region",
+            "multi region",
+            "multiregion",
+            "disjoint",
+            "failover",
+            "dr",
+            "geo-redundant",
+            "cross-region",
+            "distribute",
+            "placement",
+            "topology",
+            "graph",
+            "inter-node",
+            "inter-region"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        },
+        {
+          "constraint_token": "SLA_Availability_Min",
+          "keywords_checked": [
+            "sla",
+            "availability",
+            "uptime",
+            "99.",
+            "fault tolerant",
+            "high availability"
+          ],
+          "matched": false,
+          "matched_keywords": [],
+          "status": "NO MATCH"
+        }
+      ],
+      "parameter_extractions": [
+        {
+          "field": "budget_max_usd",
+          "patterns_evaluated": [
+            "(?:\u20b9|rs\\.?)\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)",
+            "(\\d+(?:,\\d+)*(?:\\.\\d+)?)\\s*(?:inr|rupees?|rs\\b)",
+            "budget(?:\\s+of|\\s+max|\\s+limit)?\\s*[:=]?\\s*(?:\u20b9|rs\\.?)\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)",
+            "budget(?:\\s+of|\\s+max|\\s+limit)?\\s*[:=]?\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)\\s*(?:inr|rupees?|rs\\b)",
+            "\\$\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)",
+            "(\\d+(?:,\\d+)*(?:\\.\\d+)?)\\s*(?:usd|dollars?)",
+            "(?:budget|cost|price|spend|limit|under|cap)\\s*(?:of|max|limit|under|is|to)?\\s*[:=]?\\s*\\$?\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)"
+          ],
+          "matched": true,
+          "matched_pattern": "(?:\u20b9|rs\\.?)\\s*(\\d+(?:,\\d+)*(?:\\.\\d+)?)",
+          "matched_substring": "\u20b925000",
+          "raw_extracted": "25000",
+          "converted_value": 294.12,
+          "field_type": "float (USD converted from INR)",
+          "status": "MATCHED (INR)",
+          "provenance": "[EXPLICIT: INR converted to USD]"
+        },
+        {
+          "field": "service_count",
+          "patterns_evaluated": [
+            "(\\d+)\\s*(?:microservices?|services?|components?|nodes?)"
+          ],
+          "matched": true,
+          "matched_pattern": "(\\d+)\\s*(?:microservices?|services?|components?|nodes?)",
+          "matched_substring": "4 microservices",
+          "raw_extracted": "4",
+          "converted_value": 4,
+          "field_type": "int",
+          "status": "MATCHED",
+          "provenance": "[EXPLICIT]"
+        },
+        {
+          "field": "qualitative_intent",
+          "patterns_evaluated": [
+            "SAGE-GNN topologies",
+            "heavy database",
+            "high memory",
+            "high compute"
+          ],
+          "matched": false,
+          "matched_pattern": null,
+          "matched_substring": null,
+          "raw_extracted": null,
+          "converted_value": null,
+          "field_type": "str",
+          "status": "NO MATCH",
+          "provenance": "[NONE]"
+        },
+        {
+          "field": "required_vcpus",
+          "patterns_evaluated": [
+            "(\\d+)\\s*(?:vcpus?|cores?|v-cpu)"
+          ],
+          "matched": true,
+          "matched_pattern": "(\\d+)\\s*(?:vcpus?|cores?|v-cpu)",
+          "matched_substring": "4 vCPUs",
+          "raw_extracted": "4",
+          "converted_value": 4,
+          "field_type": "int",
+          "status": "MATCHED",
+          "provenance": "[EXPLICIT]"
+        },
+        {
+          "field": "required_ram_gb",
+          "patterns_evaluated": [
+            "(\\d+(?:\\.\\d+)?)\\s*(?:gb|gigabytes?)\\s*(?:ram|memory)?"
+          ],
+          "matched": true,
+          "matched_pattern": "(\\d+(?:\\.\\d+)?)\\s*(?:gb|gigabytes?)\\s*(?:ram|memory)?",
+          "matched_substring": "8GB RAM",
+          "raw_extracted": "8",
+          "converted_value": 8.0,
+          "field_type": "float",
+          "status": "MATCHED",
+          "provenance": "[EXPLICIT]"
+        },
+        {
+          "field": "latency_max_ms",
+          "patterns_evaluated": [
+            "(?:max\\s+|under\\s+|latency\\s+(?:of\\s+|under\\s+)?|\\b)(\\d+(?:\\.\\d+)?)\\s*ms"
+          ],
+          "matched": false,
+          "matched_pattern": null,
+          "matched_substring": null,
+          "raw_extracted": null,
+          "converted_value": 100.0,
+          "field_type": "float",
+          "status": "NO MATCH (Default Applied)",
+          "provenance": "[DEFAULT: Baseline Fallback]"
+        },
+        {
+          "field": "sla_availability_pct",
+          "patterns_evaluated": [
+            "(9\\d(?:\\.\\d+)?)\\s*%"
+          ],
+          "matched": false,
+          "matched_pattern": null,
+          "matched_substring": null,
+          "raw_extracted": null,
+          "converted_value": 99.9,
+          "field_type": "float",
+          "status": "NO MATCH (Default Applied)",
+          "provenance": "[DEFAULT: Baseline Fallback]"
+        },
+        {
+          "field": "cloud_providers",
+          "patterns_evaluated": [
+            "\\b(AWS|Azure|GCP)\\b"
+          ],
+          "matched": true,
+          "matched_pattern": "\\b(AWS|Azure|GCP)\\b",
+          "matched_substring": "AWS",
+          "raw_extracted": [
+            "AWS"
+          ],
+          "converted_value": [
+            "AWS"
+          ],
+          "field_type": "List[str]",
+          "status": "MATCHED",
+          "provenance": "[EXPLICIT]"
+        }
+      ],
+      "field_provenance": {
+        "budget_max_usd": "[EXPLICIT: INR converted to USD]",
+        "service_count": "[EXPLICIT]",
+        "qualitative_intent": "[NONE]",
+        "required_vcpus": "[EXPLICIT]",
+        "required_ram_gb": "[EXPLICIT]",
+        "latency_max_ms": "[DEFAULT: Baseline Fallback]",
+        "sla_availability_pct": "[DEFAULT: Baseline Fallback]",
+        "cloud_providers": "[EXPLICIT]"
+      }
+    },
+    "stage_2_carm_matching": {
+      "extracted_constraints": [
+        "Bounded_Integer_Variables",
+        "Budget_Limit_Max",
+        "Resource_Min_vCPU"
+      ],
+      "archetype_scores": [
+        {
+          "archetype": "ILP_VM_Allocation",
+          "template": "ilp_vm_allocation_template.py",
+          "score": 0.75,
+          "target_constraints": [
+            "Bounded_Integer_Variables",
+            "Budget_Limit_Max",
+            "Latency_Bound_Max",
+            "Resource_Min_vCPU"
+          ],
+          "matched_constraints": [
+            "Bounded_Integer_Variables",
+            "Budget_Limit_Max",
+            "Resource_Min_vCPU"
+          ]
+        },
+        {
+          "archetype": "PSO_Continuous_Scaling",
+          "template": "pso_continuous_scaling_template.py",
+          "score": 0.0,
+          "target_constraints": [
+            "CPU_Threshold_Max",
+            "Continuous_Bandwidth_Range",
+            "Cost_Minimization_Objective"
+          ],
+          "matched_constraints": []
+        },
+        {
+          "archetype": "Z3_Graph_Disaster_Recovery",
+          "template": "z3_graph_disaster_recovery_template.py",
+          "score": 0.0,
+          "target_constraints": [
+            "Inter_Node_Latency_Max",
+            "Multi_Region_Disjoint",
+            "SLA_Availability_Min"
+          ],
+          "matched_constraints": []
+        }
+      ],
+      "winner": "ILP_VM_Allocation",
+      "winner_template": "ilp_vm_allocation_template.py",
+      "winner_score": 0.75,
+      "runner_up": "PSO_Continuous_Scaling",
+      "runner_up_score": 0.0,
+      "margin": 0.75,
+      "is_near_tie": false
+    },
+    "stage_3_contract_validation": {
+      "validation_status": "VALIDATED_SUCCESS",
+      "contract_fields": {
+        "problem_type": "ILP_VM_Allocation",
+        "cloud_providers": [
+          "AWS"
+        ],
+        "budget_max_usd": 294.12,
+        "service_count": 4,
+        "required_vcpus": 4,
+        "required_ram_gb": 8.0,
+        "latency_max_ms": 100.0,
+        "sla_availability_pct": 99.9,
+        "metadata": {
+          "field_provenance": {
+            "budget_max_usd": "[EXPLICIT: INR converted to USD]",
+            "service_count": "[EXPLICIT]",
+            "qualitative_intent": "[NONE]",
+            "required_vcpus": "[EXPLICIT]",
+            "required_ram_gb": "[EXPLICIT]",
+            "latency_max_ms": "[DEFAULT: Baseline Fallback]",
+            "sla_availability_pct": "[DEFAULT: Baseline Fallback]",
+            "cloud_providers": "[EXPLICIT]"
+          }
+        }
+      },
+      "validation_errors_caught": []
+    },
+    "stage_4_solver_dispatch": {
+      "problem_type": "ILP_VM_Allocation",
+      "dispatched_function_name": "solve_ilp_vm_knapsack",
+      "dispatched_module": "templates.ILP_VM_Knapsack_Allocation",
+      "dispatched_callable_repr": "<function solve_ilp_vm_knapsack at 0x000002BE97873EC0>",
+      "routing_rationale": "Deterministic routing from CARM winning archetype to dedicated symbolic solver"
+    },
+    "stage_5_solver_internals": {
+      "solver_type": "ILP",
+      "loop_description": "Exact Branch-and-Bound / SciPy MILP HiGHS Simplex & Cutting Planes",
+      "sku_catalog_size": 8,
+      "sku_names": [
+        "AWS:t3.medium",
+        "AWS:t3.large",
+        "AWS:t3.xlarge",
+        "AWS:c5.large",
+        "AWS:c5.xlarge",
+        "AWS:m5.large",
+        "AWS:m5.xlarge",
+        "AWS:m5.2xlarge"
+      ],
+      "objective_coefficients_usd": [
+        30.37,
+        60.74,
+        121.47,
+        62.05,
+        124.1,
+        70.08,
+        140.16,
+        280.32
+      ],
+      "constraint_matrix_shape": [
+        3,
+        8
+      ],
+      "constraint_bounds": [
+        -4.0,
+        -8.0,
+        294.12
+      ],
+      "solving_algorithm": "SciPy_MILP_HiGHS",
+      "solve_time_ms": 44.548,
+      "is_feasible": true,
+      "optimal_objective_value": 60.74,
+      "solver_output": {
+        "status": "OPTIMAL",
+        "solver": "SciPy_MILP_HiGHS",
+        "total_monthly_cost_usd": 60.74,
+        "allocated_vms": [
+          {
+            "instance_type": "t3.medium",
+            "provider": "AWS",
+            "count": 2,
+            "vcpus_per_vm": 2,
+            "ram_gb_per_vm": 4.0,
+            "monthly_cost": 60.74
+          }
+        ],
+        "total_vcpus": 4,
+        "total_ram_gb": 8.0,
+        "budget_max_usd": 294.12,
+        "budget_utilized_pct": 20.65,
+        "cost_savings_usd": 233.38,
+        "solve_time_ms": 44.287
+      }
+    },
+    "stage_6_explainer": {
+      "consumed_solver_fields": {
+        "status": "OPTIMAL",
+        "solver": "SciPy_MILP_HiGHS",
+        "total_monthly_cost_usd": 60.74,
+        "cost_savings_usd": 233.38,
+        "budget_utilized_pct": 20.65,
+        "solve_time_ms": 44.287,
+        "allocated_vms": [
+          {
+            "instance_type": "t3.medium",
+            "provider": "AWS",
+            "count": 2,
+            "vcpus_per_vm": 2,
+            "ram_gb_per_vm": 4.0,
+            "monthly_cost": 60.74
+          }
+        ],
+        "total_vcpus": 4,
+        "total_ram_gb": 8.0
+      },
+      "generated_finops_report": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : ILP_VM_Allocation\n Optimization Engine  : SciPy_MILP_HiGHS\n Feasibility Status   : OPTIMAL\n Target Cloud(s)      : AWS\n Exchange Rate        : 1 USD = 85.00 INR\n----------------------------------------------------------------------------------\n FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)\n----------------------------------------------------------------------------------\n  - Monthly Budget Cap       : $294.12 USD (\u20b925,000.20 INR) / month\n  - Optimized Monthly Cost   : $60.74 USD (\u20b95,162.90 INR) / month\n  - Monthly Net Savings      : $233.38 USD (\u20b919,837.30 INR) / month (79.3% under cap)\n  - Budget Utilization Rate  :  20.65%\n----------------------------------------------------------------------------------\n COMPUTE & RESOURCE ALLOCATION BREAKDOWN\n----------------------------------------------------------------------------------\n  - Target Services Required : 4 service(s)\n  - Total Allocated Compute  : 4 vCPUs (Required: 4)\n  - Total Allocated Memory   : 8.0 GB RAM (Required: 8.0 GB)\n\n  Instance Placement Plan:\n   [1] AWS t3.medium x 2 instance(s) (2 vCPUs, 4.0GB) -> $60.74 USD (\u20b95,162.90 INR)/mo\n----------------------------------------------------------------------------------\n ACTIONABLE FINOPS RECOMMENDATIONS\n----------------------------------------------------------------------------------\n  1. Pricing Strategy: Workload utilizes burstable instances (t3.medium). Enroll in AWS 1-Year Compute Savings Plans (saves ~28-34%) or migrate to ARM64 Graviton (t4g) for up to 20% better price-to-performance.\n  2. Budget Headroom (20.6% utilized): You have a monthly surplus of $233.38 USD (\u20b919,837.30 INR). Reallocate surplus capital toward multi-AZ automated failover and managed snapshot replication.\n  3. Workload Bin-Packing: Consolidate the 4 requested microservices into containerized pods (ECS/EKS/Docker) with strict CPU/memory limits to maximize utilization density on t3.medium.\n  4. Governance & Attribution: Apply mandatory Cost Allocation Tags (`Environment`, `CostCenter`, `Owner:FinOps`) across all 4 service resources for 100% cost attribution.\n=================================================================================="
+    }
+  }
+}

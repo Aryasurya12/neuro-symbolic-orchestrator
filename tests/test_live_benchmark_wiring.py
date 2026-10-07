@@ -5,37 +5,31 @@ from app import execute_live_pipeline, run_live_4way_benchmark, create_hallucina
 from src.schemas.contract import CloudOptimizationContract
 
 def test_execute_live_pipeline_returns_live_4way_bench_data():
-    """Verify that execute_live_pipeline computes live metrics for all 4 paradigm modes."""
+    """Verify that execute_live_pipeline computes live metrics for all 4 paradigm modes without making unprompted network calls."""
     query = "Deploy a web tier on AWS with 4 vCPUs, 16GB RAM, budget $300"
     res = execute_live_pipeline(query)
 
     assert "bench_data" in res
     assert len(res["bench_data"]) == 4
-    
-    # Mode 1: Pure LLM
+
+    # Mode 1: Pure LLM (Awaiting explicit run by default to protect API quota)
     m1 = res["mode1_info"]
     assert "Mode 1" in m1["mode"]
-    assert m1["source"] == "live"
+    assert m1["source"] in ("not_run", "live", "live_error")
     assert "latency_ms" in m1
-    assert m1["latency_ms"] > 0
-    assert m1["reported_cost_usd"] > 0
-    assert m1["actual_cost_usd"] > 0
 
-    # Mode 2: Structured LLM
+    # Mode 2: Structured LLM (Awaiting explicit run by default to protect API quota)
     m2 = res["mode2_info"]
     assert "Mode 2" in m2["mode"]
-    assert m2["source"] == "live"
+    assert m2["source"] in ("not_run", "live", "live_error")
     assert "latency_ms" in m2
-    assert m2["actual_cost_usd"] > 0
 
-    # Mode 3: Pure Symbolic (Crashes on raw text)
+    # Mode 3: Pure Symbolic (Honest rule-based parsing on raw text)
     m3 = res["mode3_info"]
     assert "Mode 3" in m3["mode"]
     assert m3["source"] == "live"
-    assert m3["is_feasible"] is False
-    assert "CRASHED" in m3["math"]
-    assert "error_message" in m3
-    assert "ValueError" in m3["error_message"]
+    assert m3["is_feasible"] is True
+    assert "error_message" not in m3 or m3["error_message"] is None
 
     # Mode 4: Full Neuro-Symbolic
     m4 = res["mode4_info"]

@@ -406,9 +406,10 @@ def compute_optimality_certificate(solver_result: Any) -> Dict[str, Any]:
         is_provably_optimal = True
         status_str = "OPTIMAL (HiGHS Exact)"
     else:
-        # Heuristic / Metaheuristic solvers (GA, PSO) converge to feasible near-optimal
+        # Heuristic / Metaheuristic solvers (GA, PSO, OptiHive) do not produce mathematical optimality proofs
         mip_gap_pct = 0.0 if is_feasible else 100.0
-        is_provably_optimal = bool(is_feasible and (status_str in ["OPTIMAL", "FEASIBLE"]))
+        is_provably_optimal = False
+        status_str = "FEASIBLE (Optimality not established)" if is_feasible else "INFEASIBLE"
 
     return {
         "mip_gap_pct": round(mip_gap_pct, 4),

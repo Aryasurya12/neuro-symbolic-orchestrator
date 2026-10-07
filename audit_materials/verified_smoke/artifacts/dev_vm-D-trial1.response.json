@@ -1,0 +1,62 @@
+{
+  "output": {
+    "allocated_resources": {
+      "vms": [
+        {
+          "provider": "AWS",
+          "instance_type": "t3.xlarge",
+          "count": 1
+        }
+      ]
+    },
+    "claimed_cost_usd": 121.47000122070312,
+    "self_reported_status": "feasible"
+  },
+  "raw": {
+    "contract": {
+      "problem_type": "ILP_VM_Allocation",
+      "cloud_providers": [
+        "AWS"
+      ],
+      "budget_max_usd": 300.0,
+      "service_count": 1,
+      "required_vcpus": 4,
+      "required_ram_gb": 16.0,
+      "latency_max_ms": 100.0,
+      "sla_availability_pct": 99.9,
+      "metadata": {
+        "field_provenance": {
+          "budget_max_usd": "[EXPLICIT]",
+          "service_count": "[DEFAULT: Baseline Fallback]",
+          "required_vcpus": "[EXPLICIT]",
+          "required_ram_gb": "[EXPLICIT]",
+          "latency_max_ms": "[DEFAULT: Baseline Fallback]",
+          "sla_availability_pct": "[DEFAULT: Baseline Fallback]",
+          "cloud_providers": "[EXPLICIT]"
+        }
+      }
+    },
+    "template": "ilp_vm_allocation_template.py",
+    "score": 1.0,
+    "result": {
+      "status": "Feasible",
+      "solver": "OptiHive_Selector",
+      "total_monthly_cost_usd": 121.47000122070312,
+      "allocated_vms": [
+        {
+          "provider": "AWS",
+          "instance_type": "t3.xlarge",
+          "count": 1,
+          "vcpus_per_vm": 4,
+          "ram_gb_per_vm": 16.0,
+          "monthly_cost": 121.472
+        }
+      ],
+      "total_vcpus": 4,
+      "total_ram_gb": 16.0
+    },
+    "report": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : ILP_VM_Allocation\n Optimization Engine  : OptiHive_Selector\n Feasibility Status   : Feasible\n Target Cloud(s)      : AWS\n Exchange Rate        : 1 USD = 85.00 INR\n----------------------------------------------------------------------------------\n FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)\n----------------------------------------------------------------------------------\n  - Monthly Budget Cap       : $300.00 USD (₹25,500.00 INR) / month\n  - Optimized Monthly Cost   : $121.47 USD (₹10,324.95 INR) / month\n  - Monthly Net Savings      : $178.53 USD (₹15,175.05 INR) / month (59.5% under cap)\n  - Budget Utilization Rate  :  40.49%\n----------------------------------------------------------------------------------\n COMPUTE & RESOURCE ALLOCATION BREAKDOWN\n----------------------------------------------------------------------------------\n  - Target Services Required : 1 service(s)\n  - Total Allocated Compute  : 4 vCPUs (Required: 4)\n  - Total Allocated Memory   : 16.0 GB RAM (Required: 16.0 GB)\n\n  Instance Placement Plan:\n   [1] AWS t3.xlarge x 1 instance(s) (4 vCPUs, 16.0GB) -> $121.47 USD (₹10,325.12 INR)/mo\n----------------------------------------------------------------------------------\n ACTIONABLE FINOPS RECOMMENDATIONS\n----------------------------------------------------------------------------------\n  1. Pricing Strategy: Workload utilizes burstable instances (t3.xlarge). Enroll in AWS 1-Year Compute Savings Plans (saves ~28-34%) or migrate to ARM64 Graviton (t4g) for up to 20% better price-to-performance.\n  2. Spend Governance (40.5% utilized): Optimal operating band with $178.53 USD (₹15,175.05 INR)/mo buffer. Establish automated CloudWatch/Prometheus anomaly alerts at 80%.\n  3. Compute Rightsizing: Track sustained CPU credit usage on t3.xlarge for 14 days; scale down instance size if average utilization remains below 40%.\n  4. Governance & Attribution: Apply mandatory Cost Allocation Tags (`Environment`, `CostCenter`, `Owner:FinOps`) across all 1 service resources for 100% cost attribution.\n==================================================================================",
+    "seed": 20261007
+  },
+  "exception": null
+}

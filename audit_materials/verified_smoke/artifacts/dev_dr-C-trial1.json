@@ -1,0 +1,99 @@
+{
+  "experiment_hash": "025323f41647b7a74e8094db43f3d7ed6fa23aa6b228811c1a56f6cb38661d47",
+  "row": {
+    "run_id": "dev_dr-C-trial1-20261006T182327-8e06ef16",
+    "query_id": "dev_dr",
+    "config": "C",
+    "trial_num": 1,
+    "timestamp": "2026-10-06T18:23:28.224292+00:00",
+    "query_category": "formal_english",
+    "input": {
+      "raw_query_text": "Disaster recovery across AWS and Azure with SLA 99.99%, max latency 20 ms and budget $300 monthly."
+    },
+    "execution": {
+      "nlu_success": null,
+      "exception": null,
+      "latency_ms": 624.0136029999803
+    },
+    "raw_output": {
+      "allocated_resources": {
+        "regions": [
+          "us-east-1",
+          "eastus"
+        ]
+      },
+      "claimed_cost_usd": 248.0,
+      "self_reported_status": "feasible"
+    },
+    "check_result": {
+      "passed": true,
+      "constraint_satisfied": true,
+      "cost_error_pct": 0.0,
+      "reason": "ok"
+    }
+  },
+  "raw": {
+    "output": {
+      "allocated_resources": {
+        "regions": [
+          "us-east-1",
+          "eastus"
+        ]
+      },
+      "claimed_cost_usd": 248.0,
+      "self_reported_status": "feasible"
+    },
+    "raw": {
+      "parameters": {
+        "budget_max_usd": 300.0,
+        "required_vcpus": 1,
+        "required_ram_gb": 1.0,
+        "metadata": {
+          "field_provenance": {
+            "budget_max_usd": "[EXPLICIT]",
+            "service_count": "[DEFAULT: Baseline Fallback]",
+            "required_vcpus": "[DEFAULT: Baseline Fallback]",
+            "required_ram_gb": "[DEFAULT: Baseline Fallback]",
+            "latency_max_ms": "[EXPLICIT]",
+            "sla_availability_pct": "[EXPLICIT]",
+            "cloud_providers": "[EXPLICIT]"
+          }
+        },
+        "latency_max_ms": 20.0,
+        "sla_availability_pct": 99.99,
+        "cloud_providers": [
+          "AWS",
+          "Azure"
+        ]
+      },
+      "template": "Z3_Graph_Disaster_Recovery",
+      "result": {
+        "status": "FEASIBLE",
+        "solver": "Z3_SMT_Graph_Steered_Solver",
+        "is_feasible": true,
+        "primary_region": "AWS:us-east-1 (US_East)",
+        "secondary_region": "Azure:eastus (US_East)",
+        "disaster_recovery_topology": "Active-Active Multi-Region Mesh",
+        "inter_region_latency_ms": 12.0,
+        "latency_threshold_ms": 20.0,
+        "achieved_sla_pct": 99.99997,
+        "target_sla_pct": 99.99,
+        "total_monthly_cost_usd": 248.0,
+        "budget_max_usd": 300.0,
+        "budget_utilized_pct": 82.67,
+        "cost_savings_usd": 52.0,
+        "constraint_status": {
+          "is_feasible": true,
+          "budget_ok": true,
+          "latency_ok": true,
+          "sla_ok": true,
+          "provider_ok": true
+        }
+      },
+      "seed": 20261007
+    },
+    "exception": null,
+    "stdout": "",
+    "stderr": ""
+  }
+}

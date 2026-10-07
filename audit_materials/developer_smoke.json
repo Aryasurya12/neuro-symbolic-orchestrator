@@ -1,0 +1,74 @@
+{
+  "ground_truth_author": "DEVELOPER TEST FIXTURE \u2014 NOT USER GROUND TRUTH",
+  "approved_by_user": false,
+  "purpose": "TECHNICAL SMOKE ONLY; not user-approved evaluation",
+  "queries": [
+    {
+      "query_id": "dev_vm",
+      "query_category": "formal_english",
+      "raw_query_text": "Allocate AWS VMs with 4 vCPUs and 16 GB RAM under $300 monthly.",
+      "configs": "CD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "vm",
+        "constraints": {
+          "providers": [
+            "AWS"
+          ],
+          "min_vcpus": 4,
+          "min_ram_gb": 16,
+          "budget_max_usd": 300
+        },
+        "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+      }
+    },
+    {
+      "query_id": "dev_dr",
+      "query_category": "formal_english",
+      "raw_query_text": "Disaster recovery across AWS and Azure with SLA 99.99%, max latency 20 ms and budget $300 monthly.",
+      "configs": "CD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "dr",
+        "constraints": {
+          "providers": [
+            "AWS",
+            "Azure"
+          ],
+          "cross_provider": true,
+          "max_latency_ms": 20,
+          "min_sla_pct": 99.99,
+          "budget_max_usd": 300
+        },
+        "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+      }
+    },
+    {
+      "query_id": "dev_scale",
+      "query_category": "formal_english",
+      "raw_query_text": "Autoscale bandwidth from 100 to 1000 Mbps with at most 16 replicas and CPU at most 70%, under $500 monthly.",
+      "configs": "CD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "scaling",
+        "constraints": {
+          "min_bandwidth_mbps": 100,
+          "max_bandwidth_mbps": 1000,
+          "max_replicas": 16,
+          "max_cpu_pct": 70,
+          "budget_max_usd": 500
+        },
+        "rationale": "Developer integration fixture only; not user ground truth or efficacy evidence"
+      }
+    }
+  ]
+}

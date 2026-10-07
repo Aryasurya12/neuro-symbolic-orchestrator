@@ -1,0 +1,162 @@
+{
+  "ground_truth_author": "",
+  "approved_by_user": false,
+  "notes": "DRAFT, NOT RUN. User must write truth; 15 unique queries + 5 repeated queries = 40 A/B calls. Categories equally weighted as a stress panel, not a production-frequency estimate. Freeze this selection before results; adjust only before freeze.",
+  "queries": [
+    {
+      "query_id": "q001",
+      "query_category": "formal_english",
+      "raw_query_text": "Allocate AWS virtual machines with at least 12 total vCPUs and 24 GB total RAM, within $250 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q002",
+      "query_category": "formal_english",
+      "raw_query_text": "Place disaster recovery across AWS and Azure in two regions on different providers, with latency at most 20 ms, availability at least 99.99%, and a monthly budget of $300.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q003",
+      "query_category": "formal_english",
+      "raw_query_text": "Autoscale bandwidth between 150 and 600 Mbps with at most 8 integer replicas, keep modeled CPU at or below 65%, and spend no more than $250 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q004",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "Bhai GCP pe VMs chahiye: total 8 vCPU aur 32 GB RAM minimum, monthly budget 220 dollars hai.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q005",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "AWS aur Azure dono pe disaster recovery set karo, alag providers par do regions, latency 30 ms se zyada nahi, SLA 99.99%, budget 300 dollars monthly.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q006",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "Bandwidth autoscale karo 200 se 800 Mbps ke beech, max 10 replicas integer mein, CPU 70 percent se neeche aur mahine ka budget 300 dollars.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q007",
+      "query_category": "missing_field",
+      "raw_query_text": "Set up an AWS deployment with enough memory for my application.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q008",
+      "query_category": "missing_field",
+      "raw_query_text": "AWS needs 8 vCPUs and 16 GB RAM; keep the budget below 300.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q009",
+      "query_category": "missing_field",
+      "raw_query_text": "Give us two small AWS nodes, or perhaps one larger node if that is better, on a reasonable budget.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q010",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "Allocate AWS VMs with at least 64 total vCPUs and 256 GB total RAM for at most $20 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q011",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "For disaster recovery use only AWS, but the two selected regions must belong to different cloud providers. Budget $400, latency 100 ms maximum, SLA 99.99%.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q012",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "Autoscale at least 500 Mbps using at most one replica while keeping CPU at or below 50%. Budget $500 monthly.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q013",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Choose GPU instances with 24 GB GPU memory for CUDA training within $500 a month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q014",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Plan encrypted managed PostgreSQL backups with a seven-year retention policy within $100 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    },
+    {
+      "query_id": "q015",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Allocate four AWS VMs in Mumbai only, each with 4 vCPUs and 16 GB RAM, within $600 monthly; no data may leave India.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": null
+    }
+  ]
+}

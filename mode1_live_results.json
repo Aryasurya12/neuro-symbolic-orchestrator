@@ -1,0 +1,50 @@
+[
+  {
+    "run": 1,
+    "latency_sec": 27.2,
+    "sent_max_tokens": 2048,
+    "finish_reason": "stop",
+    "retry_occurred": false,
+    "usage": {
+      "prompt_tokens": 215,
+      "completion_tokens": 129,
+      "total_tokens": 344
+    },
+    "raw_content_chars": 494,
+    "extracted_cost": 216.0,
+    "raw_content": "Recommended Cloud Provider and Instance Types with quantities, and the user wants a recommendation. I should provide a concise, practical answer.\n\nThe user wants a recommendation for a VM allocation plan that satisfies 8 vCPUs and 16GB RAM, staying under $0.30 per hour per instance.\n\n1. **Recommended Cloud Provider and Instance Types with quantities**: AWS, 4x t3.large instances\n2. **Total vCPUs and Total RAM provided**: 16 vCPUs, 64GB RAM\n3. **Exact Estimated Total Monthly Cost**: $216.00",
+    "cleaned_content": "Recommended Cloud Provider and Instance Types with quantities, and the user wants a recommendation. I should provide a concise, practical answer.\n\nThe user wants a recommendation for a VM allocation plan that satisfies 8 vCPUs and 16GB RAM, staying under $0.30 per hour per instance.\n\n1. **Recommended Cloud Provider and Instance Types with quantities**: AWS, 4x t3.large instances\n2. **Total vCPUs and Total RAM provided**: 16 vCPUs, 64GB RAM\n3. **Exact Estimated Total Monthly Cost**: $216.00"
+  },
+  {
+    "run": 2,
+    "latency_sec": 1.96,
+    "sent_max_tokens": 2048,
+    "finish_reason": "stop",
+    "retry_occurred": false,
+    "usage": {
+      "prompt_tokens": 215,
+      "completion_tokens": 59,
+      "total_tokens": 274
+    },
+    "raw_content_chars": 190,
+    "extracted_cost": 288.0,
+    "raw_content": "Recommended Cloud Provider and Instance Types with quantities: AWS c5.4xlarge x 2 instances\nTotal vCPUs and Total RAM provided: 32 vCPUs, 64GB RAM\nExact Estimated Total Monthly Cost: $288.00",
+    "cleaned_content": "Recommended Cloud Provider and Instance Types with quantities: AWS c5.4xlarge x 2 instances\nTotal vCPUs and Total RAM provided: 32 vCPUs, 64GB RAM\nExact Estimated Total Monthly Cost: $288.00"
+  },
+  {
+    "run": 3,
+    "latency_sec": 44.17,
+    "sent_max_tokens": 2048,
+    "finish_reason": "stop",
+    "retry_occurred": false,
+    "usage": {
+      "prompt_tokens": 215,
+      "completion_tokens": 73,
+      "total_tokens": 288
+    },
+    "raw_content_chars": 220,
+    "extracted_cost": 144.0,
+    "raw_content": "Recommended Cloud Provider and Instance Types with quantities: AWS c5.2xlarge (8 vCPU, 16GB RAM) x 1 instance.\nTotal vCPUs and Total RAM provided: 8 vCPUs, 16GB RAM.\nExact Estimated Total Monthly Cost ($/month): $144.00.",
+    "cleaned_content": "Recommended Cloud Provider and Instance Types with quantities: AWS c5.2xlarge (8 vCPU, 16GB RAM) x 1 instance.\nTotal vCPUs and Total RAM provided: 8 vCPUs, 16GB RAM.\nExact Estimated Total Monthly Cost ($/month): $144.00."
+  }
+]

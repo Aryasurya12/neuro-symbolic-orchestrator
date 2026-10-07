@@ -1,0 +1,81 @@
+{
+  "experiment_hash": "025323f41647b7a74e8094db43f3d7ed6fa23aa6b228811c1a56f6cb38661d47",
+  "row": {
+    "run_id": "dev_scale-C-trial1-20261006T182326-17fdcc67",
+    "query_id": "dev_scale",
+    "config": "C",
+    "trial_num": 1,
+    "timestamp": "2026-10-06T18:23:26.941049+00:00",
+    "query_category": "formal_english",
+    "input": {
+      "raw_query_text": "Autoscale bandwidth from 100 to 1000 Mbps with at most 16 replicas and CPU at most 70%, under $500 monthly."
+    },
+    "execution": {
+      "nlu_success": null,
+      "exception": null,
+      "latency_ms": 597.4184870000272
+    },
+    "raw_output": {
+      "allocated_resources": {
+        "bandwidth_mbps": 100.0,
+        "replicas": 1
+      },
+      "claimed_cost_usd": 53.0,
+      "self_reported_status": "feasible"
+    },
+    "check_result": {
+      "passed": false,
+      "constraint_satisfied": false,
+      "cost_error_pct": 0.0,
+      "reason": "cpu"
+    }
+  },
+  "raw": {
+    "output": {
+      "allocated_resources": {
+        "bandwidth_mbps": 100.0,
+        "replicas": 1
+      },
+      "claimed_cost_usd": 53.0,
+      "self_reported_status": "feasible"
+    },
+    "raw": {
+      "parameters": {
+        "budget_max_usd": 500.0,
+        "required_vcpus": 1,
+        "required_ram_gb": 1.0,
+        "metadata": {
+          "field_provenance": {
+            "budget_max_usd": "[EXPLICIT]",
+            "service_count": "[DEFAULT: Baseline Fallback]",
+            "required_vcpus": "[DEFAULT: Baseline Fallback]",
+            "required_ram_gb": "[DEFAULT: Baseline Fallback]",
+            "latency_max_ms": "[DEFAULT: Baseline Fallback]",
+            "sla_availability_pct": "[DEFAULT: Baseline Fallback]",
+            "cloud_providers": "[DEFAULT: Baseline Fallback]"
+          }
+        }
+      },
+      "template": "PSO_Continuous_Scaling",
+      "result": {
+        "status": "CONVERGED",
+        "solver": "Continuous_Vectorized_PSO",
+        "optimal_bandwidth_mbps": 100.0,
+        "recommended_replicas": 1,
+        "target_cpu_utilization_pct": 70.0,
+        "estimated_monthly_cost_usd": 53.0,
+        "estimated_hourly_cost_usd": 0.0726,
+        "budget_max_usd": 500.0,
+        "budget_utilized_pct": 10.6,
+        "cost_savings_usd": 447.0,
+        "fitness_score": 125.5,
+        "iterations_completed": 50,
+        "particles_count": 30
+      },
+      "seed": 20261007
+    },
+    "exception": null,
+    "stdout": "",
+    "stderr": ""
+  }
+}

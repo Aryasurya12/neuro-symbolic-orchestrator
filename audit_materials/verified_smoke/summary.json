@@ -1,0 +1,108 @@
+{
+  "experiment_hash": "025323f41647b7a74e8094db43f3d7ed6fa23aa6b228811c1a56f6cb38661d47",
+  "note": "Wilson intervals are descriptive for this curated set, not population confidence. Repeats are not independent queries. Cold latency includes API errors/timeouts; inspect individual records.",
+  "configs": {
+    "A": {
+      "primary_queries_planned": 0,
+      "primary_completed": 0,
+      "primary_passes": 0,
+      "pending": 0,
+      "not_run": 0,
+      "accuracy": null,
+      "illustrative_wilson_95": null,
+      "completed_all_runs": 0,
+      "primary_cost_error_pct": [],
+      "primary_execution_errors": 0,
+      "latency_ms_median": null,
+      "latency_ms_range": null,
+      "categories": {
+        "formal_english": {
+          "completed": 0,
+          "passed": 0
+        }
+      },
+      "repetitions": {},
+      "failures": []
+    },
+    "B": {
+      "primary_queries_planned": 0,
+      "primary_completed": 0,
+      "primary_passes": 0,
+      "pending": 0,
+      "not_run": 0,
+      "accuracy": null,
+      "illustrative_wilson_95": null,
+      "completed_all_runs": 0,
+      "primary_cost_error_pct": [],
+      "primary_execution_errors": 0,
+      "latency_ms_median": null,
+      "latency_ms_range": null,
+      "categories": {
+        "formal_english": {
+          "completed": 0,
+          "passed": 0
+        }
+      },
+      "repetitions": {},
+      "failures": []
+    },
+    "C": {
+      "primary_queries_planned": 0,
+      "primary_completed": 0,
+      "primary_passes": 0,
+      "pending": 0,
+      "not_run": 0,
+      "accuracy": null,
+      "illustrative_wilson_95": null,
+      "completed_all_runs": 3,
+      "primary_cost_error_pct": [],
+      "primary_execution_errors": 0,
+      "latency_ms_median": null,
+      "latency_ms_range": null,
+      "categories": {
+        "formal_english": {
+          "completed": 0,
+          "passed": 0
+        }
+      },
+      "repetitions": {},
+      "failures": [
+        {
+          "query_id": "dev_scale",
+          "trial_num": 1,
+          "reason": "cpu",
+          "exception": null
+        }
+      ]
+    },
+    "D": {
+      "primary_queries_planned": 0,
+      "primary_completed": 0,
+      "primary_passes": 0,
+      "pending": 0,
+      "not_run": 0,
+      "accuracy": null,
+      "illustrative_wilson_95": null,
+      "completed_all_runs": 3,
+      "primary_cost_error_pct": [],
+      "primary_execution_errors": 0,
+      "latency_ms_median": null,
+      "latency_ms_range": null,
+      "categories": {
+        "formal_english": {
+          "completed": 0,
+          "passed": 0
+        }
+      },
+      "repetitions": {},
+      "failures": [
+        {
+          "query_id": "dev_scale",
+          "trial_num": 1,
+          "reason": "cpu",
+          "exception": null
+        }
+      ]
+    }
+  }
+}

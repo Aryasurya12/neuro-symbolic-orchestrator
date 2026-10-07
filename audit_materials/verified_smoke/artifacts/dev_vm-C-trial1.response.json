@@ -1,0 +1,60 @@
+{
+  "output": {
+    "allocated_resources": {
+      "vms": [
+        {
+          "provider": "AWS",
+          "instance_type": "t3.xlarge",
+          "count": 1
+        }
+      ]
+    },
+    "claimed_cost_usd": 121.47,
+    "self_reported_status": "feasible"
+  },
+  "raw": {
+    "parameters": {
+      "budget_max_usd": 300.0,
+      "required_vcpus": 4,
+      "required_ram_gb": 16.0,
+      "metadata": {
+        "field_provenance": {
+          "budget_max_usd": "[EXPLICIT]",
+          "service_count": "[DEFAULT: Baseline Fallback]",
+          "required_vcpus": "[EXPLICIT]",
+          "required_ram_gb": "[EXPLICIT]",
+          "latency_max_ms": "[DEFAULT: Baseline Fallback]",
+          "sla_availability_pct": "[DEFAULT: Baseline Fallback]",
+          "cloud_providers": "[EXPLICIT]"
+        }
+      },
+      "cloud_providers": [
+        "AWS"
+      ]
+    },
+    "template": "ILP_VM_Allocation",
+    "result": {
+      "status": "OPTIMAL",
+      "solver": "SciPy_MILP_HiGHS",
+      "total_monthly_cost_usd": 121.47,
+      "allocated_vms": [
+        {
+          "instance_type": "t3.xlarge",
+          "provider": "AWS",
+          "count": 1,
+          "vcpus_per_vm": 4,
+          "ram_gb_per_vm": 16.0,
+          "monthly_cost": 121.47
+        }
+      ],
+      "total_vcpus": 4,
+      "total_ram_gb": 16.0,
+      "budget_max_usd": 300.0,
+      "budget_utilized_pct": 40.49,
+      "cost_savings_usd": 178.53,
+      "solve_time_ms": 338.57
+    },
+    "seed": 20261007
+  },
+  "exception": null
+}

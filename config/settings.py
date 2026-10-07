@@ -5,8 +5,10 @@ from dataclasses import dataclass, field
 from typing import Tuple
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file at project root
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(PROJECT_ROOT, ".env")
+load_dotenv(dotenv_path=ENV_PATH)
 
 
 @dataclass
@@ -25,6 +27,8 @@ class Settings:
     OPENROUTER_MODEL: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
     )
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 360.0
+    LLM_MAX_COMPLETION_TOKENS: int = 4096
 
     # Currency conversion & formatting settings
     USD_TO_INR_RATE: float = 85.0

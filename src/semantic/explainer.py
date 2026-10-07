@@ -268,7 +268,7 @@ class FinOpsExplainer:
         cls,
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
-        timeout_seconds: float = 6.0,
+        timeout_seconds: Optional[float] = None,
     ) -> Optional[List[str]]:
         """Invokes OpenRouter NVIDIA Nemotron to generate dynamic, AI-reasoned FinOps advice.
         Returns a list of recommendation strings, or None on failure/timeout.
@@ -277,16 +277,13 @@ class FinOpsExplainer:
         if not api_key:
             return None
 
-        primary_model = os.getenv("OPENROUTER_MODEL") or getattr(
+        effective_timeout = timeout_seconds if timeout_seconds is not None else getattr(
+            settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0
+        )
+        target_model = os.getenv("OPENROUTER_MODEL") or getattr(
             settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
         )
-        candidate_models = [
-            primary_model,
-            "nvidia/nemotron-3.5-lightning:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-        ]
-        models_to_try = list(dict.fromkeys(candidate_models))
+        max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
 
         total_cost = solver_result.get(
             "total_monthly_cost_usd",
@@ -331,46 +328,27 @@ class FinOpsExplainer:
             {"role": "user", "content": user_prompt},
         ]
 
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-            timeout=timeout_seconds,
-        )
-
-        for model_name in models_to_try:
-            try:
-                resp = client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=0.2,
-                    max_tokens=2048,
-                )
-                if not resp or not resp.choices:
-                    continue
-                choice = resp.choices[0]
-                finish_reason = getattr(choice, "finish_reason", "unknown")
-                raw_content = (choice.message.content or "").strip()
-                recs = cls._clean_llm_recommendations(raw_content)
-                if len(recs) >= 2:
-                    return recs[:4]
-                
-                # If truncated and insufficient recommendations, auto-retry once with higher token limit
-                if finish_reason == "length":
-                    retry_resp = client.chat.completions.create(
-                        model=model_name,
-                        messages=messages,
-                        temperature=0.2,
-                        max_tokens=4096,
-                    )
-                    if retry_resp and retry_resp.choices:
-                        retry_content = (retry_resp.choices[0].message.content or "").strip()
-                        retry_recs = cls._clean_llm_recommendations(retry_content)
-                        if len(retry_recs) >= 2:
-                            return retry_recs[:4]
-            except Exception:
-                continue
-
-        return None
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+                timeout=effective_timeout,
+                max_retries=0,
+            )
+            resp = client.chat.completions.create(
+                model=target_model,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=max_tokens,
+            )
+            if not resp or not resp.choices:
+                return None
+            choice = resp.choices[0]
+            raw_content = (choice.message.content or "").strip()
+            recs = cls._clean_llm_recommendations(raw_content)
+            return recs[:4] if recs else None
+        except Exception:
+            return None
 
     @classmethod
     def generate_report(
@@ -378,7 +356,7 @@ class FinOpsExplainer:
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
         exchange_rate: float = settings.USD_TO_INR_RATE,
-        enable_llm_explainer: bool = True,
+        enable_llm_explainer: bool = False,
     ) -> str:
         """Generates a structured ASCII Executive FinOps Deployment Report
         displaying dual-currency metrics ($ and ₹) and dynamic, contextual recommendations.

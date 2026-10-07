@@ -56,25 +56,30 @@ def test_stage1_provenance_badges():
 
 
 def test_percentage_error_and_overflow_benchmark_metrics():
-    metrics = app.compute_calibrated_baseline_metrics(
-        "Run batch processing on GCP requiring high compute scaling under $250 monthly budget",
-        budget_max_usd=250.0,
-        optimal_cost_usd=150.0,
+    from src.verifiers.independent_checker import IndependentChecker
+    from src.semantic.schemas import CloudOptimizationContract
+
+    contract = CloudOptimizationContract(
+        problem_type="ILP_VM_Allocation",
+        cloud_providers=["GCP"],
+        budget_max_usd=50.0,
+        required_vcpus=4,
+        required_ram_gb=16.0,
     )
+    # Allocation that exceeds budget ($50) and differs from claimed cost ($150 vs $97.82 catalog)
+    solver_res = {
+        "status": "OPTIMAL",
+        "total_monthly_cost_usd": 150.0,
+        "allocated_vms": [
+            {"sku": "e2-standard-4", "provider": "GCP", "quantity": 1, "monthly_cost": 150.0, "vcpus": 4, "ram_gb": 16.0}
+        ],
+    }
 
-    m1 = metrics["mode1"]
-    assert "error_usd" in m1
-    assert "error_pct" in m1
-    assert "overflow_usd" in m1
-    assert m1["error_pct"] > 0
-    assert m1["overflow_usd"] > 0
-
-    m2 = metrics["mode2"]
-    assert "error_usd" in m2
-    assert "error_pct" in m2
-    assert "overflow_usd" in m2
-    assert m2["error_pct"] > 0
-    assert m2["overflow_usd"] > 0
+    check = IndependentChecker.verify_solution(contract, solver_res)
+    assert check["cost_accuracy"]["cost_delta_usd"] > 0
+    assert check["cost_accuracy"]["cost_error_pct"] > 0
+    assert check["feasible_against_contract"] is False
+    assert any("Budget overflow" in v for v in check["violations"])
 
 
 def test_itemized_sku_and_dynamic_recommendations():

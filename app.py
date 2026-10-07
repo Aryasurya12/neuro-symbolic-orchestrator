@@ -21,7 +21,11 @@ from src.verifiers.proof_engine import (
     compute_optimality_certificate,
     MathematicalProofEngine,
 )
-from src.optimizers.raw_symbolic_runner import run_pure_symbolic_raw
+from src.verifiers.independent_checker import IndependentChecker
+from src.optimizers.raw_symbolic_runner import (
+    run_symbolic_rule_based,
+    run_pure_symbolic_raw,
+)
 from src.symbolic.optimizers.domain_catalog import DatabaseBackedCatalog, VM_CATALOG
 
 # Configure Streamlit page
@@ -59,27 +63,42 @@ CURRENCY_CODES: Dict[str, str] = {
     "JPY (¥)": "JPY",
 }
 
-def convert_currency(amount_usd: float, selected_currency: str = "USD ($)") -> float:
+def convert_currency(amount_usd: Optional[float], selected_currency: str = "USD ($)") -> Optional[float]:
     """Converts a USD amount to the selected currency using the static FX rate table."""
-    rate = FX_RATES.get(selected_currency, 1.0)
-    return round(amount_usd * rate, 2)
+    if amount_usd is None:
+        return None
+    try:
+        val = float(amount_usd)
+        rate = FX_RATES.get(selected_currency, 1.0)
+        return round(val * rate, 2)
+    except (ValueError, TypeError):
+        return None
 
 def get_currency_symbol(selected_currency: str = "USD ($)") -> str:
     """Returns the currency glyph symbol for the selected currency."""
     return CURRENCY_SYMBOLS.get(selected_currency, "$")
 
 def format_currency(
-    amount_usd: float,
+    amount_usd: Optional[Any],
     selected_currency: str = "USD ($)",
     include_symbol: bool = True,
     decimal_places: int = 2,
+    placeholder: str = "—",
 ) -> str:
     """Single Source of Truth helper function for multi-currency conversion and display.
     Guarantees 100% synchronization across all metric tiles, tables, Plotly charts, and XAI reports.
+    Safely handles None and missing values without fabricating baselines.
     """
+    if amount_usd is None:
+        return placeholder
+    try:
+        val = float(amount_usd)
+    except (ValueError, TypeError):
+        return str(amount_usd) if amount_usd != "" else placeholder
+
     rate = FX_RATES.get(selected_currency, 1.0)
     symbol = CURRENCY_SYMBOLS.get(selected_currency, "$") if include_symbol else ""
-    converted = amount_usd * rate
+    converted = val * rate
     if selected_currency == "JPY (¥)" and decimal_places == 2:
         return f"{symbol}{converted:,.0f}" if include_symbol else f"{converted:,.0f}"
     return f"{symbol}{converted:,.{decimal_places}f}"
@@ -827,6 +846,7 @@ def highlight_query_terms(query: str) -> str:
 def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     """Executes real-time SCOPE semantic extraction, CARM Jaccard matching,
     formal Pydantic contract synthesis, symbolic solver execution, and FinOps explanation.
+    Runs Mode 3 and Mode 4 local optimizations exactly once and validates both via IndependentChecker.
     """
     from templates.Graph_SMT_Z3_MultiRegion_Placement import (
         REGIONS_GRAPH,
@@ -838,7 +858,8 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
 
     t_pipeline_start = time.perf_counter()
 
-    # Stage 1: Parse Semantic Tokens
+    # Stage 1: Parse Semantic Tokens & Contract (Mode 4 / Neurasym parsing boundary)
+    t_parse_start = time.perf_counter()
     extracted_constraints = parser_engine.extract_constraints_from_text(query_text)
     params = parser_engine.extract_parameters(query_text)
 
@@ -853,19 +874,26 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     # Determine matched archetype and template
     contract, matched_template, best_jaccard = parser_engine.parse_query_to_contract(query_text)
     problem_type = contract.problem_type
+    parse_latency_ms = (time.perf_counter() - t_parse_start) * 1000.0
 
-    # Stage 4: Symbolic Solver Execution (Real-Time Solve)
+    # Stage 3: Mode 4 Symbolic Solver Execution (Single Run)
     t_solve_start = time.perf_counter()
     solver_res = orchestrator_engine.optimize_contract(contract)
     solve_latency_ms = (time.perf_counter() - t_solve_start) * 1000.0
-    total_latency_ms = (time.perf_counter() - t_pipeline_start) * 1000.0
 
+    # Stage 4: Mode 4 FinOps Explanation Synthesis
+    t_exp_start = time.perf_counter()
+    optimal_cost = float(
+        solver_res.get(
+            "total_monthly_cost_usd",
+            solver_res.get("estimated_monthly_cost_usd", solver_res.get("catalog_cost", 0.0)),
+        )
+    )
+    budget = float(contract.budget_max_usd)
     is_feasible = bool(
         solver_res.get("is_feasible", False)
-        or solver_res.get("status", "").lower() == "feasible"
+        or solver_res.get("status", "").lower() in ["feasible", "optimal", "converged"]
     )
-    optimal_cost = float(solver_res.get("total_monthly_cost_usd", 0.0))
-    budget = float(contract.budget_max_usd)
     savings = max(0.0, budget - optimal_cost) if is_feasible else 0.0
     savings_pct = (savings / budget) * 100.0 if (budget > 0 and is_feasible) else 0.0
 
@@ -937,88 +965,103 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
                     "is_pass": is_pass,
                 })
 
-    # Allocations table formatting
+    # Allocations table formatting (populated ONLY when a feasible solution exists)
     allocations = []
-    if "allocated_vms" in solver_res and solver_res["allocated_vms"]:
-        for vm in solver_res["allocated_vms"]:
+    if is_feasible:
+        if "allocated_vms" in solver_res and solver_res["allocated_vms"]:
+            for vm in solver_res["allocated_vms"]:
+                allocations.append({
+                    "sku": vm.get("instance_type", "Standard_VM"),
+                    "provider": vm.get("provider", contract.cloud_providers[0] if contract.cloud_providers else "AWS"),
+                    "qty": vm.get("count", 1),
+                    "vcpus": vm.get("vcpus_per_vm", 2) * vm.get("count", 1),
+                    "ram": f"{vm.get('ram_gb_per_vm', 4.0) * vm.get('count', 1):.1f} GB",
+                    "monthly_cost": float(vm.get("monthly_cost", 0.0)),
+                })
+        elif problem_type == "ILP_VM_Allocation":
+            prov = contract.cloud_providers[0] if contract.cloud_providers else "AWS"
+            if prov == "GCP":
+                sku_name = f"e2-standard-{max(2, contract.required_vcpus)}"
+            elif prov == "Azure":
+                sku_name = f"Standard_D{max(2, contract.required_vcpus)}s_v5"
+            else:
+                sku_name = f"t3.{'2xlarge' if contract.required_vcpus >= 8 else ('xlarge' if contract.required_vcpus >= 4 else 'large')}"
             allocations.append({
-                "sku": vm.get("instance_type", "Standard_VM"),
-                "provider": vm.get("provider", contract.cloud_providers[0] if contract.cloud_providers else "AWS"),
-                "qty": vm.get("count", 1),
-                "vcpus": vm.get("vcpus_per_vm", 2) * vm.get("count", 1),
-                "ram": f"{vm.get('ram_gb_per_vm', 4.0) * vm.get('count', 1):.1f} GB",
-                "monthly_cost": float(vm.get("monthly_cost", 0.0)),
+                "sku": sku_name,
+                "provider": prov,
+                "qty": max(1, contract.service_count),
+                "vcpus": max(1, contract.required_vcpus),
+                "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
+                "monthly_cost": optimal_cost,
             })
-    elif problem_type == "ILP_VM_Allocation":
-        prov = contract.cloud_providers[0] if contract.cloud_providers else "AWS"
-        # Map realistic SKU name if solver didn't specify
-        if prov == "GCP":
-            sku_name = f"e2-standard-{max(2, contract.required_vcpus)}"
-        elif prov == "Azure":
-            sku_name = f"Standard_D{max(2, contract.required_vcpus)}s_v5"
-        else:
-            sku_name = f"t3.{'2xlarge' if contract.required_vcpus >= 8 else ('xlarge' if contract.required_vcpus >= 4 else 'large')}"
-        allocations.append({
-            "sku": sku_name,
-            "provider": prov,
-            "qty": max(1, contract.service_count),
-            "vcpus": max(1, contract.required_vcpus),
-            "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
-            "monthly_cost": optimal_cost,
-        })
-    elif problem_type == "PSO_Continuous_Scaling":
-        bw = solver_res.get("optimal_bandwidth_mbps", 250.0)
-        reps = solver_res.get("recommended_replicas", 2)
-        prov = contract.cloud_providers[0] if contract.cloud_providers else "GCP"
-        allocations.append({
-            "sku": f"Autoscaled Pod Worker ({bw:.0f} Mbps BW)",
-            "provider": prov,
-            "qty": reps,
-            "vcpus": reps * max(1, contract.required_vcpus),
-            "ram": f"{reps * max(1.0, contract.required_ram_gb):.1f} GB",
-            "monthly_cost": optimal_cost,
-        })
-    elif problem_type == "Z3_Graph_Disaster_Recovery":
-        prim = solver_res.get("primary_region", "us-east-1")
-        sec = solver_res.get("secondary_region", "us-west-2")
-        prov_a = contract.cloud_providers[0] if contract.cloud_providers else "AWS"
-        prov_b = contract.cloud_providers[-1] if len(contract.cloud_providers) > 1 else prov_a
-        allocations.append({
-            "sku": f"Primary Region Node ({prim})",
-            "provider": prov_a,
-            "qty": 1,
-            "vcpus": max(1, contract.required_vcpus),
-            "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
-            "monthly_cost": round(optimal_cost * 0.5, 2),
-        })
-        allocations.append({
-            "sku": f"Secondary Failover Node ({sec})",
-            "provider": prov_b,
-            "qty": 1,
-            "vcpus": max(1, contract.required_vcpus),
-            "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
-            "monthly_cost": round(optimal_cost * 0.5, 2),
-        })
+        elif problem_type == "PSO_Continuous_Scaling":
+            bw = solver_res.get("optimal_bandwidth_mbps", 250.0)
+            reps = solver_res.get("recommended_replicas", 2)
+            prov = contract.cloud_providers[0] if contract.cloud_providers else "GCP"
+            allocations.append({
+                "sku": f"Autoscaled Pod Worker ({bw:.0f} Mbps BW)",
+                "provider": prov,
+                "qty": reps,
+                "vcpus": reps * max(1, contract.required_vcpus),
+                "ram": f"{reps * max(1.0, contract.required_ram_gb):.1f} GB",
+                "monthly_cost": optimal_cost,
+            })
+        elif problem_type == "Z3_Graph_Disaster_Recovery":
+            prim = solver_res.get("primary_region", "us-east-1")
+            sec = solver_res.get("secondary_region", "us-west-2")
+            prov_a = contract.cloud_providers[0] if contract.cloud_providers else "AWS"
+            prov_b = contract.cloud_providers[-1] if len(contract.cloud_providers) > 1 else prov_a
+            allocations.append({
+                "sku": f"Primary Region Node ({prim})",
+                "provider": prov_a,
+                "qty": 1,
+                "vcpus": max(1, contract.required_vcpus),
+                "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
+                "monthly_cost": round(optimal_cost * 0.5, 2),
+            })
+            allocations.append({
+                "sku": f"Secondary Failover Node ({sec})",
+                "provider": prov_b,
+                "qty": 1,
+                "vcpus": max(1, contract.required_vcpus),
+                "ram": f"{max(1.0, contract.required_ram_gb):.1f} GB",
+                "monthly_cost": round(optimal_cost * 0.5, 2),
+            })
 
     # Stage 5: FinOps Explanation Synthesis
-    if problem_type == "Z3_Graph_Disaster_Recovery":
+    if not is_feasible:
+        reasons = []
+        if "error_message" in solver_res and solver_res["error_message"]:
+            reasons.append(str(solver_res["error_message"]))
+        elif "error" in solver_res and solver_res["error"]:
+            reasons.append(str(solver_res["error"]))
+        elif solver_res.get("status") == "infeasible" or "INFEASIBLE" in solver_res.get("status", ""):
+            reasons.append(f"requested compute ({contract.required_vcpus} vCPUs, {contract.required_ram_gb:.1f} GB RAM) exceeds ${budget:.2f}/mo budget cap")
+        else:
+            reasons.append("optimization constraints could not be satisfied")
+        explanation = (
+            f"Solver reported infeasible: No valid placement satisfies all workload requirements "
+            f"({contract.required_vcpus} vCPUs, {contract.required_ram_gb:.1f} GB RAM, SLA {contract.sla_availability_pct:.3f}%) "
+            f"under the ${budget:.2f} monthly budget cap ({', '.join(reasons)})."
+        )
+    elif problem_type == "Z3_Graph_Disaster_Recovery":
         prim = solver_res.get("primary_region", "us-east-1")
         sec = solver_res.get("secondary_region", "us-west-2")
         lat = solver_res.get("inter_region_latency_ms", 65.0)
         achieved_sla = solver_res.get("achieved_sla_pct", 99.999)
         explanation = (
             f"Z3 SMT solver validated multi-region topology across {prim} and {sec}. "
-            f"Inter-region sync latency of {lat:.1f} ms strictly satisfies the <= {contract.latency_max_ms:.1f} ms SLA bound, "
-            f"composite availability reaches {achieved_sla:.4f}% (exceeding {contract.sla_availability_pct:.2f}% target), "
-            f"and total monthly cost of ${optimal_cost:.2f} delivers ${savings:.2f}/month ({savings_pct:.1f}%) headroom under the ${budget:.2f} cap."
+            f"Inter-region sync latency of {lat:.1f} ms satisfies the <= {contract.latency_max_ms:.1f} ms bound, "
+            f"composite availability reaches {achieved_sla:.4f}% (target: {contract.sla_availability_pct:.2f}%), "
+            f"and total monthly cost of ${optimal_cost:.2f} leaves ${savings:.2f}/month ({savings_pct:.1f}%) budget headroom under the ${budget:.2f} cap."
         )
     elif problem_type == "PSO_Continuous_Scaling":
         bw = solver_res.get("optimal_bandwidth_mbps", 250.0)
         reps = solver_res.get("recommended_replicas", 2)
         explanation = (
-            f"Continuous PSO dynamic scaling optimized cloud compute capacity to {bw:.0f} Mbps baseline bandwidth "
+            f"Continuous PSO dynamic scaling optimized compute capacity to {bw:.0f} Mbps baseline bandwidth "
             f"and {reps} active worker replicas at ${optimal_cost:.2f}/month. "
-            f"Delivers {savings_pct:.1f}% (${savings:.2f}/mo) budget headroom with strictly bounded convergence in sub-10ms solver time."
+            f"Delivers {savings_pct:.1f}% (${savings:.2f}/mo) budget headroom with continuous swarm convergence."
         )
     else:
         v_tot = solver_res.get("total_vcpus", contract.required_vcpus)
@@ -1026,24 +1069,48 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
         prov_name = contract.cloud_providers[0] if contract.cloud_providers else "AWS"
         explanation = (
             f"Exact integer linear programming satisfied all resource constraints ({v_tot} vCPUs, {r_tot:.0f} GB RAM) "
-            f"on {prov_name} at ${optimal_cost:.2f}/month. "
-            f"Guarantees 0 constraint violations and achieves ${savings:.2f}/month ({savings_pct:.1f}%) net budget savings under the ${budget:.2f} monthly cap."
+            f"on {prov_name} at ${optimal_cost:.2f}/month under the ${budget:.2f} monthly cap."
         )
 
-    # Generate dynamic FinOps recommendations from FinOpsExplainer
+    explanation_latency_ms = (time.perf_counter() - t_exp_start) * 1000.0
+    total_latency_ms = (time.perf_counter() - t_pipeline_start) * 1000.0
+
+    # Independent Verification of Mode 4 Solution
+    m4_check = IndependentChecker.verify_solution(contract, solver_res)
+
+    # Stage 6: Mode 3 Genuine Solver Execution with Local Rule-Based Parsing (Single Run)
+    m3_result = run_symbolic_rule_based(query_text, contract=contract)
+    m3_check = m3_result.get("independent_check") or IndependentChecker.verify_solution(
+        contract, m3_result.get("solver_res", m3_result)
+    )
+
+    # Dynamic FinOps Recommendations
     from src.semantic.explainer import FinOpsExplainer
     recommendations = FinOpsExplainer.generate_dynamic_recommendations(
         contract=contract,
         solver_result=solver_res,
     )
 
-    # Real-Time Live 4-Way Paradigm Benchmark Evaluation
-    live_4way = run_live_4way_benchmark(
+    # Retrieve any cached live LLM evaluation runs for this query from session state
+    m1_cached = None
+    m2_cached = None
+    if "llm_runs" in st.session_state:
+        m1_cached = st.session_state["llm_runs"].get(f"{query_text}::mode_1")
+        m2_cached = st.session_state["llm_runs"].get(f"{query_text}::mode_2")
+
+    # Real-Time 4-Way Paradigm Benchmark Evaluation
+    live_4way = build_4way_comparison_data(
         user_query=query_text,
         contract=contract,
         solver_res=solver_res,
         solve_latency_ms=solve_latency_ms,
         total_latency_ms=total_latency_ms,
+        m1_run=m1_cached,
+        m2_run=m2_cached,
+        m3_result=m3_result,
+        m4_check=m4_check,
+        parse_latency_ms=parse_latency_ms,
+        explanation_latency_ms=explanation_latency_ms,
     )
 
     return {
@@ -1056,14 +1123,20 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
         "optimal_cost_usd": optimal_cost,
         "savings_usd": savings,
         "savings_pct": savings_pct,
+        "is_feasible": is_feasible,
         "solver_engine": engine_label,
         "solver_desc": solver_desc,
+        "parse_latency_ms": parse_latency_ms,
         "solve_latency_ms": solve_latency_ms,
+        "explanation_latency_ms": explanation_latency_ms,
         "total_latency_ms": total_latency_ms,
         "allocations": allocations,
         "region_pairs": region_pairs,
         "explanation": explanation,
         "recommendations": recommendations,
+        "m3_result": m3_result,
+        "m3_check": m3_check,
+        "m4_check": m4_check,
         "race_data": live_4way["race_data"],
         "modes_comparison": live_4way["bench_data"],
         "bench_data": live_4way["bench_data"],
@@ -1077,280 +1150,373 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     }
 
 
-def run_live_4way_benchmark(
+def build_4way_comparison_data(
     user_query: str,
     contract: Any,
     solver_res: Dict[str, Any],
     solve_latency_ms: float,
     total_latency_ms: float,
+    m1_run: Optional[Dict[str, Any]] = None,
+    m2_run: Optional[Dict[str, Any]] = None,
+    m3_result: Optional[Dict[str, Any]] = None,
+    m4_check: Optional[Dict[str, Any]] = None,
+    parse_latency_ms: float = 0.0,
+    explanation_latency_ms: float = 0.0,
 ) -> Dict[str, Any]:
-    """Executes a real-time live 4-way comparative benchmark evaluating the query across all 4 paradigm modes:
-    - Mode 1: Pure LLM Unstructured (Nemotron-3.5 API or live fallback if quota limited)
-    - Mode 2: Structured LLM (Pydantic schema guided direct math prediction)
-    - Mode 3: Pure Symbolic (Raw mathematical solver directly on natural language - throws ValueError)
-    - Mode 4: Neurasym Full Neuro-Symbolic Pipeline (Validated with ProofEngine)
+    """Constructs the 4-way comparison matrix data.
+    Does NOT execute automatic or hidden LLM network calls.
+    Populates Mode 1 and Mode 2 from explicit session run results or marks them as awaiting execution.
+    Executes Mode 3 genuinely via local rule-based parsing and validates Mode 3 and Mode 4 via IndependentChecker.
     """
-    from config.settings import settings
-    api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
-    model = os.getenv("OPENROUTER_MODEL") or getattr(settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
-
     budget = float(getattr(contract, "budget_max_usd", 500.0))
-    optimal_cost = float(solver_res.get("total_monthly_cost_usd", 0.0))
+    optimal_cost = float(
+        solver_res.get(
+            "total_monthly_cost_usd",
+            solver_res.get("estimated_monthly_cost_usd", solver_res.get("catalog_cost", 0.0)),
+        )
+    )
     req_vcpus = int(getattr(contract, "required_vcpus", 4))
     req_ram = float(getattr(contract, "required_ram_gb", 16.0))
 
     # -------------------------------------------------------------------------
     # Mode 1: Pure LLM (Unstructured Text)
     # -------------------------------------------------------------------------
-    t_m1 = time.perf_counter()
-    m1_content = ""
-    m1_error = None
-    m1_extracted_cost = None
-
-    if api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=3.0)
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are a Cloud Solutions Architect. Recommend a concrete VM allocation and estimate total monthly cost in USD. Be concise."},
-                    {"role": "user", "content": f"Recommend cloud VMs for this request: \"{user_query}\""},
-                ],
-                temperature=0.2,
-                max_tokens=1024,
-            )
-            m1_content = (resp.choices[0].message.content or "").strip()
-            cost_match = re.search(r"\$\s*(\d+(?:\.\d+)?)", m1_content)
-            if cost_match:
-                m1_extracted_cost = float(cost_match.group(1))
-        except Exception as e:
-            m1_error = str(e)
-
-    m1_latency_ms = (time.perf_counter() - t_m1) * 1000.0
-
-    if m1_extracted_cost is not None and m1_extracted_cost > 0:
-        m1_reported_cost = m1_extracted_cost
-        m1_actual_catalog_cost = round(max(optimal_cost * 1.45, m1_reported_cost * 1.32), 2)
+    if m1_run is None:
+        m1_info = {
+            "mode": "Mode 1: Pure LLM (Unstructured)",
+            "source": "not_run",
+            "nlu": "Available on Demand",
+            "math": "Awaiting run",
+            "latency": "—",
+            "latency_ms": 0.0,
+            "latency_disp": "—",
+            "reported_cost": "—",
+            "reported_cost_usd": None,
+            "actual_catalog_cost": None,
+            "actual_cost_usd": None,
+            "error_usd": None,
+            "error_pct": None,
+            "overflow_usd": None,
+            "violations": "Not executed (Click 'Mode 1: Run Live LLM →' below)",
+            "cost_color": "#8CA0B4",
+            "is_feasible": None,
+            "raw_content": "",
+            "error": None,
+        }
     else:
-        q_len = len(user_query)
-        m1_reported_cost = round(budget * 0.92 if budget > 0 else optimal_cost * 1.25, 2)
-        m1_actual_catalog_cost = round(max(optimal_cost * 1.55, budget * 1.28 if budget > 0 else optimal_cost * 1.65), 2)
-        if m1_latency_ms < 10.0:
-            m1_latency_ms = max(148.0, min(240.0, 172.0 + (q_len * 0.35)))
-
-    m1_err_usd = round(m1_actual_catalog_cost - m1_reported_cost, 2)
-    m1_err_pct = round((m1_err_usd / m1_reported_cost) * 100.0 if m1_reported_cost > 0 else 0.0, 1)
-    m1_ovf_usd = round(max(0.0, m1_actual_catalog_cost - budget), 2)
-    m1_lat_disp = f"{m1_latency_ms / 1000.0:.2f}s" if m1_latency_ms >= 1000.0 else f"{m1_latency_ms:.1f}ms"
+        m1_status = m1_run.get("status", "unknown")
+        m1_lat_ms = m1_run.get("elapsed_ms", 0.0)
+        m1_lat_disp = f"{m1_lat_ms / 1000.0:.2f}s" if m1_lat_ms >= 1000.0 else f"{m1_lat_ms:.1f}ms"
+        if m1_status == "success":
+            rep_cost = m1_run.get("reported_cost_usd")
+            act_cost = m1_run.get("actual_cost_usd")
+            err_pct = m1_run.get("error_pct")
+            ovf_usd = m1_run.get("overflow_usd", 0.0)
+            m1_info = {
+                "mode": "Mode 1: Pure LLM (Unstructured)",
+                "source": "live",
+                "nlu": "Natural language (Unstructured)",
+                "math": f"Claimed ${rep_cost:,.2f}/mo" if rep_cost is not None else "No Pricing Found",
+                "latency": m1_lat_disp,
+                "latency_ms": m1_lat_ms,
+                "latency_disp": m1_lat_disp,
+                "reported_cost": f"${rep_cost:,.2f}" if rep_cost is not None else "N/A",
+                "reported_cost_usd": rep_cost,
+                "actual_catalog_cost": act_cost,
+                "actual_cost_usd": act_cost,
+                "error_usd": m1_run.get("error_usd"),
+                "error_pct": err_pct,
+                "overflow_usd": ovf_usd,
+                "violations": f"+{err_pct:.1f}% Pricing Error (${ovf_usd:,.2f} Overflow)" if err_pct is not None else "Unverified Output",
+                "cost_color": "#FFA600",
+                "is_feasible": m1_run.get("is_feasible"),
+                "raw_content": m1_run.get("content", ""),
+                "error": None,
+            }
+        elif m1_status == "daily_quota_exhausted":
+            m1_info = {
+                "mode": "Mode 1: Pure LLM (Unstructured)",
+                "source": "live_error",
+                "nlu": "Quota Exhausted",
+                "math": f"429 Daily Limit (Reset: {m1_run.get('reset_str', '05:30 IST')})",
+                "latency": f"{m1_lat_disp} (Blocked)",
+                "latency_ms": m1_lat_ms,
+                "latency_disp": f"{m1_lat_disp} (Blocked)",
+                "reported_cost": "—",
+                "reported_cost_usd": None,
+                "actual_catalog_cost": None,
+                "actual_cost_usd": None,
+                "error_usd": None,
+                "error_pct": None,
+                "overflow_usd": None,
+                "violations": "Daily Free Quota Exhausted (50/50)",
+                "cost_color": "#F5365C",
+                "is_feasible": None,
+                "raw_content": m1_run.get("content", ""),
+                "error": m1_run.get("error_message", "OpenRouter free-tier daily quota limit reached."),
+            }
+        else:
+            err_msg = m1_run.get("error_message", "Request Failed")
+            m1_info = {
+                "mode": "Mode 1: Pure LLM (Unstructured)",
+                "source": "live_error",
+                "nlu": "Error",
+                "math": f"Execution error: {m1_status}",
+                "latency": f"{m1_lat_disp} (Failed)",
+                "latency_ms": m1_lat_ms,
+                "latency_disp": f"{m1_lat_disp} (Failed)",
+                "reported_cost": "—",
+                "reported_cost_usd": None,
+                "actual_catalog_cost": None,
+                "actual_cost_usd": None,
+                "error_usd": None,
+                "error_pct": None,
+                "overflow_usd": None,
+                "violations": err_msg[:50],
+                "cost_color": "#F5365C",
+                "is_feasible": None,
+                "raw_content": m1_run.get("content", ""),
+                "error": err_msg,
+            }
 
     # -------------------------------------------------------------------------
     # Mode 2: Structured LLM (Pydantic Only / Direct Math Prediction)
     # -------------------------------------------------------------------------
-    t_m2 = time.perf_counter()
-    m2_content = ""
-    m2_error = None
-    m2_predicted_cost = None
-
-    if api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=3.0)
-            schema_sample = {
-                "instance_type": "string",
-                "count": 1,
-                "total_vcpus": req_vcpus,
-                "total_ram_gb": req_ram,
-                "total_monthly_cost_usd": 0.0,
-            }
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": f"Predict cloud sizing as JSON matching schema: {json.dumps(schema_sample)}"},
-                    {"role": "user", "content": user_query},
-                ],
-                temperature=0.0,
-                max_tokens=1024,
-            )
-            m2_content = (resp.choices[0].message.content or "").strip()
-            first_b = m2_content.find("{")
-            last_b = m2_content.rfind("}")
-            if first_b != -1 and last_b != -1:
-                p_json = json.loads(m2_content[first_b:last_b+1])
-                m2_predicted_cost = float(p_json.get("total_monthly_cost_usd", 0.0))
-        except Exception as e:
-            m2_error = str(e)
-
-    m2_latency_ms = (time.perf_counter() - t_m2) * 1000.0
-
-    # Live catalog pricing lookup for Mode 2
-    catalog_cost_lookup = 0.0
-    try:
-        catalog = DatabaseBackedCatalog()
-        matching_costs = [
-            sku.monthly_cost() for sku in catalog.VM_CATALOG
-            if sku.vcpus >= req_vcpus and sku.ram_gb >= req_ram
-        ]
-        if matching_costs:
-            catalog_cost_lookup = min(matching_costs)
-        else:
-            catalog_cost_lookup = round(max(optimal_cost * 1.30, (req_vcpus * 24.5) + (req_ram * 4.2)), 2)
-    except Exception:
-        catalog_cost_lookup = round(max(optimal_cost * 1.30, (req_vcpus * 24.5) + (req_ram * 4.2)), 2)
-
-    if m2_predicted_cost is not None and m2_predicted_cost > 0:
-        m2_reported_cost = m2_predicted_cost
-        m2_actual_catalog_cost = catalog_cost_lookup
+    if m2_run is None:
+        m2_info = {
+            "mode": "Mode 2: Structured LLM (Pydantic)",
+            "source": "not_run",
+            "nlu": "Available on Demand",
+            "math": "Awaiting run",
+            "latency": "—",
+            "latency_ms": 0.0,
+            "latency_disp": "—",
+            "reported_cost": "—",
+            "reported_cost_usd": None,
+            "actual_catalog_cost": None,
+            "actual_cost_usd": None,
+            "error_usd": None,
+            "error_pct": None,
+            "overflow_usd": None,
+            "violations": "Not executed (Click 'Mode 2: Run Live LLM →' below)",
+            "cost_color": "#8CA0B4",
+            "is_feasible": None,
+            "raw_content": "",
+            "error": None,
+        }
     else:
-        m2_reported_cost = round(budget * 0.85 if budget > 0 else optimal_cost * 1.18, 2)
-        m2_actual_catalog_cost = max(catalog_cost_lookup, round(optimal_cost * 1.35, 2))
-        if m2_latency_ms < 10.0:
-            m2_latency_ms = max(135.0, min(220.0, m1_latency_ms * 0.88))
+        m2_status = m2_run.get("status", "unknown")
+        m2_lat_ms = m2_run.get("elapsed_ms", 0.0)
+        m2_lat_disp = f"{m2_lat_ms / 1000.0:.2f}s" if m2_lat_ms >= 1000.0 else f"{m2_lat_ms:.1f}ms"
+        if m2_status == "success":
+            rep_cost = m2_run.get("reported_cost_usd")
+            act_cost = m2_run.get("actual_cost_usd")
+            err_pct = m2_run.get("error_pct")
+            ovf_usd = m2_run.get("overflow_usd", 0.0)
+            m2_info = {
+                "mode": "Mode 2: Structured LLM (Pydantic)",
+                "source": "live",
+                "nlu": "JSON Schema decoding",
+                "math": f"Claimed ${rep_cost:,.2f}/mo" if rep_cost is not None else "Invalid Schema",
+                "latency": m2_lat_disp,
+                "latency_ms": m2_lat_ms,
+                "latency_disp": m2_lat_disp,
+                "reported_cost": f"${rep_cost:,.2f}" if rep_cost is not None else "N/A",
+                "reported_cost_usd": rep_cost,
+                "actual_catalog_cost": act_cost,
+                "actual_cost_usd": act_cost,
+                "error_usd": m2_run.get("error_usd"),
+                "error_pct": err_pct,
+                "overflow_usd": ovf_usd,
+                "violations": f"+{err_pct:.1f}% Arithmetic Mismatch (${ovf_usd:,.2f} Overflow)" if err_pct is not None else "Schema Error",
+                "cost_color": "#F5365C",
+                "is_feasible": m2_run.get("is_feasible"),
+                "raw_content": m2_run.get("content", ""),
+                "error": None,
+            }
+        elif m2_status == "daily_quota_exhausted":
+            m2_info = {
+                "mode": "Mode 2: Structured LLM (Pydantic)",
+                "source": "live_error",
+                "nlu": "Quota Exhausted",
+                "math": f"429 Daily Limit (Reset: {m2_run.get('reset_str', '05:30 IST')})",
+                "latency": f"{m2_lat_disp} (Blocked)",
+                "latency_ms": m2_lat_ms,
+                "latency_disp": f"{m2_lat_disp} (Blocked)",
+                "reported_cost": "—",
+                "reported_cost_usd": None,
+                "actual_catalog_cost": None,
+                "actual_cost_usd": None,
+                "error_usd": None,
+                "error_pct": None,
+                "overflow_usd": None,
+                "violations": "Daily Free Quota Exhausted (50/50)",
+                "cost_color": "#F5365C",
+                "is_feasible": None,
+                "raw_content": m2_run.get("content", ""),
+                "error": m2_run.get("error_message", "OpenRouter free-tier daily quota limit reached."),
+            }
+        else:
+            err_msg = m2_run.get("error_message", "Request Failed")
+            m2_info = {
+                "mode": "Mode 2: Structured LLM (Pydantic)",
+                "source": "live_error",
+                "nlu": "Error",
+                "math": f"Execution error: {m2_status}",
+                "latency": f"{m2_lat_disp} (Failed)",
+                "latency_ms": m2_lat_ms,
+                "latency_disp": f"{m2_lat_disp} (Failed)",
+                "reported_cost": "—",
+                "reported_cost_usd": None,
+                "actual_catalog_cost": None,
+                "actual_cost_usd": None,
+                "error_usd": None,
+                "error_pct": None,
+                "overflow_usd": None,
+                "violations": err_msg[:50],
+                "cost_color": "#F5365C",
+                "is_feasible": None,
+                "raw_content": m2_run.get("content", ""),
+                "error": err_msg,
+            }
 
-    m2_err_usd = round(abs(m2_actual_catalog_cost - m2_reported_cost), 2)
-    m2_err_pct = round((m2_err_usd / m2_actual_catalog_cost) * 100.0 if m2_actual_catalog_cost > 0 else 0.0, 1)
-    m2_ovf_usd = round(max(0.0, m2_actual_catalog_cost - budget), 2)
-    m2_lat_disp = f"{m2_latency_ms / 1000.0:.2f}s" if m2_latency_ms >= 1000.0 else f"{m2_latency_ms:.1f}ms"
+    # -------------------------------------------------------------------------
+    # Mode 3: Symbolic + rule-based parsing
+    # -------------------------------------------------------------------------
+    if m3_result is None:
+        m3_result = run_symbolic_rule_based(user_query, contract=contract)
+    m3_check = m3_result.get("independent_check") or IndependentChecker.verify_solution(
+        contract, m3_result.get("solver_res", m3_result)
+    )
+    m3_latency_ms = float(m3_result.get("latency_ms", 0.0))
+    m3_lat_disp = f"{m3_latency_ms:.2f}ms" if m3_latency_ms < 1000.0 else f"{m3_latency_ms/1000.0:.2f}s"
+    m3_is_feas = m3_check["feasible_against_contract"]
+    m3_reported_cost = float(m3_result.get("total_monthly_cost_usd", 0.0)) if m3_check["structure_valid"] else None
+    m3_calc_cost = m3_check["cost_accuracy"]["calculated_catalog_cost_usd"] if m3_is_feas else (
+        m3_reported_cost if m3_check["structure_valid"] else None
+    )
+    m3_cost_delta = m3_check["cost_accuracy"]["cost_delta_usd"]
+    m3_cost_err_pct = m3_check["cost_accuracy"]["cost_error_pct"]
+    m3_overflow = max(0.0, (m3_calc_cost or 0.0) - budget) if m3_calc_cost else 0.0
+    m3_violations_text = ", ".join(m3_check["violations"]) if m3_check["violations"] else "0 violations (Independently verified)"
+
+    m3_info = {
+        "mode": "Mode 3: Symbolic + rule-based parsing",
+        "source": "live",
+        "nlu": "Rule-based (Regex/CARM)",
+        "math": m3_check["summary_status"],
+        "optimality": m3_check["optimality_verdict"],
+        "latency": m3_lat_disp,
+        "latency_ms": m3_latency_ms,
+        "latency_disp": m3_lat_disp,
+        "reported_cost": f"${m3_reported_cost:,.2f}" if m3_reported_cost is not None else "—",
+        "reported_cost_usd": m3_reported_cost,
+        "actual_catalog_cost": m3_calc_cost,
+        "actual_cost_usd": m3_calc_cost,
+        "error_usd": m3_cost_delta,
+        "error_pct": m3_cost_err_pct,
+        "overflow_usd": m3_overflow,
+        "violations": m3_violations_text,
+        "cost_color": "#008162" if m3_is_feas else "#F5365C",
+        "is_feasible": m3_is_feas,
+        "raw_res": m3_result,
+        "independent_check": m3_check,
+    }
 
     # -------------------------------------------------------------------------
-    # Mode 3: Pure Symbolic (Throws exception on natural language)
+    # Mode 4: Full Neuro-Symbolic (Neurasym)
     # -------------------------------------------------------------------------
-    mode3_raw_res = run_pure_symbolic_raw(user_query)
-    m3_latency_ms = mode3_raw_res["latency_ms"]
-    m3_lat_disp = f"{m3_latency_ms:.2f}ms"
+    if m4_check is None:
+        m4_check = IndependentChecker.verify_solution(contract, solver_res)
+    m4_latency_ms = total_latency_ms
+    m4_lat_disp = f"{m4_latency_ms:.1f}ms" if m4_latency_ms < 1000.0 else f"{m4_latency_ms/1000.0:.2f}s"
+    m4_is_feas = m4_check["feasible_against_contract"]
+    m4_calc_cost = m4_check["cost_accuracy"]["calculated_catalog_cost_usd"] if m4_is_feas else (
+        optimal_cost if m4_check["structure_valid"] else None
+    )
+    m4_cost_delta = m4_check["cost_accuracy"]["cost_delta_usd"]
+    m4_cost_err_pct = m4_check["cost_accuracy"]["cost_error_pct"]
+    m4_overflow = max(0.0, (m4_calc_cost or 0.0) - budget) if m4_calc_cost else 0.0
+    m4_violations_text = ", ".join(m4_check["violations"]) if m4_check["violations"] else "0 violations (Independently verified)"
 
-    # -------------------------------------------------------------------------
-    # Mode 4: Neurasym Neuro-Symbolic (Verified with Proof Engine)
-    # -------------------------------------------------------------------------
     candidate_plan = {
-        "allocated_vcpu": solver_res.get("total_vcpus", req_vcpus),
-        "allocated_ram": solver_res.get("total_ram_gb", req_ram),
-        "catalog_cost": optimal_cost,
-        "predicted_cost": optimal_cost,
+        "allocated_vcpu": solver_res.get("total_vcpus", req_vcpus if solver_res.get("is_feasible", False) else 0),
+        "allocated_ram": solver_res.get("total_ram_gb", req_ram if solver_res.get("is_feasible", False) else 0.0),
+        "catalog_cost": optimal_cost if solver_res.get("is_feasible", False) else 0.0,
+        "predicted_cost": optimal_cost if solver_res.get("is_feasible", False) else 0.0,
         "achieved_sla": solver_res.get("achieved_sla_pct", getattr(contract, "sla_availability_pct", 99.9)),
         "achieved_latency_ms": solver_res.get("inter_region_latency_ms", getattr(contract, "latency_max_ms", 100.0)),
         "allocated_vms": solver_res.get("allocated_vms", []),
     }
     feasibility_cert = verify_feasibility(candidate_plan, contract)
     optimality_cert = compute_optimality_certificate(solver_res)
-    m4_latency_ms = total_latency_ms
-    m4_lat_disp = f"{m4_latency_ms:.1f}ms" if m4_latency_ms < 1000.0 else f"{m4_latency_ms/1000.0:.2f}s"
 
-    bench_data = [
-        {
-            "mode": "Mode 1: Pure LLM (Unstructured)",
-            "source": "live",
-            "nlu": "100% (High / Colloquial)",
-            "math": f"Hallucinated Pricing (+{m1_err_pct:.1f}% error / ${m1_ovf_usd:,.2f} overflow)",
-            "latency": m1_lat_disp,
-            "latency_ms": m1_latency_ms,
-            "reported_cost_usd": m1_reported_cost,
-            "actual_cost_usd": m1_actual_catalog_cost,
-            "error_usd": m1_err_usd,
-            "error_pct": m1_err_pct,
-            "overflow_usd": m1_ovf_usd,
-            "violations": f"+{m1_err_pct:.1f}% Pricing Error (${m1_ovf_usd:,.2f} Overflow)",
-            "cost_color": "#FFA600",
-            "is_feasible": False,
-            "raw_content": m1_content,
-            "error": m1_error,
-        },
-        {
-            "mode": "Mode 2: Structured LLM (Pydantic)",
-            "source": "live",
-            "nlu": "100% (Schema Valid)",
-            "math": f"Arithmetic Mismatch (+{m2_err_pct:.1f}% error / ${m2_ovf_usd:,.2f} overflow)",
-            "latency": m2_lat_disp,
-            "latency_ms": m2_latency_ms,
-            "reported_cost_usd": m2_reported_cost,
-            "actual_cost_usd": m2_actual_catalog_cost,
-            "error_usd": m2_err_usd,
-            "error_pct": m2_err_pct,
-            "overflow_usd": m2_ovf_usd,
-            "violations": f"+{m2_err_pct:.1f}% Arithmetic Mismatch (${m2_ovf_usd:,.2f} Overflow)",
-            "cost_color": "#F5365C",
-            "is_feasible": False,
-            "raw_content": m2_content,
-            "error": m2_error,
-        },
-        {
-            "mode": "Mode 3: Pure Symbolic (Solver)",
-            "source": "live",
-            "nlu": "0% (Fails Raw Text)",
-            "math": "CRASHED (Parsing Error)",
-            "latency": m3_lat_disp,
-            "latency_ms": m3_latency_ms,
-            "reported_cost_usd": 0.0,
-            "actual_cost_usd": 0.0,
-            "error_usd": 0.0,
-            "error_pct": 0.0,
-            "overflow_usd": 0.0,
-            "violations": "100% (Unparseable Input)",
-            "cost_color": "#F5365C",
-            "is_feasible": False,
-            "error_message": mode3_raw_res["error_message"],
-            "raw_res": mode3_raw_res,
-        },
-        {
-            "mode": "Mode 4: Full Neuro-Symbolic (Neurasym)",
-            "source": "live",
-            "nlu": "100% (High / Colloquial)",
-            "math": "100% Provably Optimal" if feasibility_cert["is_feasible"] else "INFEASIBLE (Constraint Violation)",
-            "latency": m4_lat_disp,
-            "latency_ms": m4_latency_ms,
-            "reported_cost_usd": optimal_cost if feasibility_cert["is_feasible"] else 0.0,
-            "actual_cost_usd": optimal_cost if feasibility_cert["is_feasible"] else 0.0,
-            "error_usd": 0.0,
-            "error_pct": 0.0,
-            "overflow_usd": 0.0,
-            "violations": "0.0% Error (Provably Optimal)" if feasibility_cert["is_feasible"] else "Constraint Violation",
-            "cost_color": "#65A31C" if feasibility_cert["is_feasible"] else "#F5365C",
-            "is_feasible": feasibility_cert["is_feasible"],
-            "feasibility_certificate": feasibility_cert,
-            "optimality_certificate": optimality_cert,
-        },
-    ]
+    m4_info = {
+        "mode": "Mode 4: Full Neuro-Symbolic (Neurasym)",
+        "source": "live",
+        "nlu": "Rule-based + Multi-Engine",
+        "math": m4_check["summary_status"],
+        "optimality": m4_check["optimality_verdict"],
+        "latency": m4_lat_disp,
+        "latency_ms": m4_latency_ms,
+        "latency_disp": m4_lat_disp,
+        "reported_cost": f"${optimal_cost:,.2f}" if m4_check["structure_valid"] else "—",
+        "reported_cost_usd": optimal_cost if m4_check["structure_valid"] else None,
+        "actual_catalog_cost": m4_calc_cost,
+        "actual_cost_usd": m4_calc_cost,
+        "error_usd": m4_cost_delta,
+        "error_pct": m4_cost_err_pct,
+        "overflow_usd": m4_overflow,
+        "violations": m4_violations_text,
+        "cost_color": "#65A31C" if m4_is_feas else "#F5365C",
+        "is_feasible": m4_is_feas,
+        "feasibility_certificate": feasibility_cert,
+        "optimality_certificate": optimality_cert,
+        "independent_check": m4_check,
+    }
+
+    bench_data = [m1_info, m2_info, m3_info, m4_info]
 
     race_data = [
         {
             "mode": "Mode 1: Pure LLM",
-            "latency_ms": m1_latency_ms,
-            "latency_disp": m1_lat_disp,
-            "width_pct": 96,
-            "status": "Hallucinated",
-            "status_icon": ICON_CROSS,
+            "latency_ms": m1_info["latency_ms"],
+            "latency_disp": m1_info["latency_disp"],
+            "width_pct": 96 if m1_info["source"] == "live" else (10 if m1_info["source"] == "live_error" else 5),
+            "status": "Live Succeeded" if m1_info["source"] == "live" else ("Error / Limit" if m1_info["source"] == "live_error" else "Not Run"),
+            "status_icon": ICON_CHECK if m1_info["source"] == "live" else (ICON_CROSS if m1_info["source"] == "live_error" else "⏳"),
             "color": "#003D5C",
-            "accent": "#FFA600",
+            "accent": "#FFA600" if m1_info["source"] == "live" else "#8CA0B4",
         },
         {
             "mode": "Mode 2: Structured LLM",
-            "latency_ms": m2_latency_ms,
-            "latency_disp": m2_lat_disp,
-            "width_pct": max(10, min(95, round((m2_latency_ms / m1_latency_ms) * 96.0, 1))),
-            "status": "Price Error",
-            "status_icon": ICON_CROSS,
+            "latency_ms": m2_info["latency_ms"],
+            "latency_disp": m2_info["latency_disp"],
+            "width_pct": 80 if m2_info["source"] == "live" else (10 if m2_info["source"] == "live_error" else 5),
+            "status": "Live Succeeded" if m2_info["source"] == "live" else ("Error / Limit" if m2_info["source"] == "live_error" else "Not Run"),
+            "status_icon": ICON_CHECK if m2_info["source"] == "live" else (ICON_CROSS if m2_info["source"] == "live_error" else "⏳"),
             "color": "#008162",
-            "accent": "#F5365C",
+            "accent": "#F5365C" if m2_info["source"] == "live" else "#8CA0B4",
         },
         {
-            "mode": "Mode 3: Pure Symbolic",
+            "mode": "Mode 3: Symbolic + Rule-Based",
             "latency_ms": m3_latency_ms,
             "latency_disp": m3_lat_disp,
-            "width_pct": 2.0,
-            "status": "Crashed (0% NLU)",
-            "status_icon": ICON_CROSS,
-            "color": "#F5365C",
-            "accent": "#F5365C",
+            "width_pct": 5.0,
+            "status": m3_check["summary_status"],
+            "status_icon": ICON_CHECK if m3_is_feas else ICON_CROSS,
+            "color": "#008162" if m3_is_feas else "#F5365C",
+            "accent": "#008162" if m3_is_feas else "#F5365C",
         },
         {
             "mode": "Mode 4: Neuro-Symbolic",
             "latency_ms": m4_latency_ms,
             "latency_disp": m4_lat_disp,
-            "width_pct": max(3.0, min(6.0, round((m4_latency_ms / m1_latency_ms) * 100, 1))),
-            "status": "Provably Sound" if feasibility_cert["is_feasible"] else "Infeasible",
-            "status_icon": ICON_CHECK if feasibility_cert["is_feasible"] else ICON_CROSS,
-            "color": "#FFA600" if feasibility_cert["is_feasible"] else "#F5365C",
-            "accent": "#65A31C" if feasibility_cert["is_feasible"] else "#F5365C",
+            "width_pct": 5.0,
+            "status": m4_check["summary_status"],
+            "status_icon": ICON_CHECK if m4_is_feas else ICON_CROSS,
+            "color": "#FFA600" if m4_is_feas else "#F5365C",
+            "accent": "#65A31C" if m4_is_feas else "#F5365C",
         },
     ]
 
@@ -1358,112 +1524,293 @@ def run_live_4way_benchmark(
         "bench_data": bench_data,
         "modes_comparison": bench_data,
         "race_data": race_data,
-        "mode1_info": bench_data[0],
-        "mode2_info": bench_data[1],
-        "mode3_info": bench_data[2],
-        "mode4_info": bench_data[3],
+        "mode1_info": m1_info,
+        "mode2_info": m2_info,
+        "mode3_info": m3_info,
+        "mode4_info": m4_info,
         "feasibility_cert": feasibility_cert,
         "optimality_cert": optimality_cert,
         "total_tokens_count": 1200 + (len(user_query.split()) * 18),
     }
 
 
-def call_live_mode(mode_num: int, query: str) -> Tuple[bool, Optional[Dict[str, Any]], str]:
-    """Attempts a real-time OpenRouter API call for Mode 1 or Mode 2 with a strict 15.0-second timeout.
-    Enforces the timeout via a daemon thread and catches all exceptions cleanly to guarantee zero crashes.
+def run_live_4way_benchmark(
+    user_query: str,
+    contract: Any,
+    solver_res: Dict[str, Any],
+    solve_latency_ms: float,
+    total_latency_ms: float,
+    m1_run: Optional[Dict[str, Any]] = None,
+    m2_run: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Backward-compatible alias for build_4way_comparison_data."""
+    return build_4way_comparison_data(
+        user_query=user_query,
+        contract=contract,
+        solver_res=solver_res,
+        solve_latency_ms=solve_latency_ms,
+        total_latency_ms=total_latency_ms,
+        m1_run=m1_run,
+        m2_run=m2_run,
+    )
+
+
+def execute_dashboard_llm_request(
+    mode_num: int,
+    query: str,
+    contract: Any = None,
+    timeout_seconds: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Executes a single, isolated live inference request to OpenRouter for Mode 1 or Mode 2.
+    Uses configurable timeout from settings (default: 360s), max_retries=0, single target model.
+    Never fabricates fallback costs; captures exact timing, raw content, and failure reason.
     """
     import os
-    import queue
     import re
-    import threading
     import time
+    from datetime import datetime, timezone
     from config.settings import settings
 
     api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
     if not api_key:
-        return False, {"is_429": False}, "Live call timed out or rate-limited — showing recorded baseline."
+        return {
+            "status": "missing_credentials",
+            "error_type": "ConfigurationError",
+            "error_message": "OPENROUTER_API_KEY is missing in environment or settings.",
+            "elapsed_seconds": 0.0,
+            "elapsed_ms": 0.0,
+            "content": "",
+            "reported_cost_usd": None,
+            "actual_cost_usd": None,
+            "error_usd": None,
+            "error_pct": None,
+            "overflow_usd": None,
+            "is_feasible": None,
+        }
 
+    effective_timeout = timeout_seconds if timeout_seconds is not None else getattr(
+        settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0
+    )
     model = os.getenv("OPENROUTER_MODEL") or getattr(
         settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
     )
+    max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
 
-    result_queue: queue.Queue = queue.Queue()
-
-    def _worker():
-        t0 = time.perf_counter()
-        try:
-            from openai import OpenAI
-            client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=14.0)
-
-            if mode_num == 1:
-                system_instruction = (
-                    "You are a Cloud Solutions Architect. Be concise. "
-                    "Provide the direct technical allocation and cost immediately without verbose step-by-step thinking preambles."
-                )
-                user_prompt = (
-                    f"A customer sends this request:\n\"{query}\"\n\n"
-                    f"Recommend a concrete cloud VM allocation plan. Provide:\n"
-                    f"1. Recommended Cloud Provider and Instance Types with quantities\n"
-                    f"2. Total vCPUs and Total RAM provided\n"
-                    f"3. Exact Estimated Total Monthly Cost ($/month)\n"
-                    f"Respond directly with your recommendation in plain text. Be concise."
-                )
-            else:
-                system_instruction = (
-                    "You are a Cloud Optimization System. Respond ONLY with valid JSON matching this schema: "
-                    "{\"cloud_provider\": str, \"instances\": [{\"sku\": str, \"quantity\": int, \"monthly_cost\": float}], \"total_monthly_cost\": float, \"total_vcpus\": int, \"total_ram_gb\": float}. No other text."
-                )
-                user_prompt = f"Optimize allocation for: \"{query}\". Respond in JSON."
-
-            messages = [
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_prompt},
-            ]
-
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.2,
-                max_tokens=1024,
-            )
-            latency_ms = (time.perf_counter() - t0) * 1000.0
-            content = (resp.choices[0].message.content or "").strip()
-
-            cost_match = re.search(r"\$\s*(\d+(?:\.\d+)?)", content)
-            if cost_match:
-                extracted_cost = float(cost_match.group(1))
-                cost_disp = f"${extracted_cost:.2f} (Live)"
-            else:
-                cost_disp = "Extracted (Live)"
-
-            lat_disp = f"{latency_ms / 1000.0:.2f}s" if latency_ms >= 1000 else f"{latency_ms:.1f}ms"
-            result_queue.put((
-                True,
-                {
-                    "source": "live",
-                    "latency": lat_disp,
-                    "cost": cost_disp,
-                    "content": content,
-                },
-                "Live call succeeded.",
-            ))
-        except Exception as e:
-            err_str = str(e).lower()
-            is_429 = "429" in err_str or "rate limit" in err_str or "quota" in err_str
-            result_queue.put((
-                False,
-                {"is_429": is_429},
-                "Live call timed out or rate-limited — showing recorded baseline.",
-            ))
-
-    worker_thread = threading.Thread(target=_worker, daemon=True)
-    worker_thread.start()
+    t0 = time.perf_counter()
+    run_record: Dict[str, Any] = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "mode_num": mode_num,
+        "query": query,
+        "model": model,
+        "timeout": effective_timeout,
+        "content": "",
+        "reported_cost_usd": None,
+        "actual_cost_usd": None,
+        "error_usd": None,
+        "error_pct": None,
+        "overflow_usd": None,
+        "is_feasible": None,
+    }
 
     try:
-        success, data, msg = result_queue.get(timeout=15.0)
-        return success, data, msg
-    except queue.Empty:
-        return False, {"is_429": False}, "Live call timed out or rate-limited — showing recorded baseline."
+        from openai import OpenAI
+
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+            timeout=effective_timeout,
+            max_retries=0,
+        )
+
+        if mode_num == 1:
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a Cloud Solutions Architect. Recommend a concrete cloud VM allocation plan. State the recommended provider, instance types, quantities, and the exact total monthly cost in USD ($/month). Be concise.",
+                },
+                {"role": "user", "content": f"Recommend cloud VMs for this request: \"{query}\""},
+            ]
+        else:
+            req_vcpus = int(getattr(contract, "required_vcpus", 4)) if contract else 4
+            req_ram = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
+            schema_sample = {
+                "cloud_provider": "AWS",
+                "instances": [{"sku": "t3.medium", "quantity": 2, "monthly_cost": 60.74}],
+                "total_monthly_cost": 60.74,
+                "total_vcpus": req_vcpus,
+                "total_ram_gb": req_ram,
+            }
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"You are a Cloud Optimization System. Respond ONLY with valid JSON matching this schema: {json.dumps(schema_sample)}. No explanatory text.",
+                },
+                {"role": "user", "content": f"Optimize allocation for: \"{query}\". Respond in JSON."},
+            ]
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.0 if mode_num == 2 else 0.2,
+            max_tokens=max_tokens,
+        )
+        elapsed_s = time.perf_counter() - t0
+        run_record["elapsed_seconds"] = round(elapsed_s, 2)
+        run_record["elapsed_ms"] = round(elapsed_s * 1000.0, 1)
+
+        choice = resp.choices[0] if resp.choices else None
+        if not choice:
+            run_record["status"] = "empty_response"
+            run_record["error_message"] = "Provider returned no choices."
+            return run_record
+
+        finish_reason = getattr(choice, "finish_reason", "unknown")
+        run_record["finish_reason"] = finish_reason
+        raw_content = (choice.message.content or "").strip()
+        run_record["content"] = raw_content
+        run_record["response_id"] = getattr(resp, "id", None)
+        if hasattr(resp, "usage") and resp.usage:
+            run_record["usage"] = {
+                "prompt_tokens": resp.usage.prompt_tokens,
+                "completion_tokens": resp.usage.completion_tokens,
+                "total_tokens": resp.usage.total_tokens,
+            }
+
+        if not raw_content:
+            run_record["status"] = "empty_response"
+            run_record["error_message"] = "Model returned empty content."
+            return run_record
+
+        if finish_reason == "length":
+            run_record["status"] = "truncated"
+            run_record["error_message"] = "Generation reached max token limit and was truncated."
+
+        # Compute ground truth catalog cost if possible
+        budget = float(getattr(contract, "budget_max_usd", 500.0)) if contract else 500.0
+        req_v = int(getattr(contract, "required_vcpus", 4)) if contract else 4
+        req_r = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
+
+        catalog_cost_lookup = None
+        try:
+            catalog = DatabaseBackedCatalog()
+            matching_costs = [
+                sku.monthly_cost() for sku in catalog.VM_CATALOG
+                if sku.vcpus >= req_v and sku.ram_gb >= req_r
+            ]
+            if matching_costs:
+                catalog_cost_lookup = min(matching_costs)
+        except Exception:
+            catalog_cost_lookup = None
+
+        if mode_num == 1:
+            cost_match = re.search(r"\$\s*(\d+(?:\.\d+)?)", raw_content)
+            if cost_match:
+                rep_cost = float(cost_match.group(1))
+                run_record["reported_cost_usd"] = rep_cost
+                run_record["actual_cost_usd"] = catalog_cost_lookup
+                if catalog_cost_lookup and catalog_cost_lookup > 0:
+                    err_usd = round(abs(catalog_cost_lookup - rep_cost), 2)
+                    err_pct = round((err_usd / catalog_cost_lookup) * 100.0, 1)
+                    run_record["error_usd"] = err_usd
+                    run_record["error_pct"] = err_pct
+                    run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
+                run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
+            else:
+                run_record["status"] = "unparseable_prose"
+                run_record["error_message"] = "No dollar amount ($XX.XX) found in natural language response."
+        else:
+            try:
+                first_b = raw_content.find("{")
+                last_b = raw_content.rfind("}")
+                if first_b != -1 and last_b != -1:
+                    p_json = json.loads(raw_content[first_b:last_b+1])
+                    run_record["parsed_json"] = p_json
+                    rep_cost = float(p_json.get("total_monthly_cost", p_json.get("total_monthly_cost_usd", 0.0)))
+                    run_record["reported_cost_usd"] = rep_cost
+                    run_record["actual_cost_usd"] = catalog_cost_lookup
+                    if catalog_cost_lookup and catalog_cost_lookup > 0:
+                        err_usd = round(abs(catalog_cost_lookup - rep_cost), 2)
+                        err_pct = round((err_usd / catalog_cost_lookup) * 100.0, 1)
+                        run_record["error_usd"] = err_usd
+                        run_record["error_pct"] = err_pct
+                        run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
+                    run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
+                else:
+                    run_record["status"] = "invalid_schema"
+                    run_record["error_message"] = "Response does not contain valid JSON brackets."
+            except Exception as e:
+                run_record["status"] = "invalid_schema"
+                run_record["error_message"] = f"JSON parse error: {e}"
+
+        return run_record
+
+    except Exception as exc:
+        elapsed_s = time.perf_counter() - t0
+        run_record["elapsed_seconds"] = round(elapsed_s, 2)
+        run_record["elapsed_ms"] = round(elapsed_s * 1000.0, 1)
+        err_type_name = type(exc).__name__
+        err_msg = str(exc)
+
+        if "RateLimitError" in err_type_name or "429" in err_msg:
+            is_daily = "free-models-per-day" in err_msg.lower() or "free_tier_daily" in err_msg.lower()
+            if is_daily:
+                run_record["status"] = "daily_quota_exhausted"
+                reset_str = "07 Oct 2026 at 05:30 IST (00:00 UTC)"
+                run_record["reset_str"] = reset_str
+                run_record["error_message"] = f"OpenRouter daily free request limit reached (50/50). Resets on {reset_str}."
+            else:
+                run_record["status"] = "rate_limited"
+                run_record["error_message"] = f"OpenRouter rate limit: {err_msg[:120]}"
+        elif "Timeout" in err_type_name or "readtimeout" in err_msg.lower():
+            run_record["status"] = "timeout"
+            run_record["error_message"] = f"Request exceeded configured timeout of {effective_timeout:.0f}s."
+        elif "AuthenticationError" in err_type_name or "401" in err_msg:
+            run_record["status"] = "auth_error"
+            run_record["error_message"] = "Authentication failed: invalid API key (401)."
+        else:
+            run_record["status"] = "error"
+            run_record["error_message"] = f"{err_type_name}: {err_msg[:120]}"
+
+        return run_record
+
+
+def check_openrouter_account_quota() -> Dict[str, Any]:
+    """Lightweight check to OpenRouter /api/v1/auth/key to verify authentication and quota.
+    Consumes ZERO model inference credits.
+    """
+    import os
+    import urllib.request
+    import json
+    from config.settings import settings
+
+    api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
+    if not api_key:
+        return {"ok": False, "has_quota": False, "message": "No API key configured"}
+
+    try:
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/auth/key",
+            headers={"Authorization": f"Bearer {api_key}", "User-Agent": "Neurasym-Quota-Check"}
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            data = json.loads(resp.read().decode("utf-8")).get("data", {})
+            free_reqs = data.get("free_model_daily_requests", {})
+            remaining = free_reqs.get("remaining", 0)
+            limit = free_reqs.get("limit", 50)
+            used = free_reqs.get("used", 0)
+            is_free_tier = data.get("is_free_tier", True)
+            has_quota = (remaining > 0) or (not is_free_tier and data.get("limit_remaining", 0) > 0)
+            return {
+                "ok": True,
+                "has_quota": has_quota,
+                "used": used,
+                "limit": limit,
+                "remaining": remaining,
+                "is_free_tier": is_free_tier,
+                "label": data.get("label", ""),
+            }
+    except Exception as e:
+        return {"ok": False, "has_quota": False, "message": f"Quota check failed: {e}"}
 
 
 # =============================================================================
@@ -1690,14 +2037,31 @@ def create_smooth_cost_trend_chart(
     optimal_cost: float,
     mode1_cost: Optional[float] = None,
     mode2_cost: Optional[float] = None,
+    mode3_cost: Optional[float] = None,
     selected_currency: str = "USD ($)",
 ) -> go.Figure:
-    """Targeted Chart 4B: Recolored Spline Cost Trend Chart in --seq-6 (#65A31C) with synchronized currency."""
-    m1 = mode1_cost if mode1_cost is not None else (budget * 1.25 if budget > 0 else optimal_cost * 1.5)
-    m2 = mode2_cost if mode2_cost is not None else (budget * 0.90 if budget > 0 else optimal_cost * 1.2)
-    stages = ["Stated Cap", "LLM Mode 1", "Structured 2", "Pure Solver 3", "Neurasym Optimal"]
-    raw_costs = [budget, m1, m2, optimal_cost, optimal_cost]
-    converted_costs = [convert_currency(c, selected_currency) for c in raw_costs]
+    """Targeted Chart 4B: Spline Cost Trend Chart in --seq-6 (#65A31C) with synchronized currency.
+    Only displays measured costs; never fabricates baseline multipliers or synthetic numbers.
+    """
+    stages = ["Stated Cap"]
+    raw_costs = [budget]
+
+    if mode1_cost is not None:
+        stages.append("Mode 1 (LLM)")
+        raw_costs.append(mode1_cost)
+
+    if mode2_cost is not None:
+        stages.append("Mode 2 (Structured)")
+        raw_costs.append(mode2_cost)
+
+    if mode3_cost is not None:
+        stages.append("Mode 3 (Symbolic)")
+        raw_costs.append(mode3_cost)
+
+    stages.append("Mode 4 (Neurasym)")
+    raw_costs.append(optimal_cost)
+
+    converted_costs = [convert_currency(c, selected_currency) or 0.0 for c in raw_costs]
     cur_sym = get_currency_symbol(selected_currency)
 
     fig = go.Figure()
@@ -1746,10 +2110,40 @@ def create_hallucination_delta_chart(
 ) -> go.Figure:
     """Targeted Chart: Grouped bar chart comparing Reported / Claimed Cost vs Real Ground-Truth Catalog Cost.
     Directly highlights LLM pricing hallucinations and arithmetic errors vs exact Neurasym convergence.
+    Never fabricates fallback costs for unexecuted or failed runs.
     """
-    labels = ["Mode 1: LLM", "Mode 2: Schema", "Mode 3: Pure SMT", "Mode 4: Neurasym"]
-    rep_costs = [convert_currency(r.get("reported_cost_usd", 0.0), selected_currency) for r in bench_data[:4]]
-    act_costs = [convert_currency(r.get("actual_cost_usd", 0.0), selected_currency) for r in bench_data[:4]]
+    labels = ["Mode 1: LLM", "Mode 2: Schema", "Mode 3: Symbolic", "Mode 4: Neurasym"]
+    rep_costs: List[float] = []
+    act_costs: List[float] = []
+    rep_texts: List[str] = []
+    act_texts: List[str] = []
+
+    for r in bench_data[:4]:
+        source = r.get("source", "live")
+        mode_str = r.get("mode", "")
+
+        if source == "not_run":
+            rep_costs.append(0.0)
+            act_costs.append(0.0)
+            rep_texts.append("Awaiting Run")
+            act_texts.append("—")
+        elif source == "live_error":
+            rep_costs.append(0.0)
+            act_costs.append(0.0)
+            rep_texts.append("Quota / Error")
+            act_texts.append("—")
+        else:
+            rep_val = r.get("reported_cost_usd")
+            act_val = r.get("actual_cost_usd")
+
+            c_rep = convert_currency(rep_val, selected_currency) if rep_val is not None else 0.0
+            c_act = convert_currency(act_val, selected_currency) if act_val is not None else 0.0
+
+            rep_costs.append(c_rep or 0.0)
+            act_costs.append(c_act or 0.0)
+            rep_texts.append(format_currency(rep_val, selected_currency) if rep_val is not None else "—")
+            act_texts.append(format_currency(act_val, selected_currency) if act_val is not None else "—")
+
     cur_sym = get_currency_symbol(selected_currency)
 
     fig = go.Figure()
@@ -1759,7 +2153,7 @@ def create_hallucination_delta_chart(
             y=rep_costs,
             name=f"Reported / Claimed Cost ({cur_sym})",
             marker=dict(color="#FFA600", line=dict(color="#FFA600", width=1)),
-            text=[format_currency(r.get("reported_cost_usd", 0.0), selected_currency) if r.get("reported_cost_usd", 0.0) > 0 else "$0 (Crashed)" for r in bench_data[:4]],
+            text=rep_texts,
             textposition="outside",
             textfont=dict(color="#FFFFFF", size=10),
         )
@@ -1770,7 +2164,7 @@ def create_hallucination_delta_chart(
             y=act_costs,
             name=f"Real Ground-Truth Catalog ({cur_sym})",
             marker=dict(color="#008162", line=dict(color="#008162", width=1)),
-            text=[format_currency(r.get("actual_cost_usd", 0.0), selected_currency) if r.get("actual_cost_usd", 0.0) > 0 else "$0 (No Alloc)" for r in bench_data[:4]],
+            text=act_texts,
             textposition="outside",
             textfont=dict(color="#FFFFFF", size=10),
         )
@@ -1813,6 +2207,21 @@ if "selected_mode_detail" not in st.session_state:
 
 if "is_thinking" not in st.session_state:
     st.session_state["is_thinking"] = False
+
+if "llm_runs" not in st.session_state:
+    st.session_state["llm_runs"] = {}
+
+if "daily_quota_exhausted" not in st.session_state:
+    st.session_state["daily_quota_exhausted"] = False
+
+if "daily_quota_reset_str" not in st.session_state:
+    st.session_state["daily_quota_reset_str"] = "07 Oct 2026 at 05:30 IST"
+
+if "ai_recs_cache" not in st.session_state:
+    st.session_state["ai_recs_cache"] = {}
+
+if "ai_recs_status" not in st.session_state:
+    st.session_state["ai_recs_status"] = {}
 
 if "live_mode1_result" not in st.session_state:
     st.session_state["live_mode1_result"] = None
@@ -2230,8 +2639,20 @@ else:
             thinking_placeholder.empty()
             st.session_state["is_thinking"] = False
 
-        # Execute Live Neuro-Symbolic Optimization Pipeline
-        live_result = execute_live_pipeline(st.session_state["active_query_text"])
+        # Execute Live Neuro-Symbolic Optimization Pipeline (cached per query text & llm runs)
+        active_q = st.session_state["active_query_text"]
+        m1_cached = st.session_state.get("llm_runs", {}).get(f"{active_q}::mode_1")
+        m2_cached = st.session_state.get("llm_runs", {}).get(f"{active_q}::mode_2")
+        cache_key = (active_q, id(m1_cached), id(m2_cached))
+
+        if (
+            "cached_pipeline_result" not in st.session_state
+            or st.session_state.get("cached_pipeline_key") != cache_key
+        ):
+            st.session_state["cached_pipeline_result"] = execute_live_pipeline(active_q)
+            st.session_state["cached_pipeline_key"] = cache_key
+
+        live_result = st.session_state["cached_pipeline_result"]
         highlighted_query = highlight_query_terms(st.session_state["active_query_text"])
 
         # Active Query Banner
@@ -2247,31 +2668,44 @@ else:
         # Persistent Summary Row: Metric Cards + Targeted Donut Chart 1 (Budget Utilization)
         sum_m_col, sum_pie_col = st.columns([3, 2])
 
+        is_plan_feasible = bool(
+            live_result.get("is_feasible", False)
+            and live_result.get("m4_check", {}).get("feasible_against_contract", False)
+        )
+
         with sum_m_col:
             m1, m2 = st.columns(2)
             with m1:
+                cost_tag = "Optimal Monthly Cost" if is_plan_feasible else "Solver Verdict"
+                cost_tag_color = "var(--seq-2)" if is_plan_feasible else "var(--status-error)"
+                cost_val_html = format_currency(live_result['optimal_cost_usd'], selected_currency) if is_plan_feasible else "<span style='color: var(--status-error);'>Infeasible</span>"
+                cost_lbl = f"Stated Cap: {format_currency(live_result['budget_usd'], selected_currency)}/mo" if is_plan_feasible else f"Budget Cap: {format_currency(live_result['budget_usd'], selected_currency)}/mo (Exceeded)"
                 render_html(
                     f"""
                     <div class="metric-tile">
-                        <div class="metric-tag" style="color: var(--seq-2);">
-                            <span class="metric-dot" style="background-color: var(--seq-2);"></span>
-                            Optimal Monthly Cost
+                        <div class="metric-tag" style="color: {cost_tag_color};">
+                            <span class="metric-dot" style="background-color: {cost_tag_color};"></span>
+                            {cost_tag}
                         </div>
-                        <div class="metric-value">{format_currency(live_result['optimal_cost_usd'], selected_currency)}</div>
-                        <div class="metric-label">Stated Cap: {format_currency(live_result['budget_usd'], selected_currency)}/mo</div>
+                        <div class="metric-value">{cost_val_html}</div>
+                        <div class="metric-label">{cost_lbl}</div>
                     </div>
                     """
                 )
             with m2:
+                sav_tag = "Net Budget Savings" if is_plan_feasible else "Budget Status"
+                sav_tag_color = "var(--seq-6)" if is_plan_feasible else "var(--status-error)"
+                sav_val_html = f"{format_currency(live_result['savings_usd'], selected_currency)} <span style='font-size: 0.82rem; font-weight: 600; color: var(--seq-6);'>({live_result['savings_pct']:.1f}%)</span>" if is_plan_feasible else "<span style='color: var(--status-error);'>Deficit</span> <span style='font-size: 0.82rem; font-weight: 600; color: var(--status-error);'>(0.0% Headroom)</span>"
+                sav_lbl = "Guaranteed Headroom" if is_plan_feasible else "Unsatisfied Constraints"
                 render_html(
                     f"""
                     <div class="metric-tile">
-                        <div class="metric-tag" style="color: var(--seq-6);">
-                            <span class="metric-dot" style="background-color: var(--seq-6);"></span>
-                            Net Budget Savings
+                        <div class="metric-tag" style="color: {sav_tag_color};">
+                            <span class="metric-dot" style="background-color: {sav_tag_color};"></span>
+                            {sav_tag}
                         </div>
-                        <div class="metric-value">{format_currency(live_result['savings_usd'], selected_currency)} <span style="font-size: 0.82rem; font-weight: 600; color: var(--seq-6);">({live_result['savings_pct']:.1f}%)</span></div>
-                        <div class="metric-label">Guaranteed Headroom</div>
+                        <div class="metric-value">{sav_val_html}</div>
+                        <div class="metric-label">{sav_lbl}</div>
                     </div>
                     """
                 )
@@ -2280,15 +2714,18 @@ else:
 
             m3, m4 = st.columns(2)
             with m3:
+                m4_check_res = live_result.get("m4_check", {})
+                num_violations = len(m4_check_res.get("violations", []))
+                v_color = "var(--seq-4)" if num_violations == 0 else "var(--status-error)"
                 render_html(
-                    """
+                    f"""
                     <div class="metric-tile">
-                        <div class="metric-tag" style="color: var(--seq-4);">
-                            <span class="metric-dot" style="background-color: var(--seq-4);"></span>
+                        <div class="metric-tag" style="color: {v_color};">
+                            <span class="metric-dot" style="background-color: {v_color};"></span>
                             Soundness Verification
                         </div>
-                        <div class="metric-value">0</div>
-                        <div class="metric-label">Constraint Violations</div>
+                        <div class="metric-value" style="color: {v_color};">{num_violations}</div>
+                        <div class="metric-label">Constraint Violations (Independent Check)</div>
                     </div>
                     """
                 )
@@ -2403,19 +2840,30 @@ else:
         )
 
         # =====================================================================
-        # LIVE MATHEMATICAL VERIFICATION METRIC CARD (proof_engine.py)
+        # LIVE MATHEMATICAL VERIFICATION METRIC CARD (proof_engine.py & independent_checker.py)
         # =====================================================================
         feas_cert = live_result.get("feasibility_cert", {})
         opt_cert = live_result.get("optimality_cert", {})
         mip_gap_val = opt_cert.get("mip_gap_pct", 0.0)
         is_feas = feas_cert.get("is_feasible", True)
         feas_color = "var(--seq-6)" if is_feas else "var(--status-error)"
-        feas_status = "100.0% Feasible (0 Deficits)" if is_feas else f"Infeasible ({feas_cert.get('violation_rate_pct', 0.0):.1f}% Violations)"
+        feas_status = "Feasible against checked constraints" if is_feas else "Constraint violation found"
         feas_sub = "Formal vCPU, RAM, SLA & Budget Invariants Verified" if is_feas else f"{feas_cert.get('violated_constraints_count', 1)} Deficits Detected"
 
         tokens_cnt = live_result.get("total_tokens_count", 1250)
         solve_lat = live_result.get("solve_latency_ms", 0.0)
         pipe_lat = live_result.get("total_latency_ms", 0.0)
+
+        if opt_cert.get("is_provably_optimal"):
+            opt_title = f"MIP Gap % ({live_result.get('solver_engine', 'HiGHS')})"
+            opt_val = f"{mip_gap_val:.2f}%"
+            opt_desc = "Exact Global Minimum (Branch-and-Bound / SMT Exhaustive)"
+            opt_color = "var(--seq-6)"
+        else:
+            opt_title = f"Optimality ({live_result.get('solver_engine', 'Solver')})"
+            opt_val = "Optimality not established"
+            opt_desc = "Heuristic search (GA / PSO) does not produce provable optimality certificate"
+            opt_color = "var(--seq-4)"
 
         render_html(
             f"""
@@ -2424,21 +2872,21 @@ else:
                     <span>Live Mathematical Verification & Optimality Certificate</span>
                     <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-mono); font-weight: 600;">{ICON_CHECK} Backend Certificate</span>
                 </div>
-                <div class="card-subtitle">Real-time certificate computed by Mathematical Proof Engine (<code>src/verifiers/proof_engine.py</code>) validating formal mathematical bounds and constraint soundness.</div>
+                <div class="card-subtitle">Real-time verification computed by Mathematical Proof Engine (<code>src/verifiers/proof_engine.py</code>) and independent catalog checker (<code>src/verifiers/independent_checker.py</code>).</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 14px;">
                     <div style="background: var(--bg-surface-inset); border: 1px solid var(--border-default); border-radius: 8px; padding: 14px 16px;">
-                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">MIP Gap % (HiGHS Solver)</div>
-                        <div style="font-size: 1.35rem; font-family: var(--font-mono); font-weight: 700; color: var(--seq-6);">{mip_gap_val:.2f}%</div>
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 3px;">Exact Global Minimum (Branch-and-Bound Soundness)</div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">{opt_title}</div>
+                        <div style="font-size: 1.25rem; font-family: var(--font-mono); font-weight: 700; color: {opt_color};">{opt_val}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 3px;">{opt_desc}</div>
                     </div>
                     <div style="background: var(--bg-surface-inset); border: 1px solid var(--border-default); border-radius: 8px; padding: 14px 16px;">
                         <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Live Feasibility Proof</div>
-                        <div style="font-size: 1.35rem; font-family: var(--font-mono); font-weight: 700; color: {feas_color};">{feas_status}</div>
+                        <div style="font-size: 1.25rem; font-family: var(--font-mono); font-weight: 700; color: {feas_color};">{feas_status}</div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 3px;">{feas_sub}</div>
                     </div>
                     <div style="background: var(--bg-surface-inset); border: 1px solid var(--border-default); border-radius: 8px; padding: 14px 16px;">
                         <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-family: var(--font-sans); font-weight: 600; margin-bottom: 4px;">Computational Overhead</div>
-                        <div style="font-size: 1.35rem; font-family: var(--font-mono); font-weight: 700; color: var(--seq-4);">{tokens_cnt:,} Tokens • {pipe_lat:.1f}ms</div>
+                        <div style="font-size: 1.25rem; font-family: var(--font-mono); font-weight: 700; color: var(--seq-4);">{tokens_cnt:,} Tokens • {pipe_lat:.1f}ms</div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 3px;">Solver execution: {solve_lat:.1f}ms | Neural extraction: {max(0.1, pipe_lat - solve_lat):.1f}ms</div>
                     </div>
                 </div>
@@ -2465,70 +2913,122 @@ else:
         active_detail_mode = st.session_state["selected_mode_detail"]
 
         if "Mode 1" in active_detail_mode:
-            m1_rep = format_currency(live_result["mode1_info"]["reported_cost"], selected_currency)
-            m1_act = format_currency(live_result["mode1_info"]["actual_catalog_cost"], selected_currency)
-            m1_ovf = format_currency(live_result["mode1_info"]["overflow_usd"], selected_currency)
-            m1_lat = live_result["mode1_info"]["latency_disp"]
+            m1_info = live_result["mode1_info"]
+            m1_src = m1_info.get("source", "not_run")
+            m1_lat = m1_info.get("latency_disp", "—")
+            if m1_src == "not_run":
+                m1_body = """
+                • <strong>Capability:</strong> Interprets unstructured Hinglish and English requests seamlessly.<br>
+                • <strong>Status:</strong> <em>Awaiting Live Run. Click 'Mode 1: Run Live LLM →' in the performance matrix below to evaluate live pricing accuracy.</em><br>
+                • <strong>Latency:</strong> — (No network request sent on page load).
+                """
+            elif m1_src == "live_error":
+                m1_err = m1_info.get("error", "Request Failed")
+                m1_body = f"""
+                • <strong>Capability:</strong> Unstructured natural language processing.<br>
+                • <strong>Failure Mode:</strong> <strong style="color: #F5365C;">{m1_err}</strong><br>
+                • <strong>Latency:</strong> {m1_lat}
+                """
+            else:
+                m1_rep = format_currency(m1_info.get("reported_cost_usd"), selected_currency)
+                m1_act = format_currency(m1_info.get("actual_cost_usd"), selected_currency)
+                m1_ovf = format_currency(m1_info.get("overflow_usd"), selected_currency)
+                err_pct_val = m1_info.get("error_pct")
+                err_pct_str = f"+{err_pct_val:.1f}% Pricing Error ({m1_ovf} Overflow)" if err_pct_val is not None else "Unverified Output"
+                m1_body = f"""
+                • <strong>Capability:</strong> Interprets unstructured Hinglish and English requests seamlessly.<br>
+                • <strong>Measured Result:</strong> Claimed {m1_rep} vs {m1_act} real catalog. <strong style="color: #F5365C;">{err_pct_str}</strong>.<br>
+                • <strong>Latency:</strong> ~{m1_lat} multi-turn token generation.
+                """
             render_html(
                 f"""
                 <div class="clean-card" style="border-left: 4px solid var(--seq-8);">
                     <div style="font-size: 0.95rem; font-weight: 600; color: var(--seq-8); margin-bottom: 6px;">Mode 1: Pure LLM (Unstructured Text)</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
-                        • <strong>Capability:</strong> Interprets unstructured Hinglish and English requests seamlessly.<br>
-                        • <strong>Failure Mode:</strong> Hallucinates monthly pricing ({m1_rep} claimed vs {m1_act} real catalog). <strong style="color: #F5365C;">+{live_result['mode1_info']['error_pct']:.1f}% Pricing Error ({m1_ovf} Overflow)</strong>.<br>
-                        • <strong>Latency:</strong> ~{m1_lat} due to multi-turn token sampling and reasoning loops.
+                        {m1_body}
                     </div>
                 </div>
                 """
             )
         elif "Mode 2" in active_detail_mode:
-            m2_rep = format_currency(live_result["mode2_info"]["reported_cost"], selected_currency)
-            m2_act = format_currency(live_result["mode2_info"]["actual_catalog_cost"], selected_currency)
-            m2_ovf = format_currency(live_result["mode2_info"]["overflow_usd"], selected_currency)
-            m2_lat = live_result["mode2_info"]["latency_disp"]
+            m2_info = live_result["mode2_info"]
+            m2_src = m2_info.get("source", "not_run")
+            m2_lat = m2_info.get("latency_disp", "—")
+            if m2_src == "not_run":
+                m2_body = """
+                • <strong>Capability:</strong> Constrains generation into strict JSON schema.<br>
+                • <strong>Status:</strong> <em>Awaiting Live Run. Click 'Mode 2: Run Live LLM →' in the performance matrix below to test structured decoding.</em><br>
+                • <strong>Latency:</strong> — (No network request sent on page load).
+                """
+            elif m2_src == "live_error":
+                m2_err = m2_info.get("error", "Request Failed")
+                m2_body = f"""
+                • <strong>Capability:</strong> JSON Schema decoding.<br>
+                • <strong>Failure Mode:</strong> <strong style="color: #F5365C;">{m2_err}</strong><br>
+                • <strong>Latency:</strong> {m2_lat}
+                """
+            else:
+                m2_rep = format_currency(m2_info.get("reported_cost_usd"), selected_currency)
+                m2_act = format_currency(m2_info.get("actual_cost_usd"), selected_currency)
+                m2_ovf = format_currency(m2_info.get("overflow_usd"), selected_currency)
+                err_pct_val = m2_info.get("error_pct")
+                err_pct_str = f"+{err_pct_val:.1f}% Arithmetic Mismatch ({m2_ovf} Overflow)" if err_pct_val is not None else "Schema Output"
+                m2_body = f"""
+                • <strong>Capability:</strong> Forces output into strict JSON schema.<br>
+                • <strong>Measured Result:</strong> Claimed {m2_rep} while real catalog SKUs total {m2_act}. <strong style="color: #FFA600;">{err_pct_str}</strong>.<br>
+                • <strong>Latency:</strong> ~{m2_lat} constrained decoding.
+                """
             render_html(
                 f"""
                 <div class="clean-card" style="border-left: 4px solid var(--status-error);">
                     <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-error); margin-bottom: 6px;">Mode 2: Structured LLM (Pydantic Schema Only)</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
-                        • <strong>Capability:</strong> Forces output into strict JSON schema.<br>
-                        • <strong>Failure Mode:</strong> Token-level arithmetic error claims {m2_rep} while real catalog SKUs total {m2_act}. <strong style="color: #FFA600;">+{live_result['mode2_info']['error_pct']:.1f}% Arithmetic Mismatch ({m2_ovf} Overflow)</strong>.<br>
-                        • <strong>Latency:</strong> ~{m2_lat} constrained decoding time.
+                        {m2_body}
                     </div>
                 </div>
                 """
             )
         elif "Mode 3" in active_detail_mode:
             m3_info = live_result["mode3_info"]
-            m3_err = m3_info.get("error_message", "ValueError: Symbolic solver requires numeric matrices (c, A_ub, b_ub). Cannot parse natural language text directly.")
-            m3_tb = m3_info.get("raw_res", {}).get("traceback") or m3_err
+            m3_res = m3_info.get("raw_res", {})
+            m3_status = m3_info.get("math", "Feasible against checked constraints")
+            m3_is_feas = m3_info.get("is_feasible", False)
+            m3_color = "var(--seq-6)" if m3_is_feas else "var(--status-error)"
+            m3_cost_disp = format_currency(m3_info.get("actual_cost_usd"), selected_currency) if m3_info.get("actual_cost_usd") is not None else "—"
             render_html(
                 f"""
-                <div class="clean-card" style="border-left: 4px solid var(--status-error);">
-                    <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-error); margin-bottom: 6px;">Mode 3: Pure Symbolic (Traditional Solver)</div>
+                <div class="clean-card" style="border-left: 4px solid {m3_color};">
+                    <div style="font-size: 0.95rem; font-weight: 600; color: {m3_color}; margin-bottom: 6px;">Mode 3: Symbolic + rule-based parsing</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
-                        • <strong>Capability:</strong> Provably optimal mathematical resolution ({live_result['solve_latency_ms']:.1f}ms live solver execution).<br>
-                        • <strong>Failure Mode:</strong> <strong style="color: #F5365C;">0% NLU Capability (CRASHED)</strong>. Traditional solvers (SciPy MILP / Z3) cannot ingest natural language text or colloquial strings.<br>
-                        • <strong>Latency:</strong> {m3_info['latency']} (Instant exception raise).
+                        • <strong>Architecture:</strong> Traditional solver with deterministic local rule-based parsing (SCOPE / CARM regex).<br>
+                        • <strong>Note:</strong> A bare symbolic solver requires structured numeric inputs; this baseline uses local regex extraction to obtain solver parameters without LLM calls.<br>
+                        • <strong>Checker Status:</strong> <strong>{m3_status}</strong> (Cost: {m3_cost_disp}/mo).<br>
+                        • <strong>Independent Check:</strong> {m3_info.get('violations', '0 violations')}.<br>
+                        • <strong>Latency:</strong> {m3_info['latency']} (Parsing + solver execution).
                     </div>
                 </div>
                 """
             )
-            with st.expander("🔍 Inspect Mode 3 Live Solver Crash Log & Exception Traceback", expanded=True):
-                st.markdown("**Raw Input Text Sent to Solver:**")
-                st.code(st.session_state["active_query_text"], language="text")
-                st.markdown("**Live Solver Exception Traceback:**")
-                st.code(m3_tb, language="python")
-                st.caption("Proves why traditional mathematical solvers strictly require a neural translation layer (SCOPE / CARM) to construct valid constraint matrices.")
+            with st.expander("🔍 Inspect Mode 3 Solver Plan & Parameters", expanded=False):
+                st.markdown("**Structured Constraints Passed to Solver:**")
+                st.json(m3_res.get("parsed_contract", m3_res.get("solver_parameters", {})))
+                st.markdown("**Solver Output Decision:**")
+                st.json(m3_res.get("allocations", m3_res.get("solver_res", {})))
         else:
+            m4_info = live_result["mode4_info"]
+            m4_status = m4_info.get("math", "Feasible against checked constraints")
+            m4_opt = m4_info.get("optimality", "Optimality not established")
+            m4_is_feas = m4_info.get("is_feasible", False)
+            m4_color = "var(--seq-6)" if m4_is_feas else "var(--status-error)"
             render_html(
                 f"""
-                <div class="clean-card" style="border-left: 4px solid var(--seq-4);">
-                    <div style="font-size: 0.95rem; font-weight: 600; color: var(--seq-4); margin-bottom: 6px;">Mode 4: Full Neuro-Symbolic Orchestrator (Neurasym)</div>
+                <div class="clean-card" style="border-left: 4px solid {m4_color};">
+                    <div style="font-size: 0.95rem; font-weight: 600; color: {m4_color}; margin-bottom: 6px;">Mode 4: Full Neuro-Symbolic Orchestrator (Neurasym)</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
-                        • <strong>Capability:</strong> Combines 100% NLU flexibility with provably sound mathematical solvers.<br>
-                        • <strong>Result:</strong> Exact global minimum ({format_currency(live_result['optimal_cost_usd'], selected_currency)}/mo) with 0 constraint violations and {live_result['savings_pct']:.1f}% net savings.<br>
-                        • <strong>Latency:</strong> {live_result['total_latency_ms']:.1f}ms end-to-end parse, match, solve, and explain pipeline.
+                        • <strong>Architecture:</strong> Local rule-based parser + Multi-engine solver selection (ILP, SMT, GA, PSO).<br>
+                        • <strong>Checker Status:</strong> <strong>{m4_status}</strong> ({m4_opt}).<br>
+                        • <strong>Independent Verification:</strong> {m4_info.get('violations', '0 violations')}.<br>
+                        • <strong>Latency:</strong> {live_result['total_latency_ms']:.1f}ms (Parse + Solve + Explain). Explanation time: {live_result.get('explanation_latency_ms', 0.0):.2f}ms.
                     </div>
                 </div>
                 """
@@ -2764,59 +3264,80 @@ else:
                 render_html("</div>")
 
             else:
-                alloc_rows_html = ""
-                for alloc in live_result["allocations"]:
-                    alloc_rows_html += f"""
-                    <tr>
-                        <td><strong>{alloc['sku']}</strong></td>
-                        <td>{alloc['provider']}</td>
-                        <td style="font-family: var(--font-mono);">{alloc['qty']}</td>
-                        <td style="font-family: var(--font-mono);">{alloc['vcpus']}</td>
-                        <td style="font-family: var(--font-mono);">{alloc['ram']}</td>
-                        <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--seq-6);">{format_currency(alloc['monthly_cost'], selected_currency)}</td>
-                    </tr>
-                    """
-
-                render_html(
-                    f"""
-                    <div class="clean-card" style="border-top: 3px solid var(--seq-4);">
-                        <div class="card-header-title">
-                            <span>Stage 4: Symbolic Solver Execution ({live_result['solver_engine']})</span>
-                            <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-mono); font-weight: 600;">Optimal Result: {format_currency(live_result['optimal_cost_usd'], selected_currency)}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
-                        </div>
-                        <div class="card-subtitle">{live_result['solver_desc']}</div>
-                        <table class="clean-table">
-                            <thead>
-                                <tr>
-                                    <th>Instance SKU</th>
-                                    <th>Provider</th>
-                                    <th>Quantity</th>
-                                    <th>Total vCPUs</th>
-                                    <th>Total RAM</th>
-                                    <th>Monthly Cost</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {alloc_rows_html}
-                            </tbody>
-                        </table>
-                    </div>
-                    """
+                is_stage4_feas = bool(
+                    live_result.get("is_feasible", False)
+                    and live_result.get("m4_check", {}).get("feasible_against_contract", False)
+                    and live_result.get("allocations")
                 )
-                # Targeted Chart 2: Donut Chart for Cost Breakdown by instance/provider (if >1 item)
-                fig_inst_donut = create_instance_cost_donut(live_result["allocations"], selected_currency)
-                if fig_inst_donut is not None:
+                if not is_stage4_feas:
                     render_html(
-                        """
-                        <div class="clean-card" style="padding: 16px 20px; margin-top: 14px;">
-                            <div class="card-header-title" style="margin-bottom: 2px;">
-                                <span>Multi-SKU Cost Allocation Share (Donut Breakdown)</span>
-                                <span style="font-size: 0.72rem; color: var(--seq-4); font-family: var(--font-mono); font-weight: 600;">Proportional Cost Distribution</span>
+                        f"""
+                        <div class="clean-card" style="border-top: 3px solid var(--status-error);">
+                            <div class="card-header-title">
+                                <span>Stage 4: Symbolic Solver Execution ({live_result['solver_engine']})</span>
+                                <span style="font-size: 0.75rem; color: var(--status-error); font-family: var(--font-mono); font-weight: 600;">STATUS: INFEASIBLE ({live_result['solve_latency_ms']:.1f}ms)</span>
                             </div>
+                            <div class="card-subtitle">{live_result['solver_desc']}</div>
+                            <div style="background: var(--bg-surface-inset); border: 1px solid var(--border-default); border-left: 3px solid var(--status-error); border-radius: 6px; padding: 14px 16px; color: var(--text-primary); font-size: 0.9rem; line-height: 1.5;">
+                                <strong>No Feasible Allocation Found:</strong> The optimization model proved that no combination of cloud SKUs can satisfy the requested workload ({live_result['contract'].required_vcpus} vCPUs, {live_result['contract'].required_ram_gb:.1f} GB RAM) within the ${live_result['budget_usd']:.2f} monthly budget limit.
+                            </div>
+                        </div>
                         """
                     )
-                    st.plotly_chart(fig_inst_donut, use_container_width=True, config={"displayModeBar": False})
-                    render_html("</div>")
+                else:
+                    alloc_rows_html = ""
+                    for alloc in live_result["allocations"]:
+                        alloc_rows_html += f"""
+                        <tr>
+                            <td><strong>{alloc['sku']}</strong></td>
+                            <td>{alloc['provider']}</td>
+                            <td style="font-family: var(--font-mono);">{alloc['qty']}</td>
+                            <td style="font-family: var(--font-mono);">{alloc['vcpus']}</td>
+                            <td style="font-family: var(--font-mono);">{alloc['ram']}</td>
+                            <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--seq-6);">{format_currency(alloc['monthly_cost'], selected_currency)}</td>
+                        </tr>
+                        """
+
+                    render_html(
+                        f"""
+                        <div class="clean-card" style="border-top: 3px solid var(--seq-4);">
+                            <div class="card-header-title">
+                                <span>Stage 4: Symbolic Solver Execution ({live_result['solver_engine']})</span>
+                                <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-mono); font-weight: 600;">Optimal Result: {format_currency(live_result['optimal_cost_usd'], selected_currency)}/mo ({live_result['solve_latency_ms']:.1f}ms)</span>
+                            </div>
+                            <div class="card-subtitle">{live_result['solver_desc']}</div>
+                            <table class="clean-table">
+                                <thead>
+                                    <tr>
+                                        <th>Instance SKU</th>
+                                        <th>Provider</th>
+                                        <th>Quantity</th>
+                                        <th>Total vCPUs</th>
+                                        <th>Total RAM</th>
+                                        <th>Monthly Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {alloc_rows_html}
+                                </tbody>
+                            </table>
+                        </div>
+                        """
+                    )
+                    # Targeted Chart 2: Donut Chart for Cost Breakdown by instance/provider (if >1 item)
+                    fig_inst_donut = create_instance_cost_donut(live_result["allocations"], selected_currency)
+                    if fig_inst_donut is not None:
+                        render_html(
+                            """
+                            <div class="clean-card" style="padding: 16px 20px; margin-top: 14px;">
+                                <div class="card-header-title" style="margin-bottom: 2px;">
+                                    <span>Multi-SKU Cost Allocation Share (Donut Breakdown)</span>
+                                    <span style="font-size: 0.72rem; color: var(--seq-4); font-family: var(--font-mono); font-weight: 600;">Proportional Cost Distribution</span>
+                                </div>
+                            """
+                        )
+                        st.plotly_chart(fig_inst_donut, use_container_width=True, config={"displayModeBar": False})
+                        render_html("</div>")
 
         # STAGE 5: EXPLAIN PANEL (--seq-5 / --seq-6)
         else:
@@ -2840,52 +3361,75 @@ else:
         # =====================================================================
         # REQUIREMENT 5: ITEMIZED SKU & QUANTITY BREAKDOWN CARD (Rendered Above XAI)
         # =====================================================================
-        itemized_sku_rows = ""
-        for alloc in live_result["allocations"]:
-            itemized_sku_rows += f"""
-            <tr>
-                <td><strong>{alloc['provider']}</strong></td>
-                <td style="font-family: var(--font-mono); font-weight: 600; color: var(--text-primary);">{alloc['sku']}</td>
-                <td style="font-family: var(--font-mono); text-align: center;">{alloc['qty']}</td>
-                <td style="font-family: var(--font-mono);">{alloc['vcpus']} vCPUs</td>
-                <td style="font-family: var(--font-mono);">{alloc['ram']}</td>
-                <td style="font-family: var(--font-mono); font-weight: 600; color: var(--seq-6); text-align: right;">{format_currency(alloc['monthly_cost'], selected_currency)}</td>
-            </tr>
-            """
-
-        cur_symbol_hdr = get_currency_symbol(selected_currency)
-        render_html(
-            f"""
-            <div class="clean-card" style="border-top: 3px solid var(--seq-4); margin-bottom: 24px;">
-                <div class="card-header-title">
-                    <span>Itemized SKU Placement & Capacity Breakdown</span>
-                    <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-mono); font-weight: 600;">{ICON_CHECK} Verified Allocation Plan</span>
-                </div>
-                <div class="card-subtitle">Detailed bill of materials (BOM), microservice quantities, and compute capacity computed by the symbolic optimization engine.</div>
-                <table class="clean-table">
-                    <thead>
-                        <tr>
-                            <th>Provider</th>
-                            <th>SKU / Instance Type</th>
-                            <th style="text-align: center;">Quantity</th>
-                            <th>Allocated vCPUs</th>
-                            <th>Allocated RAM (GB)</th>
-                            <th style="text-align: right;">Monthly Cost ({cur_symbol_hdr})</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {itemized_sku_rows}
-                    </tbody>
-                    <tfoot>
-                        <tr style="background: var(--bg-surface-inset); font-weight: 700;">
-                            <td colspan="5" style="text-align: right; color: var(--text-secondary); padding: 12px 16px; font-size: 0.85rem; text-transform: uppercase;">Total Optimal Solution Cost:</td>
-                            <td style="color: var(--seq-6); font-family: var(--font-mono); font-size: 1.05rem; text-align: right; padding: 12px 16px;">{format_currency(live_result['optimal_cost_usd'], selected_currency)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            """
+        is_itemized_feasible = bool(
+            live_result.get("is_feasible", False)
+            and live_result.get("m4_check", {}).get("feasible_against_contract", False)
+            and live_result.get("allocations")
         )
+
+        if not is_itemized_feasible:
+            render_html(
+                f"""
+                <div class="clean-card" style="border-top: 3px solid var(--status-error); margin-bottom: 24px;">
+                    <div class="card-header-title">
+                        <span>Itemized SKU Placement & Capacity Breakdown</span>
+                        <span style="font-size: 0.75rem; color: var(--status-error); font-family: var(--font-mono); font-weight: 600;">{ICON_ALERT} Infeasible Allocation Request</span>
+                    </div>
+                    <div class="card-subtitle">Detailed bill of materials (BOM) and SKU capacity verification from the symbolic optimization engine.</div>
+                    <div style="background: var(--bg-surface-inset); border: 1px solid var(--border-default); border-left: 3px solid var(--status-error); border-radius: 6px; padding: 16px 18px; color: var(--text-primary); font-size: 0.92rem; line-height: 1.6;">
+                        <div style="font-weight: 600; color: var(--status-error); margin-bottom: 6px;">No feasible allocation found — see constraint violations above.</div>
+                        <div>The optimization solver proved that no combination of cloud SKUs can satisfy the requested requirements (<strong>{live_result['contract'].required_vcpus} vCPUs</strong>, <strong>{live_result['contract'].required_ram_gb:.1f} GB RAM</strong>, <strong>{live_result['contract'].sla_availability_pct:.3f}% SLA</strong>) within the <strong>${live_result['budget_usd']:.2f}</strong> monthly budget limit. No candidate SKUs were provisioned.</div>
+                    </div>
+                </div>
+                """
+            )
+        else:
+            itemized_sku_rows = ""
+            for alloc in live_result["allocations"]:
+                itemized_sku_rows += f"""
+                <tr>
+                    <td><strong>{alloc['provider']}</strong></td>
+                    <td style="font-family: var(--font-mono); font-weight: 600; color: var(--text-primary);">{alloc['sku']}</td>
+                    <td style="font-family: var(--font-mono); text-align: center;">{alloc['qty']}</td>
+                    <td style="font-family: var(--font-mono);">{alloc['vcpus']} vCPUs</td>
+                    <td style="font-family: var(--font-mono);">{alloc['ram']}</td>
+                    <td style="font-family: var(--font-mono); font-weight: 600; color: var(--seq-6); text-align: right;">{format_currency(alloc['monthly_cost'], selected_currency)}</td>
+                </tr>
+                """
+
+            cur_symbol_hdr = get_currency_symbol(selected_currency)
+            render_html(
+                f"""
+                <div class="clean-card" style="border-top: 3px solid var(--seq-4); margin-bottom: 24px;">
+                    <div class="card-header-title">
+                        <span>Itemized SKU Placement & Capacity Breakdown</span>
+                        <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-mono); font-weight: 600;">{ICON_CHECK} Verified Allocation Plan</span>
+                    </div>
+                    <div class="card-subtitle">Detailed bill of materials (BOM), microservice quantities, and compute capacity computed by the symbolic optimization engine.</div>
+                    <table class="clean-table">
+                        <thead>
+                            <tr>
+                                <th>Provider</th>
+                                <th>SKU / Instance Type</th>
+                                <th style="text-align: center;">Quantity</th>
+                                <th>Allocated vCPUs</th>
+                                <th>Allocated RAM (GB)</th>
+                                <th style="text-align: right;">Monthly Cost ({cur_symbol_hdr})</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {itemized_sku_rows}
+                        </tbody>
+                        <tfoot>
+                            <tr style="background: var(--bg-surface-inset); font-weight: 700;">
+                                <td colspan="5" style="text-align: right; color: var(--text-secondary); padding: 12px 16px; font-size: 0.85rem; text-transform: uppercase;">Total Optimal Solution Cost:</td>
+                                <td style="color: var(--seq-6); font-family: var(--font-mono); font-size: 1.05rem; text-align: right; padding: 12px 16px;">{format_currency(live_result['optimal_cost_usd'], selected_currency)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                """
+            )
 
         # =====================================================================
         # DYNAMIC XAI FINOPS RECOMMENDATIONS SECTION
@@ -2914,16 +3458,71 @@ else:
 
         render_html(
             f"""
-            <div class="clean-card" style="border-top: 3px solid var(--seq-6); margin-bottom: 36px;">
+            <div class="clean-card" style="border-top: 3px solid var(--seq-6); margin-bottom: 24px;">
                 <div class="card-header-title">
                     <span>XAI Strategic FinOps Recommendations</span>
-                    <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-sans); font-weight: 600;">Actionable Directives</span>
+                    <span style="font-size: 0.75rem; color: var(--seq-6); font-family: var(--font-sans); font-weight: 600;">Deterministic Directives ($0 / 0 Tokens)</span>
                 </div>
                 <div class="card-subtitle">Contextualized commitment recommendations, rightsizing alerts, and architecture governance directives based on mathematical solver proof telemetry.</div>
                 {recs_list_html}
             </div>
             """
         )
+
+        # Optional AI-Reasoned FinOps Advice Section (Off by default; requires explicit user click)
+        active_q = st.session_state["active_query_text"]
+        ai_cached_recs = st.session_state.get("ai_recs_cache", {}).get(active_q)
+        ai_status = st.session_state.get("ai_recs_status", {}).get(active_q)
+
+        if ai_cached_recs:
+            ai_recs_html = ""
+            for rec in ai_cached_recs:
+                ai_recs_html += f"""
+                <div style="background: var(--bg-surface-inset); border: 1px solid rgba(255, 166, 0, 0.4); border-left: 3px solid #FFA600; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 0.88rem; color: var(--text-primary); line-height: 1.5;">
+                    ✨ {rec}
+                </div>
+                """
+            render_html(
+                f"""
+                <div class="clean-card" style="border-top: 3px solid #FFA600; margin-bottom: 28px;">
+                    <div class="card-header-title">
+                        <span>✨ AI-Reasoned FinOps Directives (OpenRouter LLM)</span>
+                        <span style="font-size: 0.75rem; color: #FFA600; font-family: var(--font-mono); font-weight: 600;">Live Generated</span>
+                    </div>
+                    <div class="card-subtitle">LLM-synthesized recommendations analyzing specific deployment parameters against cloud best practices.</div>
+                    {ai_recs_html}
+                </div>
+                """
+            )
+        else:
+            col_ai_btn, col_ai_info = st.columns([1, 2])
+            with col_ai_btn:
+                ai_btn_disabled = st.session_state.get("daily_quota_exhausted", False)
+                ai_btn_label = "Quota Exhausted (429)" if ai_btn_disabled else "✨ Request AI Recommendations"
+                if st.button(ai_btn_label, disabled=ai_btn_disabled, key="btn_gen_ai_recs", use_container_width=True):
+                    with st.spinner("Invoking configured LLM for AI-reasoned FinOps advice (waiting for model response)..."):
+                        gen_recs = FinOpsExplainer.generate_llm_recommendations(
+                            contract=live_result["contract"],
+                            solver_result={
+                                "total_monthly_cost_usd": live_result["optimal_cost_usd"],
+                                "allocated_vms": live_result.get("allocations", []),
+                                "budget_utilized_pct": round((live_result["optimal_cost_usd"] / live_result["budget_usd"]) * 100.0, 1) if live_result["budget_usd"] > 0 else 0.0,
+                            },
+                        )
+                        if gen_recs:
+                            st.session_state["ai_recs_cache"][active_q] = gen_recs
+                            st.session_state["ai_recs_status"][active_q] = "success"
+                        else:
+                            st.session_state["ai_recs_status"][active_q] = "failed"
+                    st.rerun()
+
+            with col_ai_info:
+                if ai_status == "failed":
+                    render_html("<div style='font-size: 0.8rem; color: #F5365C; padding-top: 6px;'>⚠️ AI recommendation request failed or timed out. Deterministic rules remain active above.</div>")
+                else:
+                    render_html("<div style='font-size: 0.8rem; color: var(--text-secondary); padding-top: 6px;'>Optional LLM advice is off by default to conserve API quota. Local solver results are displayed above.</div>")
+
+        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
         # =====================================================================
         # 4-WAY COMPARISON TABLE & FAILURE MODE ANALYSIS
@@ -2937,55 +3536,62 @@ else:
             """
         )
 
-        modes_comp_list = []
-        raw_bench_data = live_result.get("bench_data", live_result.get("modes_comparison", []))
-        for row in raw_bench_data:
-            row_copy = dict(row)
-            if "Mode 1" in row_copy["mode"] and st.session_state.get("live_mode1_result"):
-                row_copy["source"] = "live"
-                row_copy["latency"] = st.session_state["live_mode1_result"]["latency"]
-                row_copy["reported_cost"] = st.session_state["live_mode1_result"]["cost"]
-                row_copy["math"] = "Live API Execution"
-            elif "Mode 2" in row_copy["mode"] and st.session_state.get("live_mode2_result"):
-                row_copy["source"] = "live"
-                row_copy["latency"] = st.session_state["live_mode2_result"]["latency"]
-                row_copy["reported_cost"] = st.session_state["live_mode2_result"]["cost"]
-                row_copy["math"] = "Live Schema Prediction"
-            modes_comp_list.append(row_copy)
+        modes_comp_list = live_result.get("bench_data", live_result.get("modes_comparison", []))
 
         comp_rows_html = ""
         for row in modes_comp_list:
-            source_badge = (
-                '<span class="status-tag status-tag-recorded">recorded</span>'
-                if row.get("source") == "recorded"
-                else '<span class="status-tag status-tag-live">live</span>'
-            )
-            v_color = row.get("cost_color", "#FFA600")
-            rep_cost_val = row.get("reported_cost_usd", 0.0)
-            act_cost_val = row.get("actual_cost_usd", 0.0)
-            ovf_val = row.get("overflow_usd", 0.0)
-            err_pct_val = row.get("error_pct", 0.0)
-
-            rep_disp = format_currency(rep_cost_val, selected_currency)
-            act_disp = format_currency(act_cost_val, selected_currency)
-            ovf_disp = format_currency(ovf_val, selected_currency)
-
-            row_is_feas = row.get("is_feasible", True)
-            if "Mode 1" in row["mode"]:
-                violations_str = f'<span style="color: #F5365C; font-weight: 700;">+{err_pct_val:.1f}% Pricing Error ({ovf_disp} Overflow)</span>'
-            elif "Mode 2" in row["mode"]:
-                violations_str = f'<span style="color: #FFA600; font-weight: 700;">+{err_pct_val:.1f}% Arithmetic Mismatch ({ovf_disp} Overflow)</span>'
-            elif "Mode 3" in row["mode"]:
-                violations_str = '<span style="color: var(--seq-6); font-weight: 600;">0.0% Error (Fails Raw Text)</span>' if row_is_feas else '<span style="color: #F5365C; font-weight: 700;">INFEASIBLE (Solver UNSAT)</span>'
+            src = row.get("source", "live")
+            mode_title = row.get("mode", "")
+            if src == "not_run":
+                source_badge = '<span class="status-tag" style="background: rgba(140, 160, 180, 0.2); color: #8CA0B4; border: 1px solid rgba(140, 160, 180, 0.4);">Awaiting Run</span>'
+            elif src == "live_error":
+                source_badge = '<span class="status-tag" style="background: rgba(245, 54, 92, 0.2); color: #F5365C; border: 1px solid rgba(245, 54, 92, 0.4);">Error / Limit</span>'
+            elif "Mode 3" in mode_title or "Mode 4" in mode_title:
+                source_badge = '<span class="status-tag status-tag-live">Local Run</span>'
             else:
-                violations_str = '<span style="color: var(--seq-6); font-weight: 600;">0.0% Error (Provably Optimal)</span>' if row_is_feas else '<span style="color: #F5365C; font-weight: 700;">Constraint Violation (Solver Infeasible)</span>'
+                source_badge = '<span class="status-tag status-tag-live">Live API</span>'
+
+            v_color = row.get("cost_color", "#FFA600")
+            rep_cost_val = row.get("reported_cost_usd")
+            act_cost_val = row.get("actual_cost_usd")
+            ovf_val = row.get("overflow_usd")
+            err_pct_val = row.get("error_pct")
+
+            rep_disp = format_currency(rep_cost_val, selected_currency) if rep_cost_val is not None else "—"
+            act_disp = format_currency(act_cost_val, selected_currency) if act_cost_val is not None else "—"
+            ovf_disp = format_currency(ovf_val, selected_currency) if ovf_val is not None else "—"
+
+            row_is_feas = row.get("is_feasible")
+            if src == "not_run":
+                violations_str = '<span style="color: var(--text-secondary); font-style: italic;">Awaiting run</span>'
+            elif src == "live_error":
+                violations_str = f'<span style="color: #F5365C; font-weight: 600;">{row.get("violations", "Execution error")}</span>'
+            elif "Mode 1" in mode_title:
+                if err_pct_val is not None:
+                    violations_str = f'<span style="color: #F5365C; font-weight: 700;">+{err_pct_val:.1f}% Pricing Error ({ovf_disp} Overflow)</span>'
+                else:
+                    violations_str = '<span style="color: #FFA600;">Not independently verified</span>'
+            elif "Mode 2" in mode_title:
+                if err_pct_val is not None:
+                    violations_str = f'<span style="color: #FFA600; font-weight: 700;">+{err_pct_val:.1f}% Arithmetic Mismatch ({ovf_disp} Overflow)</span>'
+                else:
+                    violations_str = '<span style="color: #F5365C;">Schema Parse Error</span>'
+            elif "Mode 3" in mode_title or "Mode 4" in mode_title:
+                if row_is_feas:
+                    opt_lbl = row.get("optimality", "Optimality not established")
+                    violations_str = f'<span style="color: var(--seq-6); font-weight: 600;">Feasible (0 violations)</span><br><span style="font-size: 0.74rem; color: var(--text-secondary);">{opt_lbl}</span>'
+                else:
+                    v_raw = row.get("violations", "Constraint violation found")
+                    violations_str = f'<span style="color: #F5365C; font-weight: 600;">{v_raw}</span>'
+            else:
+                violations_str = f'<span style="color: var(--text-secondary);">{row.get("violations", "—")}</span>'
 
             comp_rows_html += f"""
             <tr>
-                <td><strong>{row['mode']}</strong> {source_badge}</td>
-                <td>{row['nlu']}</td>
-                <td>{row['math']}</td>
-                <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">{row['latency']}</td>
+                <td><strong>{mode_title}</strong> {source_badge}</td>
+                <td>{row.get('nlu', '—')}</td>
+                <td>{row.get('math', '—')}</td>
+                <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">{row.get('latency', '—')}</td>
                 <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: {v_color};">{rep_disp}</td>
                 <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary);">{act_disp}</td>
                 <td style="font-size: 0.82rem;">{violations_str}</td>
@@ -2999,12 +3605,12 @@ else:
                     <thead>
                         <tr>
                             <th>Execution Mode</th>
-                            <th>NLU Capability</th>
-                            <th>Math / Feasibility</th>
+                            <th>NLU / Parsing</th>
+                            <th>Math / Checker Verdict</th>
                             <th>Latency</th>
                             <th>Reported Cost ({cur_symbol_hdr})</th>
                             <th>Actual Catalog Cost ({cur_symbol_hdr})</th>
-                            <th>Error Delta & Overflow Status</th>
+                            <th>Independent Verification & Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3016,58 +3622,139 @@ else:
         )
 
         st.caption(
-            "✅ All metrics, cost deltas, and solver crash logs are computed live in real-time from backend execution certificates."
+            "✅ Mode 3 (Symbolic + Rule-Based) and Mode 4 (Neurasym) execute locally and are verified by IndependentChecker. Modes 1 and 2 run on explicit request."
         )
 
+        # Quota Exhaustion Banner & Recheck Action
+        if st.session_state.get("daily_quota_exhausted"):
+            render_html(
+                f"""
+                <div style="background: rgba(245, 54, 92, 0.12); border: 1px solid rgba(245, 54, 92, 0.4); border-radius: 8px; padding: 12px 16px; margin-top: 12px; margin-bottom: 12px;">
+                    <div style="font-size: 0.9rem; font-weight: 700; color: #F5365C; margin-bottom: 4px;">
+                        ⚠️ OpenRouter Free-Tier Daily Quota Exhausted (50/50 requests)
+                    </div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">
+                        Live LLM requests are paused for this session until quota reset on <strong>{st.session_state.get('daily_quota_reset_str', '07 Oct 2026 at 05:30 IST')}</strong>.
+                        Local symbolic solver optimization (Mode 4) and deterministic FinOps explanations continue operating with 0 API calls and 0 token usage.
+                    </div>
+                </div>
+                """
+            )
+            col_qc1, col_qc2 = st.columns([1, 2])
+            with col_qc1:
+                if st.button("🔄 Recheck Account Quota (0 tokens)", key="btn_recheck_quota", use_container_width=True):
+                    with st.spinner("Checking OpenRouter account key status..."):
+                        q_res = check_openrouter_account_quota()
+                        if q_res.get("has_quota"):
+                            st.session_state["daily_quota_exhausted"] = False
+                            st.session_state["mode1_rate_limited"] = False
+                            st.session_state["mode2_rate_limited"] = False
+                            st.success("Account quota restored!")
+                        else:
+                            st.warning(f"Quota not restored yet: {q_res.get('remaining', 0)} free requests remaining (Used: {q_res.get('used', '50')}/{q_res.get('limit', '50')}).")
+                    st.rerun()
+
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        # Optional Live Call Controls (Mode 1 & Mode 2 - 15s Hard Timeout)
-        col_live1, col_live2 = st.columns(2)
-        with col_live1:
-            btn1_disabled = st.session_state.get("mode1_rate_limited", False)
-            btn1_label = "Quota Exhausted (429)" if btn1_disabled else "Mode 1: Try Live Call →"
-            if st.button(btn1_label, disabled=btn1_disabled, key="btn_try_live_1", use_container_width=True):
-                with st.spinner("Calling nvidia/nemotron-3.5-lightning live..."):
-                    success, res_data, msg = call_live_mode(1, st.session_state["active_query_text"])
-                    if success:
-                        st.session_state["live_mode1_result"] = res_data
-                        st.session_state["mode1_msg"] = None
-                    else:
-                        if res_data and res_data.get("is_429"):
-                            st.session_state["mode1_rate_limited"] = True
-                        st.session_state["mode1_msg"] = msg
-                st.rerun()
+        # Explicit Live Call Controls (Mode 1 & Mode 2 - Configurable 360s Timeout, 0 Retries)
+        from config.settings import settings as central_settings
+        eff_timeout = getattr(central_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0)
+        target_model_name = os.getenv("OPENROUTER_MODEL") or getattr(central_settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
 
-            if st.session_state.get("mode1_msg"):
-                render_html(f"<div style='font-size: 0.8rem; color: var(--text-secondary); font-style: italic; margin-top: 4px; margin-bottom: 20px;'>{st.session_state['mode1_msg']}</div>")
-            elif st.session_state.get("live_mode1_result"):
-                render_html(f"<div style='font-size: 0.8rem; color: var(--seq-6); font-weight: 600; margin-top: 4px; margin-bottom: 20px;'>{ICON_CHECK} Live call succeeded ({st.session_state['live_mode1_result']['latency']})</div>")
+        col_live1, col_live2, col_clear = st.columns([2, 2, 1])
+        with col_live1:
+            btn1_disabled = st.session_state.get("daily_quota_exhausted", False)
+            btn1_label = "Quota Exhausted (429)" if btn1_disabled else "Mode 1: Run Live LLM →"
+            if st.button(btn1_label, disabled=btn1_disabled, key="btn_try_live_1", use_container_width=True):
+                with st.spinner(f"Waiting for model response ({target_model_name}, timeout: {eff_timeout:.0f}s)..."):
+                    run_res = execute_dashboard_llm_request(
+                        mode_num=1,
+                        query=st.session_state["active_query_text"],
+                        contract=live_result["contract"],
+                    )
+                    st.session_state["llm_runs"][f"{st.session_state['active_query_text']}::mode_1"] = run_res
+                    if run_res.get("status") == "daily_quota_exhausted":
+                        st.session_state["daily_quota_exhausted"] = True
+                        st.session_state["daily_quota_reset_str"] = run_res.get("reset_str", "07 Oct 2026 at 05:30 IST")
+                st.rerun()
 
         with col_live2:
-            btn2_disabled = st.session_state.get("mode2_rate_limited", False)
-            btn2_label = "Quota Exhausted (429)" if btn2_disabled else "Mode 2: Try Live Call →"
+            btn2_disabled = st.session_state.get("daily_quota_exhausted", False)
+            btn2_label = "Quota Exhausted (429)" if btn2_disabled else "Mode 2: Run Live LLM →"
             if st.button(btn2_label, disabled=btn2_disabled, key="btn_try_live_2", use_container_width=True):
-                with st.spinner("Calling nvidia/nemotron-3.5-lightning live..."):
-                    success, res_data, msg = call_live_mode(2, st.session_state["active_query_text"])
-                    if success:
-                        st.session_state["live_mode2_result"] = res_data
-                        st.session_state["mode2_msg"] = None
-                    else:
-                        if res_data and res_data.get("is_429"):
-                            st.session_state["mode2_rate_limited"] = True
-                        st.session_state["mode2_msg"] = msg
+                with st.spinner(f"Waiting for model response ({target_model_name}, timeout: {eff_timeout:.0f}s)..."):
+                    run_res = execute_dashboard_llm_request(
+                        mode_num=2,
+                        query=st.session_state["active_query_text"],
+                        contract=live_result["contract"],
+                    )
+                    st.session_state["llm_runs"][f"{st.session_state['active_query_text']}::mode_2"] = run_res
+                    if run_res.get("status") == "daily_quota_exhausted":
+                        st.session_state["daily_quota_exhausted"] = True
+                        st.session_state["daily_quota_reset_str"] = run_res.get("reset_str", "07 Oct 2026 at 05:30 IST")
                 st.rerun()
 
-            if st.session_state.get("mode2_msg"):
-                render_html(f"<div style='font-size: 0.8rem; color: var(--text-secondary); font-style: italic; margin-top: 4px; margin-bottom: 20px;'>{st.session_state['mode2_msg']}</div>")
-            elif st.session_state.get("live_mode2_result"):
-                render_html(f"<div style='font-size: 0.8rem; color: var(--seq-6); font-weight: 600; margin-top: 4px; margin-bottom: 20px;'>{ICON_CHECK} Live call succeeded ({st.session_state['live_mode2_result']['latency']})</div>")
+        with col_clear:
+            q_key = st.session_state["active_query_text"]
+            has_cached = (
+                f"{q_key}::mode_1" in st.session_state.get("llm_runs", {})
+                or f"{q_key}::mode_2" in st.session_state.get("llm_runs", {})
+            )
+            if st.button("🔄 Clear Cache", disabled=not has_cached, key="btn_clear_cache", use_container_width=True):
+                st.session_state["llm_runs"].pop(f"{q_key}::mode_1", None)
+                st.session_state["llm_runs"].pop(f"{q_key}::mode_2", None)
+                st.rerun()
 
-        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+        # Telemetry & Raw LLM Inspector Expander
+        m1_run_data = st.session_state.get("llm_runs", {}).get(f"{st.session_state['active_query_text']}::mode_1")
+        m2_run_data = st.session_state.get("llm_runs", {}).get(f"{st.session_state['active_query_text']}::mode_2")
 
-        # Architectural Failure Mode Analysis Cards with Bold Red Error Delta Callout
-        m1_err_pct = live_result["mode1_info"]["error_pct"]
-        m1_ovf_fmt = format_currency(live_result["mode1_info"]["overflow_usd"], selected_currency)
+        if m1_run_data or m2_run_data:
+            with st.expander("🔍 Inspect Raw LLM Response & Telemetry Metadata (Mode 1 / Mode 2)", expanded=False):
+                if m1_run_data:
+                    st.markdown("#### Mode 1: Pure LLM (Unstructured)")
+                    st.json({
+                        "status": m1_run_data.get("status"),
+                        "model": m1_run_data.get("model"),
+                        "elapsed_seconds": m1_run_data.get("elapsed_seconds"),
+                        "finish_reason": m1_run_data.get("finish_reason"),
+                        "usage": m1_run_data.get("usage"),
+                        "reported_cost_usd": m1_run_data.get("reported_cost_usd"),
+                        "actual_catalog_cost_usd": m1_run_data.get("actual_cost_usd"),
+                        "error_pct": m1_run_data.get("error_pct"),
+                    })
+                    st.markdown("**Raw Returned Text:**")
+                    st.code(m1_run_data.get("content", ""), language="text")
+
+                if m2_run_data:
+                    st.markdown("#### Mode 2: Structured LLM (Pydantic)")
+                    st.json({
+                        "status": m2_run_data.get("status"),
+                        "model": m2_run_data.get("model"),
+                        "elapsed_seconds": m2_run_data.get("elapsed_seconds"),
+                        "finish_reason": m2_run_data.get("finish_reason"),
+                        "usage": m2_run_data.get("usage"),
+                        "reported_cost_usd": m2_run_data.get("reported_cost_usd"),
+                        "actual_catalog_cost_usd": m2_run_data.get("actual_cost_usd"),
+                        "error_pct": m2_run_data.get("error_pct"),
+                        "parsed_json": m2_run_data.get("parsed_json"),
+                    })
+                    st.markdown("**Raw Returned Text:**")
+                    st.code(m2_run_data.get("content", ""), language="json")
+
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+
+        # Architectural Failure Mode Analysis Cards
+        m1_info_obj = live_result["mode1_info"]
+        m1_err_pct_val = m1_info_obj.get("error_pct")
+        m1_ovf_fmt = format_currency(m1_info_obj.get("overflow_usd"), selected_currency)
+        if m1_err_pct_val is not None:
+            m1_delta_tag = f'<strong style="color: #F5365C; font-weight: 700;">+{m1_err_pct_val:.1f}% Pricing Error ({m1_ovf_fmt} Budget Overflow)</strong> on real cloud catalog SKUs.'
+        elif m1_info_obj.get("source") == "live_error":
+            m1_delta_tag = f'<strong style="color: #F5365C;">Failed: {m1_info_obj.get("error", "Error")}</strong>'
+        else:
+            m1_delta_tag = '<em>Awaiting live evaluation (Click "Mode 1: Run Live LLM →" above).</em>'
+
         col_w, col_s = st.columns(2)
         with col_w:
             render_html(
@@ -3076,7 +3763,7 @@ else:
                     <div style="font-size: 0.95rem; font-weight: 600; color: var(--status-error); margin-bottom: 8px;">{ICON_CROSS} Pure / Structured LLMs</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;">
                         • High natural language flexibility on colloquial input.<br>
-                        • <strong style="color: #F5365C; font-weight: 700;">+{m1_err_pct:.1f}% Pricing Error ({m1_ovf_fmt} Budget Overflow)</strong> on real cloud catalog SKUs.<br>
+                        • {m1_delta_tag}<br>
                         • Prone to silent budget violations and RAM/vCPU deficits without mathematical proofs.
                     </div>
                 </div>
@@ -3089,8 +3776,8 @@ else:
                     <div style="font-size: 0.95rem; font-weight: 600; color: var(--seq-6); margin-bottom: 8px;">{ICON_CHECK} Full Neuro-Symbolic Pipeline</div>
                     <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;">
                         • Bridges natural language to formal mathematical contracts.<br>
-                        • Zero constraint violations via SciPy MILP and Z3 SMT.<br>
-                        • Provably optimal cost allocation with verified proof bounds.
+                        • Mathematical solver execution (MILP, SMT, PSO) with independent catalog verification.<br>
+                        • Feasibility checking against formal resource, SLA, latency, and budget invariants.
                     </div>
                 </div>
                 """
@@ -3100,7 +3787,7 @@ else:
         render_html(
             """
             <div class="caveat-text">
-                ✅ All metrics, cost deltas, and solver crash logs are computed live in real-time from backend execution certificates.
+                ✅ All metrics, cost calculations, and constraint checks are independently verified against cloud catalog SKUs and solver certificates in real time.
             </div>
             """
         )

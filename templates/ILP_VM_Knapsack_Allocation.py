@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 import numpy as np
 
+try:
+    from scipy.optimize import LinearConstraint, milp
+    HAS_SCIPY_MILP = True
+except Exception:
+    HAS_SCIPY_MILP = False
+
 from config.settings import settings
 
 
@@ -103,25 +109,24 @@ def solve_ilp_vm_knapsack(
     solver_name = "Exact_Branch_and_Bound_ILP"
 
     # Attempt SciPy MILP if available
-    try:
-        from scipy.optimize import LinearConstraint, milp
+    if HAS_SCIPY_MILP:
+        try:
+            A = np.vstack([-vcpus, -ram, costs])
+            lhs = np.array([-np.inf, -np.inf, 0.0])
+            rhs = np.array([-vcpus_target, -ram_target, budget_max_usd])
+            constraints = LinearConstraint(A, lhs, rhs)
+            integrality = np.ones(n)
 
-        A = np.vstack([-vcpus, -ram, costs])
-        lhs = np.array([-np.inf, -np.inf, 0.0])
-        rhs = np.array([-vcpus_target, -ram_target, budget_max_usd])
-        constraints = LinearConstraint(A, lhs, rhs)
-        integrality = np.ones(n)
-
-        res = milp(c=costs, constraints=constraints, integrality=integrality)
-        if res.success:
-            counts = np.round(res.x).astype(int)
-            calc_cost = float(np.dot(costs, counts))
-            if calc_cost <= budget_max_usd:
-                best_cost = calc_cost
-                best_allocation = counts
-                solver_name = "SciPy_MILP_HiGHS"
-    except Exception:
-        pass
+            res = milp(c=costs, constraints=constraints, integrality=integrality)
+            if res.success:
+                counts = np.round(res.x).astype(int)
+                calc_cost = float(np.dot(costs, counts))
+                if calc_cost <= budget_max_usd:
+                    best_cost = calc_cost
+                    best_allocation = counts
+                    solver_name = "SciPy_MILP_HiGHS"
+        except Exception:
+            pass
 
     # Exact Branch-and-Bound solver using NumPy
     if best_allocation is None or best_cost > budget_max_usd:

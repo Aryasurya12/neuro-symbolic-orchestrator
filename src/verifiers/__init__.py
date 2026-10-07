@@ -9,9 +9,12 @@ from src.verifiers.proof_engine import (
     compute_optimality_certificate,
     verify_feasibility,
 )
+from src.verifiers.independent_checker import IndependentChecker
 
 __all__ = [
     "MathematicalProofEngine",
     "verify_feasibility",
     "compute_optimality_certificate",
+    "IndependentChecker",
 ]
+

@@ -1,13 +1,13 @@
-"""Live Stage-by-Stage Terminal Trace for Neuro-Symbolic Cloud Optimization.
+"""Terminal Stage Trace for Neuro-Symbolic Cloud Optimization.
 
-Goal: Prints the genuine internal working of each pipeline stage as it executes,
-capturing real intermediate values, regex match statuses, full CARM archetype
-comparisons, Pydantic contract validation, deterministic solver dispatch, real
-solver iteration loops (PSO/Z3/ILP), and explainer consumption fields.
+Executes ONE query (or batch) through the REAL current pipeline and prints every
+stage's actual internal state AS IT HAPPENS — including exactly where and why it fails,
+if it fails. Calls the real functions verified in Step 4 without mocks or reconstruction.
 
 CLI Usage:
-    python -m src.proof.stage_trace --query "Deploy 8 vCPUs and 16GB RAM for under $300 on AWS"
-    python -m src.proof.stage_trace --query-file data/diagnostic_queries.json --limit 5
+    python -m src.proof.stage_trace --query "Deploy 8 vCPUs and 16GB RAM for under $300 on AWS" --mode 4
+    python -m src.proof.stage_trace --query "Continuous dynamic scaling with target CPU 70% under $1500" --mode 3
+    python -m src.proof.stage_trace --queries-file data/diagnostic_queries.json --mode 4 --failures-only
 """
 
 from __future__ import annotations
@@ -18,12 +18,8 @@ import os
 import re
 import sys
 import time
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-
-import numpy as np
-import z3
+from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure UTF-8 stdout encoding on Windows consoles
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -33,623 +29,198 @@ if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
         pass
 
 from config.settings import settings
+from src.optimizers.raw_symbolic_runner import run_symbolic_rule_based
+from src.orchestrator.service import NeuroSymbolicOrchestrator
 from src.semantic.carm_matcher import CARMMatcher
 from src.semantic.explainer import FinOpsExplainer
 from src.semantic.schemas import CloudOptimizationContract
 from src.semantic.scope_parser import SCOPEParser
-from templates.Continuous_PSO_Dynamic_Scaling import (
-    solve_pso_continuous_scaling,
-)
+from src.verifiers.independent_checker import IndependentChecker
+from templates.Continuous_PSO_Dynamic_Scaling import solve_pso_continuous_scaling
 from templates.Graph_SMT_Z3_MultiRegion_Placement import (
+    REGIONS_GRAPH,
     calculate_composite_sla,
     solve_z3_graph_disaster_recovery,
 )
-from templates.ILP_VM_Knapsack_Allocation import (
-    _VM_CATALOG,
-    solve_ilp_vm_knapsack,
-)
+from templates.ILP_VM_Knapsack_Allocation import solve_ilp_vm_knapsack
 
 
-# =============================================================================
-# Helper Utilities & ANSI Terminal Styling
-# =============================================================================
+def trace_stage_1_parsing(
+    parser: SCOPEParser, query_text: str, silent: bool = False
+) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    """STAGE 1: Rule-Based Parsing (SCOPEParser).
 
-
-class Color:
-    """Terminal ANSI colors for clean, high-visibility output."""
-
-    HEADER = "\033[95m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-    DIM = "\033[2m"
-    RESET = "\033[0m"
-
-
-def print_stage_header(stage_num: int, title: str) -> None:
-    """Prints a prominent formatted stage separator."""
-    line = "=" * 80
-    print(f"\n{Color.BOLD}{Color.CYAN}{line}")
-    print(f"=== STAGE {stage_num}: {title.upper()} ===")
-    print(f"{line}{Color.RESET}\n")
-
-
-def print_sub_header(title: str) -> None:
-    """Prints a subsection header."""
-    print(f"\n{Color.BOLD}{Color.YELLOW}--- {title} ---{Color.RESET}")
-
-
-# =============================================================================
-# Solver Execution with Deep Internal Tracing
-# =============================================================================
-
-
-def trace_pso_solver_internals(
-    contract: CloudOptimizationContract,
-    interval: int = 10,
-    random_seed: int = 42,
-) -> Dict[str, Any]:
-    """Executes the Continuous PSO Dynamic Scaling Solver while capturing the
-    full iteration loop and convergence curve at every N-th iteration.
+    Inspects actual regex field extraction and returns (success, extracted_params, failure_reason).
     """
-    np.random.seed(random_seed)
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
 
-    bandwidth_min_mbps = 100.0
-    bandwidth_max_mbps = 1000.0
-    target_cpu_pct = getattr(settings, "DEFAULT_PSO_TARGET_CPU_PCT", 70.0)
-    budget_max_usd = contract.budget_max_usd
-    num_particles = getattr(settings, "DEFAULT_PSO_NUM_PARTICLES", 30)
-    max_iterations = getattr(settings, "DEFAULT_PSO_MAX_ITERATIONS", 50)
-    cost_per_mbps_month = getattr(
-        settings, "DEFAULT_PSO_COST_PER_MBPS_MONTH", 0.08
+    log("--- STAGE 1: Rule-Based Parsing (SCOPEParser) ---")
+    log("  Attempting field extraction...")
+
+    # Regex matches inspection
+    # 1. vCPUs
+    vcpu_match = re.search(
+        r"(?:(\d+)\s*(?:vcpus?|cores?|v-cpu)|(?:vcpus?|cores?|v-cpu)\s*(?:>=|<=|:|:=|=)?\s*(\d+))",
+        query_text,
+        re.IGNORECASE,
     )
-    cost_per_replica_month = getattr(
-        settings, "DEFAULT_PSO_COST_PER_REPLICA_MONTH", 45.0
+    if vcpu_match:
+        val_vcpu = int(vcpu_match.group(1) or vcpu_match.group(2))
+        log(f'  vcpus:   matched "{vcpu_match.group(0)}" -> {val_vcpu}')
+    else:
+        log('  vcpus:   NO MATCH (tried patterns: r"(\\d+)\\s*(?:vcpus?|cores?|v-cpu)", r"vcpus?\\s*(?:>=|:)\\s*(\\d+)")')
+
+    # 2. RAM
+    ram_match = re.search(
+        r"(?:(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)\s*(?:ram|memory)?|(?:ram|memory)\s*(?:>=|<=|:|:=|=)?\s*(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)?)",
+        query_text,
+        re.IGNORECASE,
     )
-    w = getattr(settings, "DEFAULT_PSO_INERTIA_WEIGHT", 0.729)
-    c1 = getattr(settings, "DEFAULT_PSO_COGNITIVE_PARAM", 1.494)
-    c2 = getattr(settings, "DEFAULT_PSO_SOCIAL_PARAM", 1.494)
-    cpu_deviation_weight = getattr(
-        settings, "DEFAULT_PSO_CPU_PENALTY_WEIGHT", 2.5
-    )
-    budget_penalty_weight = getattr(
-        settings, "DEFAULT_PSO_BUDGET_PENALTY_WEIGHT", 50.0
-    )
-    replicas_capacity_factor = getattr(
-        settings, "DEFAULT_PSO_REPLICAS_CAPACITY_FACTOR", 75.0
-    )
-    hours_per_month = getattr(settings, "HOURS_PER_MONTH", 730.0)
+    if ram_match:
+        val_ram = float(ram_match.group(1) or ram_match.group(2))
+        log(f'  ram_gb:  matched "{ram_match.group(0)}" -> {val_ram}')
+    else:
+        log('  ram_gb:  NO MATCH (tried patterns: r"(\\d+(?:\\.\\d+)?)\\s*(?:gb|gigabytes?)", r"ram\\s*(?:>=|:)\\s*(\\d+)")')
 
-    # Search bounds: [bandwidth, replicas]
-    lb = np.array([bandwidth_min_mbps, 1.0])
-    ub = np.array([bandwidth_max_mbps, 16.0])
-
-    # Particles initialization
-    positions = np.random.uniform(lb, ub, (num_particles, 2))
-    velocities = np.zeros((num_particles, 2))
-
-    def objective_fn(pos: np.ndarray) -> np.ndarray:
-        bw = pos[:, 0]
-        reps = pos[:, 1]
-        cost = (bw * cost_per_mbps_month) + (reps * cost_per_replica_month)
-        simulated_cpu = np.clip(
-            (bw / (reps * replicas_capacity_factor)) * 100.0, 10.0, 99.0
-        )
-        cpu_deviation_penalty = (
-            np.abs(simulated_cpu - target_cpu_pct) * cpu_deviation_weight
-        )
-        budget_penalty = (
-            np.maximum(0.0, cost - budget_max_usd) * budget_penalty_weight
-        )
-        return cost + cpu_deviation_penalty + budget_penalty
-
-    # Initial fitness evaluation
-    fitness = objective_fn(positions)
-    pbest_positions = np.copy(positions)
-    pbest_fitness = np.copy(fitness)
-
-    gbest_idx = np.argmin(pbest_fitness)
-    gbest_position = np.copy(pbest_positions[gbest_idx])
-    gbest_fitness = float(pbest_fitness[gbest_idx])
-
-    iteration_trace: List[Dict[str, Any]] = [
-        {
-            "iteration": 1,
-            "best_fitness": round(gbest_fitness, 4),
-            "best_bandwidth_mbps": round(float(gbest_position[0]), 2),
-            "best_replicas": round(float(gbest_position[1]), 2),
-        }
+    # 3. Budget (INR / USD)
+    inr_patterns = [
+        r"(?:₹|rs\.?)\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+        r"(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:inr|rupees?|rs\b)",
     ]
-
-    # PSO Optimization Loop
-    for it in range(1, max_iterations + 1):
-        r1 = np.random.rand(num_particles, 2)
-        r2 = np.random.rand(num_particles, 2)
-
-        velocities = (
-            w * velocities
-            + c1 * r1 * (pbest_positions - positions)
-            + c2 * r2 * (gbest_position - positions)
-        )
-
-        positions = np.clip(positions + velocities, lb, ub)
-        fitness = objective_fn(positions)
-
-        # Update personal bests
-        improved = fitness < pbest_fitness
-        pbest_positions[improved] = positions[improved]
-        pbest_fitness[improved] = fitness[improved]
-
-        # Update global best
-        current_min_idx = np.argmin(pbest_fitness)
-        if pbest_fitness[current_min_idx] < gbest_fitness:
-            gbest_fitness = float(pbest_fitness[current_min_idx])
-            gbest_position = np.copy(pbest_positions[current_min_idx])
-
-        if it % interval == 0 or it == max_iterations:
-            iteration_trace.append(
-                {
-                    "iteration": it,
-                    "best_fitness": round(gbest_fitness, 4),
-                    "best_bandwidth_mbps": round(float(gbest_position[0]), 2),
-                    "best_replicas": round(float(gbest_position[1]), 2),
-                }
-            )
-
-    optimal_bw = float(round(gbest_position[0], 2))
-    optimal_replicas = int(max(1, round(gbest_position[1])))
-    monthly_cost = round(
-        (optimal_bw * cost_per_mbps_month)
-        + (optimal_replicas * cost_per_replica_month),
-        2,
-    )
-    hourly_cost = (
-        round(monthly_cost / hours_per_month, 4) if hours_per_month > 0 else 0.0
-    )
-
-    solver_output = {
-        "status": "CONVERGED",
-        "solver": "Continuous_Vectorized_PSO",
-        "optimal_bandwidth_mbps": optimal_bw,
-        "recommended_replicas": optimal_replicas,
-        "target_cpu_utilization_pct": target_cpu_pct,
-        "estimated_monthly_cost_usd": monthly_cost,
-        "estimated_hourly_cost_usd": hourly_cost,
-        "budget_max_usd": budget_max_usd,
-        "budget_utilized_pct": (
-            round((monthly_cost / budget_max_usd) * 100, 2)
-            if budget_max_usd > 0
-            else 0.0
-        ),
-        "cost_savings_usd": round(max(0.0, budget_max_usd - monthly_cost), 2),
-        "fitness_score": round(gbest_fitness, 4),
-        "iterations_completed": max_iterations,
-        "particles_count": num_particles,
-    }
-
-    return {
-        "solver_type": "PSO",
-        "loop_description": f"Vectorized Particle Swarm Optimization ({num_particles} particles, {max_iterations} iterations)",
-        "hyperparameters": {
-            "num_particles": num_particles,
-            "max_iterations": max_iterations,
-            "inertia_weight": w,
-            "cognitive_c1": c1,
-            "social_c2": c2,
-            "search_bounds": {
-                "bandwidth_mbps": [bandwidth_min_mbps, bandwidth_max_mbps],
-                "replicas": [1.0, 16.0],
-            },
-        },
-        "iteration_trace": iteration_trace,
-        "optimal_objective_value": round(gbest_fitness, 4),
-        "is_feasible": True,
-        "solver_output": solver_output,
-    }
-
-
-def trace_z3_solver_internals(
-    contract: CloudOptimizationContract,
-    timeout_ms: int = 5000,
-) -> Dict[str, Any]:
-    """Executes the Z3 SMT Graph Disaster Recovery Solver while extracting
-    all concrete constraint clauses and Z3 AST expressions before check().
-    """
-    try:
-        from src.symbolic.solvers.graph_model import InfrastructureGraph
-
-        graph = InfrastructureGraph()
-        nodes = graph.get_all_nodes()
-    except Exception:
-        from templates.Graph_SMT_Z3_MultiRegion_Placement import REGIONS_GRAPH
-
-        class MockNode:
-
-            def __init__(self, data: dict):
-                self.id = data["id"]
-                self.provider = data["provider"]
-                self.geo = data["geo"]
-                self.base_cost_usd = data["base_cost_usd"]
-                self.sla_pct = data["sla_pct"]
-                self.peer_latencies_ms = data.get("peer_latencies_ms", {})
-
-        nodes = [MockNode(r) for r in REGIONS_GRAPH]
-
-    solver = z3.Optimize()
-    solver.set("timeout", timeout_ms)
-
-    selected_vars: Dict[str, z3.BoolRef] = {
-        node.id: z3.Bool(f"selected_{node.id}") for node in nodes
-    }
-
-    constraint_clauses: List[str] = []
-
-    # 1. Exact 2-Region Cardinality
-    cardinality_terms = [
-        z3.If(selected_vars[node.id], 1, 0) for node in nodes
+    usd_patterns = [
+        r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+        r"(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:usd|dollars?)",
+        r"(?:budget|cost|price|spend|limit|under|cap)\s*(?:of|max|limit|under|is|to)?\s*[:=]?\s*\$?\s*(\d+(?:,\d+)*(?:\.\d+)?)",
     ]
-    cardinality_expr = z3.Sum(cardinality_terms) == 2
-    solver.add(cardinality_expr)
-    var_list_str = ", ".join([f"selected_{node.id}" for node in nodes])
-    constraint_clauses.append(
-        f"Cardinality: Sum([{var_list_str}]) == 2"
-    )
+    budget_matched = False
+    for pat in inr_patterns:
+        m = re.search(pat, query_text, re.IGNORECASE)
+        if m:
+            val_inr = float(m.group(1).replace(",", ""))
+            val_usd = round(val_inr / settings.USD_TO_INR_RATE, 2)
+            log(f'  budget:  matched "{m.group(0)}" -> {val_inr} INR (~${val_usd} USD)')
+            budget_matched = True
+            break
+    if not budget_matched:
+        for pat in usd_patterns:
+            m = re.search(pat, query_text, re.IGNORECASE)
+            if m:
+                val_usd = float(m.group(1).replace(",", ""))
+                log(f'  budget:  matched "{m.group(0)}" -> ${val_usd:.2f} USD')
+                budget_matched = True
+                break
+    if not budget_matched:
+        log('  budget:  NO MATCH (tried patterns: ["$...", "INR/₹...", "under/budget $..."])')
+
+    # 4. Provider
+    prov_match = re.search(r"\b(AWS|Azure|GCP)\b", query_text, re.IGNORECASE)
+    if prov_match:
+        log(f'  provider: matched "{prov_match.group(0)}" -> "{prov_match.group(1).lower()}"')
+    else:
+        log('  provider: NO MATCH (tried pattern: r"\\b(AWS|Azure|GCP)\\b")')
+
+    # 5. Latency & SLA
+    lat_match = re.search(r"(?:max\s+|under\s+|latency\s+(?:of\s+|under\s+)?|\b)(\d+(?:\.\d+)?)\s*ms", query_text, re.IGNORECASE)
+    if lat_match:
+        log(f'  latency: matched "{lat_match.group(0)}" -> {float(lat_match.group(1))} ms')
+    sla_match = re.search(r"(9\d(?:\.\d+)?)\s*%", query_text, re.IGNORECASE)
+    if sla_match:
+        log(f'  sla:     matched "{sla_match.group(0)}" -> {float(sla_match.group(1))}%')
+
+    # Domain Intent Check
+    has_intent = parser.has_cloud_intent(query_text)
+    if not has_intent:
+        reason = "RESULT: PARSER_FAILED -- no archetype could be constructed from this input. Stopping here, as Mode 3/4 would."
+        log(f"  {reason}")
+        return False, None, reason
+
+    # Extract actual parameters
+    params = parser.extract_parameters(query_text)
+
+    # Missing field detection
+    missing_fields = []
+    if "budget_max_usd" not in params:
+        missing_fields.append("budget_max_usd (using default $500.00)")
+    if not vcpu_match and "required_vcpus" not in params:
+        missing_fields.append("required_vcpus")
+    if not ram_match and "required_ram_gb" not in params:
+        missing_fields.append("required_ram_gb")
+
+    if missing_fields:
+        log(f"  RESULT: PARTIAL CONTRACT ({len(missing_fields)} field(s) defaulted/missing: {', '.join(missing_fields)})")
+    else:
+        log("  RESULT: FULL CONTRACT EXTRACTED")
+
+    return True, params, None
 
 
-    # 2. Provider Validity
-    allowed_providers = {p.upper() for p in contract.cloud_providers}
-    for node in nodes:
-        if node.provider.upper() not in allowed_providers:
-            prov_clause = z3.Not(selected_vars[node.id])
-            solver.add(prov_clause)
-            constraint_clauses.append(
-                f"ProviderFilter: Not(selected_{node.id}) [Provider {node.provider} not in {contract.cloud_providers}]"
-            )
+def trace_stage_2_archetype_matching(
+    matcher: CARMMatcher, query_text: str, parser: SCOPEParser, silent: bool = False
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """STAGE 2: Archetype Matching (CARM).
 
-    # 3. Disjointness / Multi-Cloud Constraint
-    is_multi_cloud = len(allowed_providers) >= 2
-    for i, a in enumerate(nodes):
-        for j, b in enumerate(nodes):
-            if i < j:
-                if a.geo == b.geo and a.provider == b.provider:
-                    same_domain_clause = z3.Not(
-                        z3.And(selected_vars[a.id], selected_vars[b.id])
-                    )
-                    solver.add(same_domain_clause)
-                    constraint_clauses.append(
-                        f"FailureDomainDisjoint: Not(And(selected_{a.id}, selected_{b.id})) [Same geo '{a.geo}' & provider '{a.provider}']"
-                    )
-                if is_multi_cloud and a.provider.upper() == b.provider.upper():
-                    same_prov_clause = z3.Not(
-                        z3.And(selected_vars[a.id], selected_vars[b.id])
-                    )
-                    solver.add(same_prov_clause)
-                    constraint_clauses.append(
-                        f"CrossProviderDisjoint: Not(And(selected_{a.id}, selected_{b.id})) [Both on '{a.provider}']"
-                    )
-
-    # 4. Budget Ceiling
-    cost_terms = [
-        z3.If(selected_vars[node.id], z3.RealVal(node.base_cost_usd), z3.RealVal(0.0))
-        for node in nodes
-    ]
-    budget_clause = z3.Sum(cost_terms) <= z3.RealVal(contract.budget_max_usd)
-    solver.add(budget_clause)
-    constraint_clauses.append(
-        f"BudgetCeiling: Sum(base_cost[node] * selected[node]) <= ${contract.budget_max_usd:.2f}"
-    )
-
-    # 5. Latency Ceiling
-    if contract.latency_max_ms > 0:
-        for i, a in enumerate(nodes):
-            for j, b in enumerate(nodes):
-                if i < j:
-                    lat = a.peer_latencies_ms.get(
-                        b.id, getattr(b, "peer_latencies_ms", {}).get(a.id, 999.0)
-                    )
-                    if lat > contract.latency_max_ms:
-                        lat_clause = z3.Not(
-                            z3.And(selected_vars[a.id], selected_vars[b.id])
-                        )
-                        solver.add(lat_clause)
-                        constraint_clauses.append(
-                            f"LatencyThreshold: Not(And(selected_{a.id}, selected_{b.id})) [Latency {lat}ms > max {contract.latency_max_ms}ms]"
-                        )
-
-    # 6. SLA Availability Floor
-    if contract.sla_availability_pct > 0:
-        for i, a in enumerate(nodes):
-            for j, b in enumerate(nodes):
-                if i < j:
-                    comp_sla = calculate_composite_sla(a.sla_pct, b.sla_pct)
-                    if comp_sla < contract.sla_availability_pct:
-                        sla_clause = z3.Not(
-                            z3.And(selected_vars[a.id], selected_vars[b.id])
-                        )
-                        solver.add(sla_clause)
-                        constraint_clauses.append(
-                            f"SLAThreshold: Not(And(selected_{a.id}, selected_{b.id})) [SLA {comp_sla:.5f}% < target {contract.sla_availability_pct}%]"
-                        )
-
-    # Objective: Minimize cost
-    solver.minimize(z3.Sum(cost_terms))
-
-    # Solver check
-    check_status = solver.check()
-    z3_result_str = str(check_status)
-
-    model_dict: Dict[str, Any] = {}
-    is_feasible = check_status == z3.sat
-
-    # Also run standard template solver for comprehensive explainer payload
-    template_res = solve_z3_graph_disaster_recovery(
-        sla_pct=contract.sla_availability_pct,
-        max_latency_ms=contract.latency_max_ms,
-        budget_max_usd=contract.budget_max_usd,
-        target_providers=contract.cloud_providers,
-    )
-
-    if is_feasible:
-        model = solver.model()
-        selected_nodes = [
-            n for n in nodes if z3.is_true(model.eval(selected_vars[n.id]))
-        ]
-        model_dict = {
-            "selected_variables": {
-                f"selected_{n.id}": bool(
-                    z3.is_true(model.eval(selected_vars[n.id]))
-                )
-                for n in nodes
-            },
-            "selected_regions": [n.id for n in selected_nodes],
-            "providers": [n.provider for n in selected_nodes],
-            "base_costs": {n.id: n.base_cost_usd for n in selected_nodes},
-        }
-
-    return {
-        "solver_type": "Z3_SMT",
-        "loop_description": "Z3 SMT Optimization Engine (Theory of Linear Real/Integer Arithmetic & Booleans)",
-        "decision_variables": list(selected_vars.keys()),
-        "constraint_clauses": constraint_clauses,
-        "solver_check_result": z3_result_str,
-        "is_feasible": is_feasible,
-        "model": model_dict,
-        "solver_output": template_res,
-    }
-
-
-def trace_ilp_solver_internals(
-    contract: CloudOptimizationContract,
-) -> Dict[str, Any]:
-    """Executes the ILP VM Allocation Knapsack Solver while extracting
-    the objective vector, constraint matrix shape, and solving method.
+    Computes Jaccard similarity across all registered templates.
     """
-    target_providers = contract.cloud_providers
-    catalog = _VM_CATALOG
-    if target_providers:
-        target_upper = {p.upper() for p in target_providers}
-        filtered = [sku for sku in catalog if sku.provider.upper() in target_upper]
-        if filtered:
-            catalog = filtered
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
 
-    n = len(catalog)
-    costs = np.array([sku.monthly_cost() for sku in catalog])
-    vcpus = np.array([sku.vcpus for sku in catalog])
-    ram = np.array([sku.ram_gb for sku in catalog])
+    log("\n--- STAGE 2: Archetype Matching (CARM) ---")
+    extracted_constraints = parser.extract_constraints_from_text(query_text)
 
-    # Constraint matrix A_ub @ x <= b_ub
-    # Constraints: -vcpus @ x <= -req_vcpus, -ram @ x <= -req_ram, costs @ x <= budget
-    A = np.vstack([-vcpus, -ram, costs])
-    b = np.array([
-        -contract.required_vcpus,
-        -contract.required_ram_gb,
-        contract.budget_max_usd,
-    ])
+    if not extracted_constraints:
+        log("  Extracted Constraints: NONE (empty set)")
+        log("  ILP_VM_Allocation                  : score 0.00")
+        log("  PSO_Continuous_Scaling             : score 0.00")
+        log("  Z3_Graph_Disaster_Recovery         : score 0.00")
+        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no matching constraint tokens found. Stopping here."
+        log(f"  {reason}")
+        return False, None, reason
 
-    template_res = solve_ilp_vm_knapsack(
-        required_vcpus=contract.required_vcpus,
-        required_ram_gb=contract.required_ram_gb,
-        budget_max_usd=contract.budget_max_usd,
-        target_providers=contract.cloud_providers,
-        catalog=catalog,
-    )
+    scores = {}
+    for archetype, data in matcher.TEMPLATE_INDEX.items():
+        score = matcher.compute_jaccard_score(
+            extracted_constraints, data["constraints"]  # type: ignore[arg-type]
+        )
+        scores[archetype] = round(score, 4)
 
-    is_feasible = template_res.get("status") in ["OPTIMAL", "FEASIBLE"]
+    # Print individual scores
+    for arch, sc in scores.items():
+        log(f"  {arch:<35}: score {sc:.2f}")
 
-    return {
-        "solver_type": "ILP",
-        "loop_description": "Exact Branch-and-Bound / SciPy MILP HiGHS Simplex & Cutting Planes",
-        "sku_catalog_size": n,
-        "sku_names": [f"{sku.provider}:{sku.name}" for sku in catalog],
-        "objective_coefficients_usd": costs.tolist(),
-        "constraint_matrix_shape": list(A.shape),
-        "constraint_bounds": b.tolist(),
-        "solving_algorithm": template_res.get(
-            "solver", "Exact_Branch_and_Bound_ILP"
-        ),
-        "solve_time_ms": template_res.get("solve_time_ms", 0.0),
-        "is_feasible": is_feasible,
-        "optimal_objective_value": template_res.get(
-            "total_monthly_cost_usd", 0.0
-        ),
-        "solver_output": template_res,
-    }
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    best_arch, best_score = sorted_scores[0]
+    second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0.0
+    margin = best_score - second_score
+
+    if best_score <= 0.0:
+        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no archetype cleared matching threshold (> 0.0). Stopping here."
+        log(f"  {reason}")
+        return False, None, reason
+
+    log(f"  -> SELECTED: {best_arch} (margin: {margin:.2f})")
+    return True, best_arch, None
 
 
-# =============================================================================
-# Stage-by-Stage Trace Core Orchestrator
-# =============================================================================
+def trace_stage_3_contract_validation(
+    archetype: str, params: Dict[str, Any], silent: bool = False
+) -> Tuple[bool, Optional[CloudOptimizationContract], Optional[str]]:
+    """STAGE 3: Contract Validation.
 
-
-@dataclass
-class StageTracePayload:
-    """Structured container holding real intermediate state for all 6 stages."""
-
-    query_id: str
-    query_text: str
-    stage_1_scope: Dict[str, Any]
-    stage_2_carm: Dict[str, Any]
-    stage_3_contract: Dict[str, Any]
-    stage_4_dispatch: Dict[str, Any]
-    stage_5_solver: Dict[str, Any]
-    stage_6_explainer: Dict[str, Any]
-
-
-def run_stage_by_stage_trace(
-    query_text: str,
-    query_id: str = "query_1",
-    verbose_terminal: bool = True,
-) -> StageTracePayload:
-    """Executes the complete stage-by-stage pipeline for a query, printing
-    real intermediate values at each stage and returning structured trace data.
+    Validates parameters against Pydantic V2 CloudOptimizationContract.
     """
-    if verbose_terminal:
-        print(f"\n{Color.BOLD}{Color.GREEN}{'#' * 80}")
-        print(f" NEURASYM STAGE-BY-STAGE TERMINAL TRACE: [{query_id}]")
-        print(f" Query: \"{query_text}\"")
-        print(f"{'#' * 80}{Color.RESET}\n")
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
 
-    parser = SCOPEParser()
-
-    # -------------------------------------------------------------------------
-    # STAGE 1: SCOPE Parsing (Real Pattern Matcher)
-    # -------------------------------------------------------------------------
-    t1_start = time.perf_counter()
-    extracted_constraints, constraint_traces = parser.extract_constraints_trace(
-        query_text
-    )
-    params, param_traces = parser.extract_parameters_trace(query_text)
-    t1_ms = (time.perf_counter() - t1_start) * 1000.0
-
-    stage_1_data = {
-        "raw_query": query_text,
-        "execution_time_ms": round(t1_ms, 3),
-        "extracted_constraint_tokens": sorted(extracted_constraints),
-        "constraint_pattern_evaluations": constraint_traces,
-        "parameter_extractions": param_traces,
-        "field_provenance": params.get("metadata", {}).get(
-            "field_provenance", {}
-        ),
-    }
-
-    if verbose_terminal:
-        print_stage_header(1, "SCOPE Natural Language Parsing")
-        print(f"Input Query: {Color.BOLD}\"{query_text}\"{Color.RESET}")
-        print(f"Execution Latency: {t1_ms:.3f} ms\n")
-
-        print_sub_header("1.1 Parameter Regex Evaluations & Conversions")
-        for pt in param_traces:
-            status_color = Color.GREEN if pt["matched"] else Color.DIM
-            print(
-                f"  [{status_color}{pt['status']}{Color.RESET}] Field: {Color.BOLD}{pt['field']:<20}{Color.RESET}"
-            )
-            print(f"    - Provenance        : {pt['provenance']}")
-            print(f"    - Type              : {pt['field_type']}")
-            if pt["matched"]:
-                print(
-                    f"    - Matched Pattern   : {pt.get('matched_pattern')}"
-                )
-                print(
-                    f"    - Raw Substring     : {Color.YELLOW}'{pt.get('matched_substring')}'{Color.RESET}"
-                )
-                print(
-                    f"    - Converted Value   : {Color.GREEN}{pt['converted_value']}{Color.RESET}"
-                )
-            else:
-                print(
-                    f"    - Match Status      : {Color.RED}No match{Color.RESET} -> Fallback Applied: {Color.YELLOW}{pt['converted_value']}{Color.RESET}"
-                )
-            print()
-
-        print_sub_header("1.2 Symbolic Constraint Token Extraction")
-        for ct in constraint_traces:
-            c_color = Color.GREEN if ct["matched"] else Color.DIM
-            print(
-                f"  [{c_color}{ct['status']}{Color.RESET}] {Color.BOLD}{ct['constraint_token']}{Color.RESET}"
-            )
-            if ct["matched"]:
-                print(
-                    f"    - Trigger Keywords  : {ct.get('matched_keywords')}"
-                )
-
-        print(
-            f"\n  {Color.BOLD}-> Total Extracted Constraint Set:{Color.RESET} {sorted(extracted_constraints)}"
-        )
-
-    # -------------------------------------------------------------------------
-    # STAGE 2: CARM Pattern Matching (Full Archetype Comparison Table)
-    # -------------------------------------------------------------------------
-    carm_matcher = parser.matcher
-    carm_details = (
-        carm_matcher.match_template_detailed(extracted_constraints)
-        if extracted_constraints
-        else {
-            "scores": carm_matcher.score_all_archetypes(set()),
-            "winner": "ILP_VM_Allocation",
-            "winner_template": "ilp_vm_allocation_template.py",
-            "winner_score": 0.0,
-            "runner_up": None,
-            "runner_up_score": 0.0,
-            "margin": 0.0,
-            "is_near_tie": False,
-        }
-    )
-
-    stage_2_data = {
-        "extracted_constraints": sorted(extracted_constraints),
-        "archetype_scores": carm_details["scores"],
-        "winner": carm_details["winner"],
-        "winner_template": carm_details["winner_template"],
-        "winner_score": carm_details["winner_score"],
-        "runner_up": carm_details["runner_up"],
-        "runner_up_score": carm_details["runner_up_score"],
-        "margin": carm_details["margin"],
-        "is_near_tie": carm_details["is_near_tie"],
-    }
-
-    if verbose_terminal:
-        print_stage_header(
-            2, "CARM Context-Aware Retrieval & Archetype Matching"
-        )
-        print("CARM archetype scores (Jaccard similarity |Intersection| / |Union|):")
-        for score_entry in carm_details["scores"]:
-            is_win = score_entry["archetype"] == carm_details["winner"]
-            prefix = "  -> WINNER: " if is_win else "     "
-            arch_col = Color.GREEN if is_win else Color.RESET
-            print(
-                f"{prefix}{arch_col}{score_entry['archetype']:<36}{Color.RESET} : {score_entry['score']:.4f}  "
-                f"(Matched: {len(score_entry['matched_constraints'])}/{len(score_entry['target_constraints'])})"
-            )
-
-        print(
-            f"\n  {Color.BOLD}-> WINNER: {carm_details['winner']} "
-            f"(margin over 2nd place: {carm_details['margin']:.4f}){Color.RESET}"
-        )
-
-        if carm_details["is_near_tie"]:
-            print(
-                f"  {Color.BOLD}{Color.YELLOW}⚠️  WARNING: Near-tie detected (margin = {carm_details['margin']:.4f} < 0.10) — potential misroute risk!{Color.RESET}"
-            )
-        else:
-            print(
-                f"  {Color.GREEN}✓ Confident Route: Decisive margin ({carm_details['margin']:.4f} >= 0.10){Color.RESET}"
-            )
-
-    # -------------------------------------------------------------------------
-    # STAGE 3: Contract Validation (Pydantic V2 Safety Contract)
-    # -------------------------------------------------------------------------
-    validation_errors: List[Dict[str, str]] = []
+    log("\n--- STAGE 3: Contract Validation ---")
     try:
         contract = CloudOptimizationContract(
-            problem_type=carm_details["winner"],
+            problem_type=archetype,  # type: ignore[arg-type]
             cloud_providers=params.get("cloud_providers", ["AWS"]),
-            budget_max_usd=params.get(
-                "budget_max_usd", settings.DEFAULT_BUDGET_USD
-            ),
+            budget_max_usd=params.get("budget_max_usd", settings.DEFAULT_BUDGET_USD),
             service_count=params.get("service_count", 1),
             required_vcpus=params.get("required_vcpus", 1),
             required_ram_gb=params.get("required_ram_gb", 1.0),
@@ -657,451 +228,635 @@ def run_stage_by_stage_trace(
             sla_availability_pct=params.get("sla_availability_pct", 99.9),
             metadata=params.get("metadata", {}),
         )
-        val_status = "VALIDATED_SUCCESS"
+        log("  Pydantic validation: PASS")
+        return True, contract, None
     except Exception as exc:
-        val_status = "VALIDATION_ERROR_AUTO_PATCHED"
-        validation_errors.append(
-            {"error_type": type(exc).__name__, "error_message": str(exc)}
-        )
-        contract = CloudOptimizationContract(
-            problem_type=carm_details["winner"],
-            cloud_providers=params.get("cloud_providers", ["AWS"]),
-            budget_max_usd=max(
-                settings.MIN_VIABLE_BUDGET_USD,
-                params.get("budget_max_usd", settings.DEFAULT_BUDGET_USD),
-            ),
-            service_count=max(1, params.get("service_count", 1)),
-            required_vcpus=max(1, params.get("required_vcpus", 1)),
-            required_ram_gb=max(1.0, params.get("required_ram_gb", 1.0)),
-            latency_max_ms=min(
-                1000.0, max(1.0, params.get("latency_max_ms", 100.0))
-            ),
-            sla_availability_pct=min(
-                99.999, max(90.0, params.get("sla_availability_pct", 99.9))
-            ),
-            metadata=params.get("metadata", {}),
-        )
+        log("  Pydantic validation: FAIL")
+        log(f"  Validation Error: {exc}")
+        return False, None, f"Pydantic validation failed: {exc}"
 
-    stage_3_data = {
-        "validation_status": val_status,
-        "contract_fields": contract.model_dump(),
-        "validation_errors_caught": validation_errors,
-    }
 
-    if verbose_terminal:
-        print_stage_header(3, "Pydantic V2 Safety Contract Validation")
-        print(f"Validation Status: {Color.BOLD}{Color.GREEN}{val_status}{Color.RESET}")
-        if validation_errors:
-            print(
-                f"{Color.RED}Validation Errors Caught & Patched:{Color.RESET}"
+def trace_stage_4_solver_execution(
+    contract: CloudOptimizationContract, mode: int, silent: bool = False
+) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    """STAGE 4: Solver Dispatch & Execution.
+
+    Dispatches to HiGHS MILP, Continuous PSO, or Z3 SMT Graph solver.
+    """
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
+
+    log("\n--- STAGE 4: Solver Dispatch & Execution ---")
+    problem = contract.problem_type
+
+    if problem == "ILP_VM_Allocation":
+        log("  Routed to: solve_ilp_vm_knapsack (HiGHS MILP)")
+        log(
+            f"  Constraints: vCPUs >= {contract.required_vcpus}, RAM >= {contract.required_ram_gb}GB, "
+            f"Budget <= ${contract.budget_max_usd:.2f}, Provider = {contract.cloud_providers}"
+        )
+        try:
+            prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS"]
+            res = solve_ilp_vm_knapsack(
+                required_vcpus=contract.required_vcpus,
+                required_ram_gb=contract.required_ram_gb,
+                budget_max_usd=contract.budget_max_usd,
+                target_providers=prov_list,
             )
-            for err in validation_errors:
-                print(f"  - {err['error_type']}: {err['error_message']}")
+            log(f"  Raw solver output: {res}")
+            return True, res, None
+        except Exception as exc:
+            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
+            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
 
-        print("\nValidated CloudOptimizationContract Payload:")
-        print(f"  - Problem Type           : {contract.problem_type}")
-        print(f"  - Target Cloud Provider(s): {contract.cloud_providers}")
-        print(f"  - Monthly Budget Cap     : ${contract.budget_max_usd:,.2f} USD")
-        print(f"  - Required Service Count : {contract.service_count} service(s)")
-        print(f"  - Minimum Required vCPUs : {contract.required_vcpus}")
-        print(f"  - Minimum Required RAM   : {contract.required_ram_gb:.1f} GB")
-        print(f"  - Max Tolerable Latency  : {contract.latency_max_ms:.1f} ms")
-        print(f"  - Target SLA Availability: {contract.sla_availability_pct:.4f}%")
-        print(f"  - Metadata & Provenance  : {contract.metadata}")
+    elif problem == "PSO_Continuous_Scaling":
+        log("  Routed to: solve_pso_continuous_scaling (Continuous PSO)")
+        log(
+            f"  Bounds: Bandwidth in [100, 1000] Mbps, Replicas in [1.0, 16.0], "
+            f"Target CPU = 70.0%, Budget <= ${contract.budget_max_usd:.2f}"
+        )
+        try:
+            prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS"]
+            res = solve_pso_continuous_scaling(
+                budget_max_usd=contract.budget_max_usd,
+                target_cpu_pct=70.0,
+                target_providers=prov_list,
+            )
+            log(f"  Raw solver output: {res}")
+            return True, res, None
+        except Exception as exc:
+            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
+            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
 
-    # -------------------------------------------------------------------------
-    # STAGE 4: Solver Dispatch (Deterministic Route Verification)
-    # -------------------------------------------------------------------------
-    if contract.problem_type == "ILP_VM_Allocation":
-        dispatched_func = solve_ilp_vm_knapsack
-        dispatched_module = "templates.ILP_VM_Knapsack_Allocation"
-        dispatched_func_name = "solve_ilp_vm_knapsack"
-    elif contract.problem_type == "PSO_Continuous_Scaling":
-        dispatched_func = solve_pso_continuous_scaling
-        dispatched_module = "templates.Continuous_PSO_Dynamic_Scaling"
-        dispatched_func_name = "solve_pso_continuous_scaling"
-    elif contract.problem_type == "Z3_Graph_Disaster_Recovery":
-        dispatched_func = solve_z3_graph_disaster_recovery
-        dispatched_module = "templates.Graph_SMT_Z3_MultiRegion_Placement"
-        dispatched_func_name = "solve_z3_graph_disaster_recovery"
+    elif problem == "Z3_Graph_Disaster_Recovery":
+        log("  Routed to: solve_z3_graph_disaster_recovery (Z3 SMT Graph)")
+        log(
+            f"  SMT Clauses: Distinct(Region_A, Region_B), Latency(A, B) <= {contract.latency_max_ms}ms, "
+            f"Composite_SLA(A, B) >= {contract.sla_availability_pct}%, Cost(A, B) <= ${contract.budget_max_usd:.2f}"
+        )
+        try:
+            prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS", "GCP"]
+            res = solve_z3_graph_disaster_recovery(
+                sla_pct=contract.sla_availability_pct,
+                max_latency_ms=contract.latency_max_ms,
+                budget_max_usd=contract.budget_max_usd,
+                target_providers=prov_list,
+            )
+            log(f"  Raw solver output: {res}")
+            return True, res, None
+        except Exception as exc:
+            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
+            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
+
     else:
-        dispatched_func = solve_ilp_vm_knapsack
-        dispatched_module = "templates.ILP_VM_Knapsack_Allocation"
-        dispatched_func_name = "solve_ilp_vm_knapsack"
+        reason = f"Unknown problem type: {problem}"
+        log(f"  [Solver Error]: {reason}")
+        return False, None, reason
 
-    stage_4_data = {
-        "problem_type": contract.problem_type,
-        "dispatched_function_name": dispatched_func_name,
-        "dispatched_module": dispatched_module,
-        "dispatched_callable_repr": repr(dispatched_func),
-        "routing_rationale": "Deterministic routing from CARM winning archetype to dedicated symbolic solver",
-    }
 
-    if verbose_terminal:
-        print_stage_header(4, "Symbolic Solver Dispatch")
-        print(f"Problem Type Routed      : {Color.BOLD}{contract.problem_type}{Color.RESET}")
-        print(f"Dispatched Function Name : {Color.BOLD}{Color.CYAN}{dispatched_func_name}{Color.RESET}")
-        print(f"Module Source Location   : {dispatched_module}")
-        print(f"Real Callable Signature  : {dispatched_func.__doc__.splitlines()[0] if dispatched_func.__doc__ else 'N/A'}")
-        print(
-            f"Routing Architecture     : {Color.GREEN}Deterministic Single-Solver Dispatch (No Cross-Solver Arbitrator Mock){Color.RESET}"
+def trace_stage_5_independent_verification(
+    contract: CloudOptimizationContract,
+    solver_result: Dict[str, Any],
+    silent: bool = False,
+    stage_header: Optional[str] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """STAGE 5 (or 4 in LLM mode): Independent Verification (IndependentChecker).
+
+    Verifies catalog SKUs, physical constraint feasibility, and optimality claims.
+    """
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
+
+    hdr = stage_header or "--- STAGE 5: Independent Verification (IndependentChecker) ---"
+    log(f"\n{hdr}")
+    check = IndependentChecker.verify_solution(contract, solver_result)
+
+    # 1. Catalog consistency
+    cat_pass = check.get("catalog_consistent", False)
+    cost_info = check.get("cost_accuracy", {})
+    rep_cost = cost_info.get("reported_cost_usd", 0.0)
+    calc_cost = cost_info.get("calculated_catalog_cost_usd", 0.0)
+
+    # Explicit Safety Guard: Never claim PASS if reported vs verified differs by > $0.05
+    if abs(rep_cost - calc_cost) > 0.05:
+        cat_pass = False
+
+    cat_status = "PASS" if cat_pass else "FAIL"
+    log(f"  Catalog consistency: {cat_status} (Reported: ${rep_cost:.2f}, Catalog verified: ${calc_cost:.2f})")
+
+    # 2. Feasibility check with recomputed numbers
+    feas_pass = check.get("feasible_against_contract", False)
+    feas_status = "PASS" if feas_pass else "FAIL"
+    recomp = check.get("recomputed_metrics", {})
+    problem = contract.problem_type
+
+    if problem == "ILP_VM_Allocation":
+        rc_vcpu = recomp.get("vcpus", 0)
+        rc_ram = recomp.get("ram_gb", 0.0)
+        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
+        log(
+            f"  Feasibility check: {feas_status} ("
+            f"vCPU: {rc_vcpu} >= {contract.required_vcpus}, "
+            f"RAM: {rc_ram:.1f}GB >= {contract.required_ram_gb:.1f}GB, "
+            f"Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f})"
         )
+    elif problem == "PSO_Continuous_Scaling":
+        rc_cpu = recomp.get("modeled_cpu_pct", 0.0)
+        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
+        detail = f"Recomputed CPU: {rc_cpu:.1f}% vs ceiling 70.0%, Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f}"
+        if rc_cpu > 70.0 or rc_cost > contract.budget_max_usd:
+            log(f"  Feasibility check: {feas_status} ({detail} -> VIOLATION)")
+        else:
+            log(f"  Feasibility check: {feas_status} ({detail})")
+    elif problem == "Z3_Graph_Disaster_Recovery":
+        rc_lat = recomp.get("latency_ms", recomp.get("inter_region_latency_ms", 0.0))
+        rc_sla = recomp.get("composite_sla_pct", 0.0)
+        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
+        log(
+            f"  Feasibility check: {feas_status} ("
+            f"Latency: {rc_lat:.1f}ms <= {contract.latency_max_ms:.1f}ms, "
+            f"SLA: {rc_sla:.4f}% >= {contract.sla_availability_pct}%, "
+            f"Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f})"
+        )
+    else:
+        log(f"  Feasibility check: {feas_status}")
 
-    # -------------------------------------------------------------------------
-    # STAGE 5: Solver Internals (The Real Optimization Loop)
-    # -------------------------------------------------------------------------
-    t5_start = time.perf_counter()
-    if contract.problem_type == "PSO_Continuous_Scaling":
-        stage_5_data = trace_pso_solver_internals(contract)
-    elif contract.problem_type == "Z3_Graph_Disaster_Recovery":
-        stage_5_data = trace_z3_solver_internals(contract)
-    else:  # ILP_VM_Allocation
-        stage_5_data = trace_ilp_solver_internals(contract)
-    t5_ms = (time.perf_counter() - t5_start) * 1000.0
-    stage_5_data["solve_time_ms"] = round(t5_ms, 3)
+    # Violations if any
+    violations = check.get("violations", [])
+    if violations:
+        for v in violations:
+            log(f"    -> VIOLATION: {v}")
 
-    solver_result = stage_5_data["solver_output"]
+    # 3. Optimality verdict
+    opt_verdict = check.get("optimality_verdict", "N/A")
+    log(f'  Optimality verdict: "{opt_verdict}"')
 
-    if verbose_terminal:
-        print_stage_header(5, "Solver Internal Optimization Loop")
-        print(f"Solver Engine            : {Color.BOLD}{stage_5_data['solver_type']}{Color.RESET}")
-        print(f"Loop Mechanism           : {stage_5_data['loop_description']}")
-        print(f"Solve Execution Time     : {t5_ms:.3f} ms\n")
+    # 4. Final summary verdict
+    final_verdict = check.get("summary_status", "Execution complete")
+    log(f"  FINAL VERDICT: {final_verdict}")
 
-        if stage_5_data["solver_type"] == "PSO":
-            print_sub_header("PSO Convergence Loop (Fitness at Every 10 Iterations)")
-            for pt in stage_5_data.get("iteration_trace", []):
-                print(
-                    f"  Iteration [{pt['iteration']:>2}/50]: Best Fitness = {Color.GREEN}{pt['best_fitness']:>8.4f}{Color.RESET}  "
-                    f"(Bandwidth = {pt['best_bandwidth_mbps']:>6.2f} Mbps, Replicas = {pt['best_replicas']:>4.2f})"
-                )
-            print(
-                f"\n  {Color.BOLD}-> Converged Optimal Bandwidth:{Color.RESET} {solver_result['optimal_bandwidth_mbps']} Mbps"
-            )
-            print(
-                f"  {Color.BOLD}-> Recommended Replicas       :{Color.RESET} {solver_result['recommended_replicas']}"
-            )
-            print(
-                f"  {Color.BOLD}-> Target CPU Utilization      :{Color.RESET} {solver_result['target_cpu_utilization_pct']}%"
-            )
+    return feas_pass, check
 
-        elif stage_5_data["solver_type"] == "Z3_SMT":
-            print_sub_header("Z3 SMT Assertions & Constraint Clauses (Before .check())")
-            for idx, clause in enumerate(stage_5_data.get("constraint_clauses", []), 1):
-                print(f"  [{idx:>2}] {clause}")
 
-            print(
-                f"\n  {Color.BOLD}-> Z3 Solver Check Result:{Color.RESET} "
-                f"{Color.GREEN if stage_5_data['is_feasible'] else Color.RED}{stage_5_data['solver_check_result']}{Color.RESET}"
-            )
-            if stage_5_data["is_feasible"]:
-                print(
-                    f"  {Color.BOLD}-> Selected Region Pair   :{Color.RESET} "
-                    f"{solver_result.get('primary_region')} <---> {solver_result.get('secondary_region')}"
-                )
-                print(
-                    f"  {Color.BOLD}-> Inter-Region Latency   :{Color.RESET} {solver_result.get('inter_region_latency_ms')} ms"
-                )
-                print(
-                    f"  {Color.BOLD}-> Composite Availability :{Color.RESET} {solver_result.get('achieved_sla_pct'):.5f}%"
-                )
-            else:
-                print(
-                    f"  {Color.RED}-> Infeasibility Diagnosis:{Color.RESET} {solver_result.get('error_message')}"
-                )
+def trace_stage_6_explanation(
+    contract: CloudOptimizationContract,
+    solver_result: Dict[str, Any],
+    mode: int,
+    silent: bool = False,
+) -> None:
+    """STAGE 6: Explanation Generation (Mode 4 Only).
 
-        elif stage_5_data["solver_type"] == "ILP":
-            print_sub_header("ILP Knapsack Problem Formulation & Matrix Shape")
-            print(
-                f"  - Decision Variables Count : {stage_5_data['sku_catalog_size']} VM SKU(s)"
-            )
-            print(
-                f"  - Constraint Matrix Shape  : {stage_5_data['constraint_matrix_shape']} (vCPU, RAM, Budget)"
-            )
-            print(
-                f"  - Objective Vector (c^T)   : {stage_5_data['objective_coefficients_usd'][:5]}... [USD/mo]"
-            )
-            print(
-                f"  - Solving Algorithm        : {stage_5_data['solving_algorithm']}"
-            )
-            print(
-                f"\n  {Color.BOLD}-> Status:{Color.RESET} {solver_result.get('status')}"
-            )
-            if stage_5_data["is_feasible"]:
-                print(
-                    f"  {Color.BOLD}-> Optimized Monthly Cost   :{Color.RESET} ${solver_result.get('total_monthly_cost_usd', 0.0):,.2f} USD"
-                )
-                print(
-                    f"  {Color.BOLD}-> Total Allocated Compute  :{Color.RESET} {solver_result.get('total_vcpus')} vCPUs, {solver_result.get('total_ram_gb')} GB RAM"
-                )
-                print(
-                    f"  {Color.BOLD}-> Placed Instances         :{Color.RESET}"
-                )
-                for vm in solver_result.get("allocated_vms", []):
-                    print(
-                        f"     * {vm['provider']} {vm['instance_type']} x {vm['count']} instance(s) (${vm['monthly_cost']:,.2f}/mo)"
-                    )
+    Transforms solver output into structured FinOps explanations.
+    """
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
 
-    # -------------------------------------------------------------------------
-    # STAGE 6: Explainer (Consuming Exact Solver Telemetry)
-    # -------------------------------------------------------------------------
-    consumed_fields: Dict[str, Any] = {
-        "status": solver_result.get("status"),
-        "solver": solver_result.get("solver"),
-        "total_monthly_cost_usd": solver_result.get(
-            "total_monthly_cost_usd",
-            solver_result.get("estimated_monthly_cost_usd", 0.0),
-        ),
-        "cost_savings_usd": solver_result.get("cost_savings_usd", 0.0),
-        "budget_utilized_pct": solver_result.get("budget_utilized_pct", 0.0),
-        "solve_time_ms": solver_result.get(
-            "solve_time_ms", stage_5_data.get("solve_time_ms", 0.0)
-        ),
-    }
+    log("\n--- STAGE 6: Explanation Generation (only for Mode 4) ---")
+    if mode != 4:
+        log("  [SKIPPED: Mode 3 does not generate natural-language explanations]")
+        return
 
-    if contract.problem_type == "ILP_VM_Allocation":
-        consumed_fields.update(
-            {
-                "allocated_vms": solver_result.get("allocated_vms", []),
-                "total_vcpus": solver_result.get("total_vcpus"),
-                "total_ram_gb": solver_result.get("total_ram_gb"),
+    problem = contract.problem_type
+    if problem == "ILP_VM_Allocation":
+        consumed_fields = ["allocated_vms", "total_monthly_cost_usd", "total_vcpus", "total_ram_gb"]
+    elif problem == "PSO_Continuous_Scaling":
+        consumed_fields = ["optimal_bandwidth_mbps", "recommended_replicas", "estimated_hourly_cost_usd"]
+    elif problem == "Z3_Graph_Disaster_Recovery":
+        consumed_fields = ["primary_region", "secondary_region", "inter_region_latency_ms", "achieved_sla_pct"]
+    else:
+        consumed_fields = list(solver_result.keys())
+
+    log(f"  Fields consumed from solver output: {consumed_fields}")
+    try:
+        explanation = FinOpsExplainer.generate_report(
+            contract=contract,
+            solver_result=solver_result,
+            enable_llm_explainer=False,
+        )
+        clean_exp = " ".join(explanation.split())
+        snippet = clean_exp[:100] + ("..." if len(clean_exp) > 100 else "")
+        log(f'  Generated explanation: "{snippet}"')
+    except Exception as exc:
+        log(f"  [Explanation Error]: {exc}")
+
+
+def run_llm_mode_trace(
+    query_text: str, mode: int, yes_flag: bool = False, silent: bool = False
+) -> Dict[str, Any]:
+    """Executes a single live inference query for Mode 1 (Pure LLM) or Mode 2 (Structured LLM).
+
+    Reuses the real execute_dashboard_llm_request function, validates via IndependentChecker,
+    logs every call to results/live_api_call_log.jsonl, and enforces the confirmation safety gate.
+    """
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
+
+    # 1. Interactive Confirmation Safety Gate
+    if not yes_flag and not silent:
+        sys.stdout.write(
+            "This will make 1 LIVE API call to OpenRouter and consume 1 of your daily quota. Continue? [y/N] "
+        )
+        sys.stdout.flush()
+        try:
+            ans = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled by user. No API call made.")
+            return {
+                "query": query_text,
+                "mode": mode,
+                "passed": False,
+                "verdict": "Cancelled by user",
+                "cost": 0.0,
             }
-        )
-    elif contract.problem_type == "PSO_Continuous_Scaling":
-        consumed_fields.update(
-            {
-                "optimal_bandwidth_mbps": solver_result.get(
-                    "optimal_bandwidth_mbps"
-                ),
-                "recommended_replicas": solver_result.get(
-                    "recommended_replicas"
-                ),
-                "target_cpu_utilization_pct": solver_result.get(
-                    "target_cpu_utilization_pct"
-                ),
-                "estimated_hourly_cost_usd": solver_result.get(
-                    "estimated_hourly_cost_usd"
-                ),
+        if ans not in ["y", "yes"]:
+            print("Cancelled by user. No API call made.")
+            return {
+                "query": query_text,
+                "mode": mode,
+                "passed": False,
+                "verdict": "Cancelled by user",
+                "cost": 0.0,
             }
+
+    log(f'\n=== QUERY: "{query_text}" ===\n')
+
+    # Parse ground truth contract for independent verification
+    parser = SCOPEParser()
+    contract, _, _ = parser.parse_query_to_contract(query_text)
+
+    # Model and Prompt Metadata
+    model = os.getenv("OPENROUTER_MODEL") or getattr(
+        settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
+    )
+    max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
+
+    if mode == 1:
+        prompt_sent = (
+            "System: You are a Cloud Solutions Architect. Recommend a concrete cloud VM allocation plan. "
+            "State the recommended provider, instance types, quantities, and the exact total monthly cost in USD ($/month). Be concise.\n"
+            f"User: Recommend cloud VMs for this request: \"{query_text}\""
         )
-    elif contract.problem_type == "Z3_Graph_Disaster_Recovery":
-        consumed_fields.update(
-            {
-                "primary_region": solver_result.get("primary_region"),
-                "secondary_region": solver_result.get("secondary_region"),
-                "inter_region_latency_ms": solver_result.get(
-                    "inter_region_latency_ms"
-                ),
-                "achieved_sla_pct": solver_result.get("achieved_sla_pct"),
-            }
+    else:
+        req_vcpus = int(getattr(contract, "required_vcpus", 4)) if contract else 4
+        req_ram = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
+        schema_sample = {
+            "cloud_provider": "AWS",
+            "instances": [{"sku": "t3.medium", "quantity": 2, "monthly_cost": 60.74}],
+            "total_monthly_cost": 60.74,
+            "total_vcpus": req_vcpus,
+            "total_ram_gb": req_ram,
+        }
+        prompt_sent = (
+            f"System: You are a Cloud Optimization System. Respond ONLY with valid JSON matching this schema: {json.dumps(schema_sample)}. No explanatory text.\n"
+            f"User: Optimize allocation for: \"{query_text}\". Respond in JSON."
         )
 
-    if not stage_5_data["is_feasible"]:
-        consumed_fields.update(
-            {
-                "error_message": solver_result.get("error_message"),
-                "constraint_status": solver_result.get("constraint_status"),
-            }
-        )
+    # --- STAGE 1: LLM Request ---
+    log("--- STAGE 1: LLM Request ---")
+    log(f"  Model: {model}")
+    prompt_snip = prompt_sent[:200] + ("..." if len(prompt_sent) > 200 else "")
+    log(f'  Prompt sent: "{prompt_snip}"')
+    log(f"  max_tokens: {max_tokens}")
 
-    # Generate deterministic report without waiting on remote LLM calls
-    report_text = FinOpsExplainer.generate_report(
+    # Real LLM Call
+    from app import execute_dashboard_llm_request
+
+    t0 = time.perf_counter()
+    llm_res = execute_dashboard_llm_request(
+        mode_num=mode,
+        query=query_text,
         contract=contract,
-        solver_result=solver_result,
-        enable_llm_explainer=False,
     )
+    elapsed_s = llm_res.get("elapsed_seconds") or round(time.perf_counter() - t0, 2)
+    finish_reason = llm_res.get("finish_reason", "unknown")
+    raw_content = llm_res.get("content", "")
 
-    stage_6_data = {
-        "consumed_solver_fields": consumed_fields,
-        "generated_finops_report": report_text,
+    # Log every live call made to results/live_api_call_log.jsonl
+    from datetime import datetime, timezone
+
+    log_path = Path("results/live_api_call_log.jsonl")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            log_entry = {
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "mode": mode,
+                "query": query_text,
+                "model": llm_res.get("model", model),
+                "status": llm_res.get("status"),
+                "finish_reason": finish_reason,
+                "elapsed_seconds": elapsed_s,
+                "reported_cost_usd": llm_res.get("reported_cost_usd"),
+                "error": llm_res.get("error_message"),
+            }
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as log_err:
+        log(f"  [Warning: could not write to live_api_call_log.jsonl: {log_err}]")
+
+    # --- STAGE 2: LLM Response ---
+    log("\n--- STAGE 2: LLM Response ---")
+    log(f'  finish_reason: "{finish_reason}"')
+    raw_snip = " ".join(raw_content.split())
+    raw_snip_300 = raw_snip[:300] + ("..." if len(raw_snip) > 300 else "")
+    log(f'  Raw response (first ~300 chars): "{raw_snip_300}"')
+    if finish_reason == "length":
+        log("  WARNING: Generation reached max token limit and was truncated (finish_reason == 'length'). Output is incomplete.")
+    if llm_res.get("status") == "daily_quota_exhausted":
+        log(f"  [API Error: 429 Daily Limit Exhausted - {llm_res.get('error_message')}]")
+    elif llm_res.get("status") in ["api_error", "missing_credentials", "empty_response"]:
+        log(f"  [API Error]: {llm_res.get('error_message')}")
+
+    # --- STAGE 3: Extraction ---
+    log("\n--- STAGE 3: Extraction ---")
+    if mode == 1:
+        log("  (Mode 1 only, prose parsing)")
+    else:
+        log("  (Mode 2 only, JSON schema parsing)")
+
+    extracted_cost = llm_res.get("reported_cost_usd")
+    extracted_alloc: List[Dict[str, Any]] = []
+
+    if mode == 1:
+        if extracted_cost is not None:
+            log(f"  Extracted cost: ${extracted_cost:,.2f}")
+        else:
+            err_reason = llm_res.get(
+                "error_message", "No dollar amount ($XX.XX) found in prose response"
+            )
+            log(f"  Extracted cost: EXTRACTION_FAILED ({err_reason})")
+
+        # Extract SKUs from prose
+        catalog = IndependentChecker.get_sku_catalog()
+        for sku_name, sdata in catalog.items():
+            pat = r"\b" + re.escape(sku_name) + r"\b"
+            if re.search(pat, raw_content, re.IGNORECASE):
+                q_match = re.search(
+                    r"(\d+)\s*(?:x|\*|instances?|nodes?|vms?)?\s*" + re.escape(sku_name),
+                    raw_content,
+                    re.IGNORECASE,
+                )
+                qty = int(q_match.group(1)) if q_match else 1
+                extracted_alloc.append({
+                    "sku": sku_name,
+                    "instance_type": sku_name,
+                    "count": qty,
+                    "quantity": qty,
+                    "provider": sdata.get("provider", "AWS"),
+                    "vcpus_per_vm": sdata.get("vcpus", 2),
+                    "ram_gb_per_vm": sdata.get("ram_gb", 4.0),
+                    "monthly_cost": round(sdata.get("hourly_cost_usd", 0.05) * 730.0 * qty, 2),
+                })
+        if extracted_alloc:
+            log(f"  Extracted allocation: {extracted_alloc}")
+        else:
+            log("  Extracted allocation: NONE")
+
+    else:
+        # Mode 2
+        parsed_json = llm_res.get("parsed_json")
+        if parsed_json and extracted_cost is not None:
+            log(f"  Extracted cost: ${extracted_cost:,.2f}")
+            raw_vms = (
+                parsed_json.get("allocated_vms")
+                or parsed_json.get("instances")
+                or []
+            )
+            if isinstance(raw_vms, list):
+                for v in raw_vms:
+                    if isinstance(v, dict):
+                        extracted_alloc.append(v)
+            if extracted_alloc:
+                log(f"  Extracted allocation: {extracted_alloc}")
+            else:
+                log("  Extracted allocation: NONE")
+        else:
+            err_reason = llm_res.get(
+                "error_message", "JSON parsing failed or no valid cost found"
+            )
+            log(f"  Extracted cost: EXTRACTION_FAILED ({err_reason})")
+            log("  Extracted allocation: NONE")
+
+    # --- STAGE 4: Independent Verification (IndependentChecker) ---
+    has_usable_alloc = len(extracted_alloc) > 0
+    if has_usable_alloc and contract:
+        solver_dict = {
+            "problem_type": contract.problem_type,
+            "status": "feasible" if (extracted_cost is not None and extracted_cost > 0) else "UNKNOWN",
+            "total_monthly_cost_usd": extracted_cost or 0.0,
+            "allocated_vms": extracted_alloc,
+        }
+        s4_ok, check_result = trace_stage_5_independent_verification(
+            contract,
+            solver_dict,
+            silent=silent,
+            stage_header="--- STAGE 4: Independent Verification (IndependentChecker) ---",
+        )
+        final_verdict = check_result.get("summary_status", "Complete")
+    else:
+        log("\n--- STAGE 4: Independent Verification (IndependentChecker) ---")
+        log("  Cannot verify: no structured output to check")
+        final_verdict = "Rejected (No Structured Allocation Output)"
+        log(f"  FINAL VERDICT: {final_verdict}")
+        s4_ok = False
+        check_result = {"violations": ["No structured allocation output"]}
+
+    # --- LATENCY ---
+    log("\n--- LATENCY ---")
+    log(f"  Total wall-clock time: {elapsed_s:.2f}s\n")
+
+    return {
+        "query": query_text,
+        "mode": mode,
+        "passed": s4_ok,
+        "failed_stage": None if s4_ok else 4,
+        "verdict": final_verdict,
+        "cost": extracted_cost or 0.0,
     }
 
-    if verbose_terminal:
-        print_stage_header(6, "FinOps Explainer & Natural Language Synthesis")
-        print_sub_header("Exact Solver Telemetry Fields Consumed by Explainer")
-        for k, v in consumed_fields.items():
-            print(f"  - {Color.BOLD}{k:<28}{Color.RESET}: {v}")
 
-        print_sub_header("Generated FinOps Executive Deployment Report")
-        print(report_text)
+def run_pipeline_trace(
+    query_text: str, mode: int = 4, yes_flag: bool = False, silent: bool = False
+) -> Dict[str, Any]:
+    """Runs a single query through the genuine pipeline, printing each stage state as it happens.
 
-    return StageTracePayload(
-        query_id=query_id,
-        query_text=query_text,
-        stage_1_scope=stage_1_data,
-        stage_2_carm=stage_2_data,
-        stage_3_contract=stage_3_contract_dump(stage_3_data),
-        stage_4_dispatch=stage_4_data,
-        stage_5_solver=stage_5_solver_dump(stage_5_data),
-        stage_6_explainer=stage_6_data,
-    )
+    If any stage fails, execution stops immediately and does NOT synthesize later stages.
+    """
+    if mode in [1, 2]:
+        return run_llm_mode_trace(query_text, mode=mode, yes_flag=yes_flag, silent=silent)
 
+    if not silent:
+        print(f'\n=== QUERY: "{query_text}" ===\n')
 
-def stage_3_contract_dump(data: dict) -> dict:
-    """Sanitizes Stage 3 data for JSON serialization."""
-    return data
+    parser = SCOPEParser()
+    matcher = CARMMatcher()
 
+    # STAGE 1
+    s1_ok, params, s1_err = trace_stage_1_parsing(parser, query_text, silent=silent)
+    if not s1_ok or params is None:
+        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 1, "verdict": s1_err, "cost": 0.0}
 
-def stage_5_solver_dump(data: dict) -> dict:
-    """Sanitizes Stage 5 data for JSON serialization."""
-    out = dict(data)
-    # Ensure all numpy arrays or z3 objects are JSON serializable
-    if "objective_coefficients_usd" in out and isinstance(
-        out["objective_coefficients_usd"], np.ndarray
-    ):
-        out["objective_coefficients_usd"] = out[
-            "objective_coefficients_usd"
-        ].tolist()
-    if "constraint_bounds" in out and isinstance(
-        out["constraint_bounds"], np.ndarray
-    ):
-        out["constraint_bounds"] = out["constraint_bounds"].tolist()
-    return out
+    # STAGE 2
+    s2_ok, archetype, s2_err = trace_stage_2_archetype_matching(matcher, query_text, parser, silent=silent)
+    if not s2_ok or archetype is None:
+        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 2, "verdict": s2_err, "cost": 0.0}
 
+    # STAGE 3
+    s3_ok, contract, s3_err = trace_stage_3_contract_validation(archetype, params, silent=silent)
+    if not s3_ok or contract is None:
+        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 3, "verdict": s3_err, "cost": 0.0}
 
-# =============================================================================
-# Structured JSON Saving
-# =============================================================================
+    # STAGE 4
+    s4_ok, solver_result, s4_err = trace_stage_4_solver_execution(contract, mode, silent=silent)
+    if not s4_ok or solver_result is None:
+        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 4, "verdict": s4_err, "cost": 0.0}
 
+    # STAGE 5
+    s5_ok, check_result = trace_stage_5_independent_verification(contract, solver_result, silent=silent)
 
-def save_stage_trace_json(
-    trace: StageTracePayload,
-    output_dir: str = "results/traces",
-) -> str:
-    """Saves the structured trace payload to results/traces/{query_id}_trace.json."""
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
+    # STAGE 6
+    trace_stage_6_explanation(contract, solver_result, mode, silent=silent)
 
-    safe_id = re.sub(r"[^\w\-_\.]", "_", trace.query_id)
-    file_path = out_path / f"{safe_id}_trace.json"
+    final_verdict = check_result.get("summary_status", "Complete")
+    passed = s5_ok and not check_result.get("violations", [])
+    cost = solver_result.get("total_monthly_cost_usd", solver_result.get("estimated_monthly_cost_usd", 0.0))
 
-    trace_dict = {
-        "query_id": trace.query_id,
-        "query_text": trace.query_text,
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "stages": {
-            "stage_1_scope_parsing": trace.stage_1_scope,
-            "stage_2_carm_matching": trace.stage_2_carm,
-            "stage_3_contract_validation": trace.stage_3_contract,
-            "stage_4_solver_dispatch": trace.stage_4_dispatch,
-            "stage_5_solver_internals": trace.stage_5_solver,
-            "stage_6_explainer": trace.stage_6_explainer,
-        },
+    return {
+        "query": query_text,
+        "mode": mode,
+        "passed": passed,
+        "failed_stage": None if passed else 5,
+        "verdict": final_verdict,
+        "cost": cost,
     }
 
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(trace_dict, f, indent=2)
 
-    return str(file_path)
+def load_queries_from_file(filepath: str) -> List[Dict[str, Any]]:
+    """Loads query objects from a JSON file."""
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(f"Queries file not found at: {filepath}")
 
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-# =============================================================================
-# CLI Main Entrypoint
-# =============================================================================
+    if isinstance(data, list):
+        queries = []
+        for idx, item in enumerate(data):
+            if isinstance(item, dict):
+                q_text = item.get("query") or item.get("text") or item.get("prompt", "")
+                q_id = item.get("id", f"query_{idx+1}")
+                queries.append({"id": q_id, "query": q_text, "raw": item})
+            elif isinstance(item, str):
+                queries.append({"id": f"query_{idx+1}", "query": item, "raw": item})
+        return queries
+    elif isinstance(data, dict):
+        q_list = data.get("queries", [])
+        return [{"id": item.get("id", f"query_{idx+1}"), "query": item.get("query", ""), "raw": item} for idx, item in enumerate(q_list)]
+    return []
 
 
 def main() -> None:
-    """CLI handler for stage_trace execution."""
+    """CLI Entrypoint for Terminal Stage Trace."""
     parser = argparse.ArgumentParser(
-        description="Neurasym Stage-by-Stage Live Terminal Trace"
+        description="Neurasym Terminal Stage Trace: Live Pipeline Inspection"
     )
     parser.add_argument(
         "--query",
         type=str,
         default=None,
-        help="Raw natural language cloud optimization query to trace.",
+        help="Single natural language query string to trace",
     )
     parser.add_argument(
+        "--queries-file",
         "--query-file",
+        dest="queries_file",
         type=str,
         default=None,
-        help="Path to JSON file containing diagnostic benchmark queries.",
+        help="Path to JSON file containing queries for batch execution",
+    )
+    parser.add_argument(
+        "--mode",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=4,
+        help="Pipeline execution mode: 1 (Pure LLM), 2 (Structured LLM), 3 (Symbolic + rule-based), or 4 (Full Neuro-Symbolic, default)",
+    )
+    parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Skip live API quota confirmation prompt for Mode 1 and Mode 2",
+    )
+    parser.add_argument(
+        "--failures-only",
+        action="store_true",
+        help="Batch mode: only print full stage traces for queries that fail or produce constraint violations",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
-        help="Maximum number of queries to run when --query-file is provided.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default="results/traces",
-        help="Output directory to save structured JSON trace logs.",
+        help="Maximum number of queries to run in batch mode",
     )
 
     args = parser.parse_args()
 
-    # Determine execution mode
-    queries_to_run: List[Tuple[str, str]] = []
-
-    if args.query:
-        queries_to_run.append(("cli_query_1", args.query))
-    elif args.query_file:
-        query_file_path = Path(args.query_file)
-        if not query_file_path.exists():
-            print(f"Error: Query file '{args.query_file}' not found.")
+    # Safety Guard: Mode 1 and Mode 2 cannot be executed in batch mode
+    if args.mode in [1, 2]:
+        if args.queries_file or not args.query:
+            print(
+                "Error: Batch execution (--queries-file) is strictly blocked for Mode 1 and Mode 2 to protect API quota. "
+                "Mode 1 and Mode 2 must be executed with a single query via --query."
+            )
             sys.exit(1)
 
-        with open(query_file_path, "r", encoding="utf-8") as f:
-            raw_data = json.load(f)
+    if args.query:
+        run_pipeline_trace(args.query, mode=args.mode, yes_flag=args.yes, silent=False)
+        return
 
-        if isinstance(raw_data, list):
-            for idx, item in enumerate(raw_data, 1):
-                if isinstance(item, str):
-                    queries_to_run.append((f"query_{idx}", item))
-                elif isinstance(item, dict):
-                    q_id = item.get("id", f"query_{idx}")
-                    q_text = item.get("query", item.get("text", ""))
-                    if q_text:
-                        queries_to_run.append((q_id, q_text))
+    queries_file = args.queries_file or "data/diagnostic_queries.json"
+    try:
+        queries = load_queries_from_file(queries_file)
+    except FileNotFoundError:
+        print(f"Error: Query file '{queries_file}' not found.")
+        sys.exit(1)
 
-        if args.limit and args.limit > 0:
-            queries_to_run = queries_to_run[: args.limit]
-    else:
-        # Default diagnostic test suite
-        default_file = Path("data/diagnostic_queries.json")
-        if default_file.exists():
-            with open(default_file, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
-            for idx, item in enumerate(raw_data, 1):
-                q_id = item.get("id", f"diagnostic_{idx}")
-                q_text = item.get("query", "")
-                if q_text:
-                    queries_to_run.append((q_id, q_text))
+    if args.limit:
+        queries = queries[: args.limit]
+
+    print(f"=== BATCH STAGE TRACE: {len(queries)} queries from '{queries_file}' (Mode {args.mode}) ===")
+    if args.failures_only:
+        print("  [Mode: --failures-only active. Passing queries will show single-line status.]\n")
+
+    results = []
+    for idx, q_item in enumerate(queries, 1):
+        q_id = q_item["id"]
+        q_text = q_item["query"]
+
+        if args.failures_only:
+            res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=True)
+            if res.get("passed", False):
+                cost = res.get("cost", 0.0)
+                verdict = res.get("verdict", "Feasible against checked constraints")
+                print(f'PASS: [{q_id}] "{q_text}" -> {verdict} (${cost:.2f})')
+                results.append(res)
+            else:
+                res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=False)
+                results.append(res)
         else:
-            queries_to_run = [
-                (
-                    "demo_ilp",
-                    "Deploy a web app that requires 8 vCPUs and 16GB RAM for under $300 a month on AWS.",
-                ),
-                (
-                    "demo_pso",
-                    "Continuous dynamic scaling with target CPU 70% under $1500",
-                ),
-                (
-                    "demo_z3",
-                    "We need disaster recovery setup across AWS and GCP with 99.99% SLA and max 50ms latency.",
-                ),
-            ]
+            res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=False)
+            results.append(res)
 
-    print(f"\n{Color.BOLD}Running Neurasym Stage Trace on {len(queries_to_run)} Query(s)...{Color.RESET}")
-
-    saved_paths: List[str] = []
-    for q_id, q_text in queries_to_run:
-        trace = run_stage_by_stage_trace(
-            query_text=q_text,
-            query_id=q_id,
-            verbose_terminal=True,
-        )
-        saved_file = save_stage_trace_json(trace, output_dir=args.output_dir)
-        saved_paths.append(saved_file)
-        print(f"\n{Color.GREEN}✓ Saved JSON Trace Artifact: {saved_file}{Color.RESET}\n")
-
-    print(f"{'=' * 80}")
-    print(f"All {len(queries_to_run)} trace(s) completed successfully.")
-    print(f"Structured logs written to: {args.output_dir}/")
-    print(f"{'=' * 80}\n")
+    # Summary
+    passed_count = sum(1 for r in results if r.get("passed", False))
+    failed_count = len(results) - passed_count
+    print(f"\n{'='*70}")
+    print(f"BATCH TRACE SUMMARY: Total: {len(results)} | Passed: {passed_count} | Failed: {failed_count}")
+    print(f"{'='*70}\n")
 
 
 if __name__ == "__main__":

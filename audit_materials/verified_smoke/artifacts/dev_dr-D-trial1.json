@@ -1,0 +1,90 @@
+{
+  "experiment_hash": "025323f41647b7a74e8094db43f3d7ed6fa23aa6b228811c1a56f6cb38661d47",
+  "row": {
+    "run_id": "dev_dr-D-trial1-20261006T182329-e96bf7ab",
+    "query_id": "dev_dr",
+    "config": "D",
+    "trial_num": 1,
+    "timestamp": "2026-10-06T18:23:29.960672+00:00",
+    "query_category": "formal_english",
+    "input": {
+      "raw_query_text": "Disaster recovery across AWS and Azure with SLA 99.99%, max latency 20 ms and budget $300 monthly."
+    },
+    "execution": {
+      "nlu_success": null,
+      "exception": null,
+      "latency_ms": 722.1093150000115
+    },
+    "raw_output": {
+      "allocated_resources": {
+        "regions": [
+          "us-east-1",
+          "eastus"
+        ]
+      },
+      "claimed_cost_usd": 248.0,
+      "self_reported_status": "feasible"
+    },
+    "check_result": {
+      "passed": true,
+      "constraint_satisfied": true,
+      "cost_error_pct": 0.0,
+      "reason": "ok"
+    }
+  },
+  "raw": {
+    "output": {
+      "allocated_resources": {
+        "regions": [
+          "us-east-1",
+          "eastus"
+        ]
+      },
+      "claimed_cost_usd": 248.0,
+      "self_reported_status": "feasible"
+    },
+    "raw": {
+      "contract": {
+        "problem_type": "Z3_Graph_Disaster_Recovery",
+        "cloud_providers": [
+          "AWS",
+          "Azure"
+        ],
+        "budget_max_usd": 300.0,
+        "service_count": 1,
+        "required_vcpus": 1,
+        "required_ram_gb": 1.0,
+        "latency_max_ms": 20.0,
+        "sla_availability_pct": 99.99,
+        "metadata": {
+          "field_provenance": {
+            "budget_max_usd": "[EXPLICIT]",
+            "service_count": "[DEFAULT: Baseline Fallback]",
+            "required_vcpus": "[DEFAULT: Baseline Fallback]",
+            "required_ram_gb": "[DEFAULT: Baseline Fallback]",
+            "latency_max_ms": "[EXPLICIT]",
+            "sla_availability_pct": "[EXPLICIT]",
+            "cloud_providers": "[EXPLICIT]"
+          }
+        }
+      },
+      "template": "z3_graph_disaster_recovery_template.py",
+      "score": 0.75,
+      "result": {
+        "status": "Feasible",
+        "solver": "OptiHive_Selector",
+        "total_monthly_cost_usd": 248.0,
+        "primary_region": "us-east-1",
+        "secondary_region": "eastus",
+        "inter_region_latency_ms": 12.0,
+        "achieved_sla_pct": 99.99997499999999,
+        "disaster_recovery_topology": "Active-Active Mesh"
+      },
+      "report": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : Z3_Graph_Disaster_Recovery\n Optimization Engine  : OptiHive_Selector\n Feasibility Status   : Feasible\n Target Cloud(s)      : AWS, Azure\n Exchange Rate        : 1 USD = 85.00 INR\n----------------------------------------------------------------------------------\n FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)\n----------------------------------------------------------------------------------\n  - Monthly Budget Cap       : $300.00 USD (₹25,500.00 INR) / month\n  - Optimized Monthly Cost   : $248.00 USD (₹21,080.00 INR) / month\n  - Monthly Net Savings      : $52.00 USD (₹4,420.00 INR) / month (17.3% under cap)\n  - Budget Utilization Rate  :  82.67%\n----------------------------------------------------------------------------------\n TOPOLOGICAL DISASTER RECOVERY PLACEMENT\n----------------------------------------------------------------------------------\n  - Primary Failure Domain   : us-east-1\n  - Secondary Failover Domain: eastus\n  - DR Interconnect Topology : Active-Active Mesh\n  - Cross-Region Sync Latency: 12.00 ms (Cap: 20.0 ms)\n  - Composite Availability   : 99.99997% SLA (Target: 99.990%)\n----------------------------------------------------------------------------------\n ACTIONABLE FINOPS RECOMMENDATIONS\n----------------------------------------------------------------------------------\n  1. Pricing Strategy: Commit to 1-Year AWS EC2 Instance Savings Plans or Standard Reserved Instances for steady-state compute (allocated compute), yielding 30-45% discount over on-demand rates.\n  2. Budget Warning (82.7% utilized): Spending is near the $300.00 USD cap with only $52.00 USD buffer. Configure automated billing alerts and scaling throttles at 85% to prevent overage.\n  3. Data Transfer & Egress: Inter-region replication between us-east-1 and eastus (12.0ms latency) incurs cross-region transfer fees; enable zstd/gzip compression to minimize data egress costs.\n  4. Governance & Attribution: Apply mandatory Cost Allocation Tags (`Environment`, `CostCenter`, `Owner:FinOps`) across all 1 service resources for 100% cost attribution.\n==================================================================================",
+      "seed": 20261007
+    },
+    "exception": null,
+    "stdout": "[GraphSteering] Loaded learned RGCN/GraphSAGE-inspired steering model from src/symbolic/solvers/gnn_checkpoint.json.\n",
+    "stderr": ""
+  }
+}

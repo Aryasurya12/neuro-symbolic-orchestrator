@@ -1,0 +1,269 @@
+{
+  "ground_truth_author": "Aryasurya (Reviewed for Audit Harness)",
+  "approved_by_user": false,
+  "notes": "Audited stress panel: 15 unique queries spanning 5 categories (3 formal English, 3 colloquial Hinglish, 3 missing field, 3 conflicting constraints, 3 out-of-archetype). 5 queries preselected for trial 2 (q001, q003, q007, q010, q013) totaling 20 runs per mode (40 A/B calls). Ground truth constraints strictly follow benchmarks.audit.checker.FIELDS.",
+  "queries": [
+    {
+      "query_id": "q001",
+      "query_category": "formal_english",
+      "raw_query_text": "Allocate AWS virtual machines with at least 12 total vCPUs and 24 GB total RAM, within $250 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "vm",
+        "constraints": {
+          "providers": [
+            "AWS"
+          ],
+          "min_vcpus": 12,
+          "min_ram_gb": 24,
+          "budget_max_usd": 250.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Explicit AWS VM allocation requiring >=12 vCPUs, >=24 GB RAM under $250/mo. Feasible in catalog (e.g., 6x t3.medium @ $182.22/mo)."
+      }
+    },
+    {
+      "query_id": "q002",
+      "query_category": "formal_english",
+      "raw_query_text": "Place disaster recovery across AWS and Azure in two regions on different providers, with latency at most 20 ms, availability at least 99.99%, and a monthly budget of $300.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "dr",
+        "constraints": {
+          "providers": [
+            "AWS",
+            "Azure"
+          ],
+          "cross_provider": true,
+          "max_latency_ms": 20.0,
+          "min_sla_pct": 99.99,
+          "budget_max_usd": 300.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Dual-cloud DR across AWS (us-east-1) and Azure (eastus) satisfies cross-provider, latency (12ms <= 20ms), SLA (99.9999% >= 99.99%), and budget ($248 <= $300)."
+      }
+    },
+    {
+      "query_id": "q003",
+      "query_category": "formal_english",
+      "raw_query_text": "Autoscale bandwidth between 150 and 600 Mbps with at most 8 integer replicas, keep modeled CPU at or below 65%, and spend no more than $250 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "scaling",
+        "constraints": {
+          "min_bandwidth_mbps": 150.0,
+          "max_bandwidth_mbps": 600.0,
+          "max_replicas": 8,
+          "max_cpu_pct": 65.0,
+          "budget_max_usd": 250.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Autoscaling within 150-600 Mbps with <=8 replicas, <=65% CPU, and <=$250/mo. Feasible in catalog (e.g., 150 Mbps with 4 replicas uses 50% CPU and costs $192/mo)."
+      }
+    },
+    {
+      "query_id": "q004",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "Bhai GCP pe VMs chahiye: total 8 vCPU aur 32 GB RAM minimum, monthly budget 220 dollars hai.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "vm",
+        "constraints": {
+          "providers": [
+            "GCP"
+          ],
+          "min_vcpus": 8,
+          "min_ram_gb": 32,
+          "budget_max_usd": 220.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Colloquial Hinglish query requesting GCP VMs with >=8 vCPUs, >=32 GB RAM within $220/mo. Satisfied by 2x e2-standard-4 at $195.64/mo."
+      }
+    },
+    {
+      "query_id": "q005",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "AWS aur Azure dono pe disaster recovery set karo, alag providers par do regions, latency 30 ms se zyada nahi, SLA 99.99%, budget 300 dollars monthly.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "dr",
+        "constraints": {
+          "providers": [
+            "AWS",
+            "Azure"
+          ],
+          "cross_provider": true,
+          "max_latency_ms": 30.0,
+          "min_sla_pct": 99.99,
+          "budget_max_usd": 300.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Colloquial Hinglish query for dual-cloud DR (AWS us-east-1 + Azure eastus) with latency <=30ms, SLA >=99.99%, and budget <=$300/mo."
+      }
+    },
+    {
+      "query_id": "q006",
+      "query_category": "colloquial_hinglish",
+      "raw_query_text": "Bandwidth autoscale karo 200 se 800 Mbps ke beech, max 10 replicas integer mein, CPU 70 percent se neeche aur mahine ka budget 300 dollars.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "feasible",
+        "archetype": "scaling",
+        "constraints": {
+          "min_bandwidth_mbps": 200.0,
+          "max_bandwidth_mbps": 800.0,
+          "max_replicas": 10,
+          "max_cpu_pct": 70.0,
+          "budget_max_usd": 300.0
+        },
+        "cost_tolerance_usd": 0.02,
+        "rationale": "Colloquial Hinglish query for bandwidth autoscaling 200-800 Mbps, <=10 replicas, <=70% CPU, <=$300/mo. Feasible (e.g., 200 Mbps with 4 replicas uses 66.67% CPU and costs $196/mo)."
+      }
+    },
+    {
+      "query_id": "q007",
+      "query_category": "missing_field",
+      "raw_query_text": "Set up an AWS deployment with enough memory for my application.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": {
+        "expected_status": "clarification",
+        "rationale": "Vague qualitative request: exact memory requirement (RAM GB), vCPU count, and budget are completely unspecified; requires clarification."
+      }
+    },
+    {
+      "query_id": "q008",
+      "query_category": "missing_field",
+      "raw_query_text": "AWS needs 8 vCPUs and 16 GB RAM; keep the budget below 300.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "clarification",
+        "rationale": "Missing budget currency and timeframe units ('below 300' without currency symbol or billing duration); predeclared policy requires clarification for ambiguous budget parameters."
+      }
+    },
+    {
+      "query_id": "q009",
+      "query_category": "missing_field",
+      "raw_query_text": "Give us two small AWS nodes, or perhaps one larger node if that is better, on a reasonable budget.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "clarification",
+        "rationale": "Subjective sizing ('small nodes', 'larger node') and unquantified budget ('reasonable budget') lack concrete mathematical bounds and require user clarification."
+      }
+    },
+    {
+      "query_id": "q010",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "Allocate AWS VMs with at least 64 total vCPUs and 256 GB total RAM for at most $20 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": {
+        "expected_status": "infeasible",
+        "rationale": "64 vCPUs and 256 GB RAM cannot be provisioned on AWS under $20/month (cheapest 64-vCPU AWS configuration in catalog costs >$2,000/mo, exceeding budget by >100x)."
+      }
+    },
+    {
+      "query_id": "q011",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "For disaster recovery use only AWS, but the two selected regions must belong to different cloud providers. Budget $400, latency 100 ms maximum, SLA 99.99%.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "infeasible",
+        "rationale": "Mutually contradictory constraints: restricting placement to 'only AWS' directly contradicts the requirement that 'two selected regions must belong to different cloud providers'."
+      }
+    },
+    {
+      "query_id": "q012",
+      "query_category": "conflicting_constraints",
+      "raw_query_text": "Autoscale at least 500 Mbps using at most one replica while keeping CPU at or below 50%. Budget $500 monthly.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "infeasible",
+        "rationale": "Contradictory scaling capacity constraints: 1 replica has 75 Mbps capacity; at 500 Mbps bandwidth, 1 replica requires 666.7% CPU load, which strictly violates the <=50% CPU ceiling (requires at least 14 replicas)."
+      }
+    },
+    {
+      "query_id": "q013",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Choose GPU instances with 24 GB GPU memory for CUDA training within $500 a month.",
+      "configs": "ABCD",
+      "trials": [
+        1,
+        2
+      ],
+      "truth": {
+        "expected_status": "unsupported",
+        "rationale": "GPU instances and CUDA memory allocation are outside the catalog's supported domain (general-purpose CPU VMs, dual-region DR, bandwidth scaling)."
+      }
+    },
+    {
+      "query_id": "q014",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Plan encrypted managed PostgreSQL backups with a seven-year retention policy within $100 per month.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "unsupported",
+        "rationale": "Database backup retention schedules and encryption storage management are outside the catalog's supported optimization archetypes."
+      }
+    },
+    {
+      "query_id": "q015",
+      "query_category": "out_of_archetype",
+      "raw_query_text": "Allocate four AWS VMs in Mumbai only, each with 4 vCPUs and 16 GB RAM, within $600 monthly; no data may leave India.",
+      "configs": "ABCD",
+      "trials": [
+        1
+      ],
+      "truth": {
+        "expected_status": "unsupported",
+        "rationale": "Specific geographical residency / data sovereignty constraint ('Mumbai only / no data may leave India') is unsupported by the benchmark VM catalog (catalog includes US/EU regions without geo-placement tagging for VM SKUs)."
+      }
+    }
+  ]
+}
