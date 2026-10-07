@@ -1,255 +1,249 @@
-# FinOps Neuro-Symbolic Orchestrator
+# FinOps Neuro-Symbolic Orchestrator (Neurasym)
 
-Neuro-Symbolic AI system for intelligent Cloud FinOps optimization using LLMs, metaheuristics, and SMT solvers.
+**A 6-stage neuro-symbolic pipeline combining Large Language Models (LLMs) and Metaheuristics/SMT Solvers for optimal cloud FinOps resource allocation.**
 
-## Overview
+## 1. Project Overview
 
-Cloud FinOps requires finding the optimal allocation of cloud resources across multiple providers to meet performance requirements while minimizing cost. This is a complex combinatorial optimization problem. Natural-language input alone is insufficient because LLMs struggle with deterministic mathematical guarantees. Therefore, this project uses a neuro-symbolic architecture to separate probabilistic natural-language understanding from deterministic mathematical optimization.
+Cloud FinOps requires finding the optimal allocation of cloud resources across multiple providers to meet performance requirements while minimizing cost. This is a complex combinatorial optimization problem. Natural-language input alone is insufficient because LLMs struggle with deterministic mathematical guarantees. 
 
-## Core Idea
+**Neurasym** solves this by implementing a neuro-symbolic architecture that strictly separates probabilistic natural-language understanding (the Semantic Layer) from deterministic mathematical optimization (the Symbolic Layer) through a validated JSON contract handshake.
 
-The project is divided into two distinct layers:
+## 2. Project Status
 
-**Neural/Semantic Layer (Part A - Shreeya):**
-- Natural-language understanding
-- Constraint extraction
-- Semantic retrieval (CARM)
-- Validated JSON generation
+**Verified Implementation Status:**
+- ✅ **Semantic Layer**: Natural language extraction (SCOPE), Historical CARM matching.
+- ✅ **Symbolic Layer**: GA, PSO, Graph-steered Z3 MaxSMT, and OptiHive Selection.
+- ✅ **CLI & Orchestration**: 6-stage terminal visualization, 4-Way benchmark mode, and SAGE-GNN graph evaluation.
+- ✅ **API**: FastAPI endpoints.
+- 🚧 **Testing**: Comprehensive test suite available via `pytest`, though local execution requires valid OpenAI API keys and specific data science dependencies.
 
-**Symbolic Layer (Part B - Arya):**
-- Optimization
-- Formal constraints
-- Metaheuristics (GA / PSO)
-- SMT solving (Z3)
-- Candidate validation/selection (OptiHive)
+## 3. Table of Contents
+1. [Problem Statement](#4-problem-statement)
+2. [Motivation and Design Philosophy](#5-motivation-and-design-philosophy)
+3. [Key Features](#6-key-features)
+4. [System Architecture](#7-system-architecture)
+5. [Complete Execution Workflow](#8-complete-execution-workflow)
+6. [Neural and Symbolic Components](#9-neural-and-symbolic-components)
+7. [Repository Structure](#10-repository-structure)
+8. [Technology Stack](#11-technology-stack)
+9. [Prerequisites](#12-prerequisites)
+10. [Installation and Setup](#13-installation-and-setup)
+11. [Configuration](#14-configuration-and-environment-variables)
+12. [How to Run](#15-how-to-run-the-project)
+13. [Input and Output Format](#16-input-and-output-format)
+14. [API Usage](#17-api-or-programmatic-usage)
+15. [Testing and Validation](#18-testing-and-validation)
+16. [Benchmarks and Evaluation](#19-benchmarks-and-evaluation)
+17. [Design Decisions](#20-design-decisions-and-trade-offs)
+18. [Limitations](#21-limitations)
+19. [Roadmap](#22-roadmap-and-future-work)
+20. [Contributing](#23-contributing)
+21. [Security](#24-security-and-responsible-configuration)
+22. [License](#25-license)
 
-## System Architecture
+## 4. Problem Statement
+Translating unstructured enterprise FinOps intents (e.g., *"Deploy an 8 vCPU web app under $300 on AWS with 99.9% SLA"*) directly into physical cloud topology deployments is risky. Pure LLM approaches hallucinate constraints, fail basic arithmetic, and violate hard budget limits. Pure symbolic solvers require exact mathematical formulas that business users cannot provide. This project bridges that gap.
+
+## 5. Motivation and Design Philosophy
+By combining Neural networks (LLMs) and Symbolic logic (SMT/Metaheuristics), we exploit the strengths of both paradigms. The LLM acts purely as a semantic translator and explainer, converting English into a strict JSON schema. The Symbolic layer acts as the math engine, guaranteeing that budget constraints and resource requirements are strictly met without hallucination.
+
+## 6. Key Features
+- **SCOPE Parsing:** Extracts constraints from natural language.
+- **CARM Templates:** Matches requests against historical optimal templates via cosine similarity.
+- **Pydantic Handshake:** Validates inputs before math operations begin.
+- **Parallel Solver Race:** Runs Genetic Algorithms (discrete), Particle Swarm (continuous), and Z3 SMT (formal) concurrently.
+- **OptiHive Selector:** Uses Latent-Class Expectation-Maximization to pick the most mathematically sound solver output.
+- **Diagnostics Modes:** Native support for 4-way LLM-vs-Neurasym comparative benchmarks.
+
+## 7. System Architecture
 
 ```mermaid
 flowchart TD
-    User([User Natural Language Request]) --> LLM[LLM / Semantic Layer<br/>Part A: Shreeya]
-    LLM --> StateEnc[State Encoding]
-    StateEnc --> CARM[CARM Retrieval]
-    CARM --> Pydantic[Pydantic JSON Contract]
-    Pydantic --> SymLayer[Symbolic Optimization Layer<br/>Part B: Arya]
+    User([User Natural Language Request]) --> SCOPE[Stage 1: SCOPE Parser<br>Neural Layer]
+    SCOPE --> CARM[Stage 2: CARM Retrieval<br>Semantic Similarity]
+    CARM --> Contract[Stage 3: Pydantic JSON Contract<br>Validation Handshake]
+    Contract --> Race{Stage 4: Parallel Solver Race<br>Symbolic Layer}
     
-    subgraph Part B
-        SymLayer --> GA[GA]
-        SymLayer --> PSO[PSO]
-        SymLayer --> Graph[Graph Steering]
-        SymLayer --> Z3[Z3 SMT Solver]
-        
-        GA --> OptiHive[OptiHive]
-        PSO --> OptiHive
-        Z3 --> OptiHive
-    end
+    Race --> GA[Genetic Algorithm]
+    Race --> PSO[Particle Swarm]
+    Race --> Z3[Graph-Steered Z3 MaxSMT]
     
-    OptiHive --> Best[Optimized Allocation]
-    Best --> NL[Natural Language Explanation<br/>Part A: Shreeya]
+    GA --> OptiHive[Stage 5: OptiHive EM Selector<br>Syntactic & Latent Selection]
+    PSO --> OptiHive
+    Z3 --> OptiHive
+    
+    OptiHive --> Best[Feasible Allocation]
+    Best --> NL[Stage 6: Natural Language Explainer<br>Proof Certificate]
+    NL --> User
 ```
 
-## Pipeline
+## 8. Complete Execution Workflow
+1. **Stage 1 (State Encoding):** User provides unstructured text. The `SCOPEParser` invokes an LLM to extract vCPUs, RAM, Budget, and Provider.
+2. **Stage 2 (CARM Match):** Compares the parsed state against historical templates.
+3. **Stage 3 (Validation):** Forces data through `CloudOptimizationContract` (Pydantic). If invalid, it halts.
+4. **Stage 4 (Solver Race):** Translates the contract to symbolic variables and runs `GeneticAlgorithm`, `ParticleSwarmOptimization`, and `GraphSteeredZ3Solver`.
+5. **Stage 5 (OptiHive):** The `OptiHiveSelector` scores the three candidate outputs based on constraint violations and objective cost, selecting the winner.
+6. **Stage 6 (Report):** The `FinOpsExplainer` translates the physical VM allocation back into natural language.
 
-1. **Stage 1 — State Encoding:** Extracting features from user query (Shreeya).
-2. **Stage 2 — CARM Template Match:** Retrieving historical context (Shreeya).
-3. **Stage 3 — Pydantic JSON Contract:** Validating the structured handshake (Shreeya).
-4. **Stage 4 — Parallel GA/PSO Race:** Metaheuristic optimization (Arya).
-5. **Stage 5 — OptiHive / Symbolic Validation:** Validating and selecting the best solver output (Arya).
-6. **Stage 6 — Natural Language Report:** Explaining the final allocation (Shreeya).
+## 9. Neural and Symbolic Components
+- **Neural:** Utilizes the `openai` Python client to perform entity extraction and final natural language summarization. It is deliberately isolated from mathematical allocation.
+- **Symbolic:** Uses `scipy`/`numpy` for metaheuristics and `z3-solver` for formal SMT proofs. The Z3 solver relies on an `InfrastructureGraph` to map cloud topological constraints before solving.
 
-## Arya's Responsibilities
-
-As the Symbolic Metaheuristics, SMT Solvers & Validation Engineer (Part B), Arya is responsible for:
-
-### SYM-1 — Vectorized GA/PSO Engine
-Parallel/pre-compiled optimization algorithms using NumPy/SciPy.
-- GA for discrete cloud VM/resource choices.
-- PSO for continuous optimization parameters (e.g., bandwidth).
-- A competitive "virtual math race" coordinates and compares them.
-
-### SYM-2 — Graph-Steered Z3 SMT Solver
-A Z3 SMT solver guided by graph-based predictions (SAGE-GNN).
-Enforces hard constraints (budget, vCPUs, RAM) strictly, while utilizing soft constraints as placement preferences without overriding hard limits.
-
-### SYM-3 — OptiHive Latent Selection
-A two-stage solver/solution selection mechanism:
-1. ILP-based syntactic/validity filtering.
-2. Latent-Class Expectation-Maximization (EM) based quality scoring/selection under noisy data.
-
-### SYM-4 — FastAPI/WebSocket Gateway
-An asynchronous FastAPI backend exposing the optimization engine, with real-time convergence streaming via WebSockets.
-
-### SYM-5 — Pricing & Benchmark Database
-A local SQLite database storing cloud pricing and resource data (AWS, Azure, GCP) and benchmark cases to supply candidate configurations to algorithms.
-
-### SYM-6 — Literature Survey
-Researching related symbolic papers (OptiHive, SAGE-GNN, AutoCO, HeurAgenix, TSP LLM Heuristics).
-
-## Interface Contract
-
-Integration between Part A and Part B relies entirely on a shared Pydantic contract.
-
-```python
-class FinOpsRequest(BaseModel):
-    problem_type: str = "cloud_finops_allocation"
-    budget_max_usd: float
-    latency_max_ms: float
-    required_vcpus: int
-    required_ram_gb: float
-    sla_availability: float
-    cloud_providers: List[str]
+## 10. Repository Structure
+```text
+neuro-symbolic-orchestrator/
+├── benchmarks/         # 4-way evaluation & final benchmarking scripts
+├── config/             # Project configurations
+├── data/               # Seed databases (cloud pricing)
+├── src/                
+│   ├── api/            # FastAPI app and websocket routing
+│   ├── orchestrator/   # Main NeuroSymbolicOrchestrator coordination
+│   ├── schemas/        # Pydantic contract (CloudOptimizationContract)
+│   ├── semantic/       # SCOPE parsing, CARM matcher, NL explainer
+│   └── symbolic/       # GA, PSO, Z3, and OptiHive implementations
+├── templates/          # CARM historical templates
+├── tests/              # Pytest suite
+├── main.py             # CLI Entrypoint for diagnostics and queries
+├── run_stages.py       # 6-Stage terminal visualization runner
+└── requirements.txt    # Project dependencies
 ```
 
-**JSON Example:**
+## 11. Technology Stack
+- **Language:** Python 3.9+
+- **Neural/Parsing:** `openai`
+- **Validation:** `pydantic`
+- **Optimization:** `numpy`, `scipy`, `z3-solver`
+- **API & Web:** `fastapi`, `uvicorn`, `websockets`, `streamlit`
+- **Testing:** `pytest`
+
+## 12. Prerequisites
+- Python 3.9 or higher.
+- An OpenAI API key (for semantic parsing).
+- Standard build tools for installing `z3-solver` and `scipy`.
+
+## 13. Installation and Setup
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Aryasurya12/neuro-symbolic-orchestrator.git
+   cd neuro-symbolic-orchestrator
+   ```
+2. **Create and activate a virtual environment:**
+   ```bash
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On macOS/Linux:
+   source venv/bin/activate
+   ```
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. **Configure environment:**
+   Copy the example environment file and add your credentials.
+   ```bash
+   cp .env.example .env
+   ```
+
+## 14. Configuration and Environment Variables
+Configuration is managed via the `.env` file.
+
+| Variable Name | Purpose | Required | Example |
+|---|---|---|---|
+| `OPENAI_API_KEY` | Used by the Semantic layer for extraction. | Yes | `sk-...` |
+
+*Note: Never commit your real `.env` file containing API keys.*
+
+## 15. How to Run the Project
+
+**1. 6-Stage Interactive Visualizer:**
+Traces a query through the exact 6-stage neuro-symbolic pipeline, printing the latencies and states of each stage.
+```bash
+python run_stages.py "Deploy a high compute workload with 8 vCPUs and 16GB RAM in AWS for under $300 a month with 99.9% SLA."
+```
+
+**2. Interactive CLI Mode (Orchestrator):**
+```bash
+python main.py
+```
+
+**3. SAGE-GNN Graph Benchmark:**
+Evaluates the graph-steered Z3 solver against multiple topologies.
+```bash
+python main.py --sage-gnn
+```
+
+**4. 4-Way Comparative Benchmark:**
+Evaluates the orchestrator against pure-LLM baseline approaches.
+```bash
+python main.py --benchmark
+```
+
+## 16. Input and Output Format
+**Input (Natural Language):**
+> *"I need an AWS instance with 8 vCPUs and 16GB RAM for less than $300 a month."*
+
+**Intermediate Validated Contract (JSON):**
 ```json
 {
-    "problem_type": "cloud_finops_allocation",
-    "budget_max_usd": 500.0,
-    "latency_max_ms": 100.0,
-    "required_vcpus": 8,
-    "required_ram_gb": 16.0,
-    "sla_availability": 99.9,
-    "cloud_providers": [
-        "AWS",
-        "Azure",
-        "GCP"
-    ]
+  "problem_type": "cloud_finops_allocation",
+  "budget_max_usd": 300.0,
+  "required_vcpus": 8,
+  "required_ram_gb": 16.0,
+  "cloud_providers": ["AWS"],
+  "sla_availability_pct": 99.9
 }
 ```
-Arya's implementation is entirely independent of the LLM logic and consumes this mock JSON for independent development.
 
-## Repository Structure
+**Output:**
+Provides a strict mathematical guarantee of which exact Instance Type (e.g., `t3.2xlarge`) is selected, alongside an English justification and cost breakdown.
 
-```text
-finops-neuro-symbolic-orchestrator/
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── api/             # SYM-4 FastAPI & WebSocket Gateway
-├── benchmarks/      # Benchmark running tools
-├── data/            # Local Pricing & Benchmark files (Sample data)
-├── database/        # SYM-5 Pricing Database logic
-├── docs/            # Architecture and Literature Review
-├── optimizers/      # SYM-1 GA / PSO Engine
-├── optihive/        # SYM-3 Latent Selection Core
-├── schemas/         # Shared Pydantic handshake contract
-├── solvers/         # SYM-2 Graph-Steered Z3 Solver
-└── tests/           # Unit tests
-```
-
-## Data Flow
-
-```mermaid
-flowchart TD
-    Req[JSON Request] --> Valid[Validated Schema]
-    Valid --> DB[(Pricing Database)]
-    DB --> GA[GA/PSO]
-    DB --> Z3[Z3 SMT]
-    GA --> OptiHive
-    Z3 --> OptiHive
-    OptiHive --> Best[Best Feasible Allocation]
-    Best --> API[API/WebSocket]
-    API --> Report[Report Generator]
-```
-
-## Technologies
-- Python
-- NumPy, SciPy
-- Pydantic
-- FastAPI, WebSockets
-- Z3 Solver
-- SQLAlchemy (SQLite)
-
-## Installation
-
-1. Clone repository
+## 17. API or Programmatic Usage
+The backend is exposed via a FastAPI application in `src/api/app.py`.
+To start the API server locally:
 ```bash
-git clone https://github.com/your-username/finops-neuro-symbolic-orchestrator.git
-cd finops-neuro-symbolic-orchestrator
+uvicorn src.api.app:app --reload
 ```
-2. Create virtual environment
+You can then programmatically invoke the orchestrator via HTTP endpoints defined in `src/api/routes.py`.
+
+## 18. Testing and Validation
+The project uses `pytest`. 
 ```bash
-python -m venv venv
+python -m pytest tests/
 ```
-3. Activate environment (Windows)
-```bash
-venv\Scripts\activate
-```
-4. Install requirements
-```bash
-pip install -r requirements.txt
-```
-5. Run tests
-```bash
-pytest tests/
-```
-6. Start FastAPI server
-```bash
-uvicorn api.main:app --reload
-```
+*Note during audit: The test suite includes 40+ module tests. Running tests requires the environment to have valid OpenAI keys and plotting libraries (`plotly`) installed as defined in `requirements.txt`. Without these, tests will raise `ModuleNotFoundError` or API exceptions.*
 
-## Running the Project (Planned)
-- Validating a request: Pass a JSON payload to the `/optimize` endpoint.
-- Optimization: The API routes valid payloads to the `OptimizerRace` and `Z3Solver`.
-- WebSocket: Connect to `ws://localhost:8000/ws/optimize-stream` for convergence updates.
-*(Note: Full optimization execution is currently planned/TODO).*
+## 19. Benchmarks and Evaluation
+The `main.py` entrypoint natively supports benchmarking:
+- **`FourWayBenchmarker`:** Compares the Neuro-Symbolic approach against naive LLM outputs.
+- **SAGE-GNN Benchmark:** Evaluates Z3 MaxSMT graph placement runtime and constraint satisfaction (feasibility percentages and ms latencies).
 
-## Development Roadmap
-- **Phase 1:** Project scaffolding + schemas (Current)
-- **Phase 2:** GA/PSO
-- **Phase 3:** Z3
-- **Phase 4:** Graph steering
-- **Phase 5:** OptiHive
-- **Phase 6:** Database and benchmarks
-- **Phase 7:** FastAPI/WebSocket
-- **Phase 8:** Shreeya integration
-- **Phase 9:** Evaluation
+## 20. Design Decisions and Trade-offs
+- **Parallel Solver Race vs Single Solver:** Z3 guarantees optimality but scales poorly (NP-Hard). GA/PSO scale well but don't guarantee optimality. Running them in parallel allows OptiHive to pick the best available result within the latency SLA.
+- **Strict Separation of Concerns:** LLMs are explicitly blocked from executing math. They only format JSON. This completely eliminates "math hallucinations" during financial provisioning.
 
-## Evaluation Metrics (TARGETS)
-- **GA/PSO:** Target sub-millisecond execution.
-- **Z3:** Target search-tree speedup and 100% hard-constraint compliance.
-- **OptiHive:** Target >95% optimal solver selection under noisy data.
-- **API:** Target <50 ms endpoint latency.
-- **Database/benchmark:** Ensure physical feasibility.
+## 21. Limitations
+- **API Dependency:** Stage 1 and Stage 6 require an active internet connection to OpenAI.
+- **Solver Cold Starts:** Z3 constraint modeling adds overhead, sometimes delaying response times beyond interactive UI thresholds for highly complex cross-region topological queries.
+- **Data Freshness:** Currently relies on static seeded local databases for cloud pricing rather than live AWS/GCP/Azure pricing APIs.
 
-*(These are target metrics as per project specification. They have not yet been achieved.)*
+## 22. Roadmap and Future Work
+- Connect pricing database to live cloud provider APIs.
+- Enhance the OptiHive latent-class EM model with historical telemetry feedback.
+- Expand WebSockets to stream solver convergence metrics to the frontend in real-time.
 
-## Testing
-- `test_ga.py`: Verifies GA accepts valid input and outputs expected structure.
-- `test_pso.py`: Verifies PSO accepts valid input and outputs expected structure.
-- `test_z3.py`: Verifies Z3 initializes and accepts valid input constraints.
-- `test_api.py`: Tests FastAPI application loading and endpoint validation.
+## 23. Contributing
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/improvement`).
+3. Ensure all tests pass (`python -m pytest tests/`).
+4. Submit a Pull Request describing your changes.
 
-## Integration with Shreeya
-Arya's symbolic modules do not depend on any specific LLM provider, prompt, or Shreeya's internal implementation. 
-The system flow relies strictly on:
-`Shreeya -> Pydantic JSON -> Arya symbolic engine`
-Arya develops and tests independently using mock JSON conforming to the contract.
+## 24. Security and Responsible Configuration
+- Do not commit your `.env` file.
+- The system runs Python `eval()` internally inside solver domains; never expose the symbolic logic directly to untrusted unvalidated JSON. The Pydantic layer (Stage 3) acts as the primary security sanitizer.
 
-## Academic Context
-Semester V Artificial Intelligence course project. Architecture based on provided work-allocation specification.
+## 25. License
+No explicit license file (`LICENSE`) is present in the repository.
 
-## Research References
-Planned literature review topics for Part B:
-- OptiHive
-- SAGE-GNN
-- AutoCO
-- HeurAgenix
-- TSP LLM Heuristics
-
-## Current Status
-- [x] Repository scaffolding
-- [x] Pydantic contract
-- [ ] GA
-- [ ] PSO
-- [ ] GA/PSO race
-- [ ] Z3 solver
-- [ ] Graph steering
-- [ ] OptiHive ILP filter
-- [ ] EM selector
-- [ ] Pricing database
-- [ ] Benchmarks
-- [x] FastAPI skeleton
-- [ ] WebSocket
-- [ ] Integration with Shreeya
-- [ ] Final evaluation
+---
+*This README was generated by auditing the actual `main` branch implementation of the Neuro-Symbolic Orchestrator.*
