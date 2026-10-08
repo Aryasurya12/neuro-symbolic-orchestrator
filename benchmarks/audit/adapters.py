@@ -117,11 +117,12 @@ def llm_messages(config, query, catalog):
 def execute_llm(config, query, catalog, model, timeout, tokens, temperature):
     import os
     from openai import OpenAI
-    key = os.environ.get('OPENROUTER_API_KEY')
+    key = os.environ.get('GROQ_API_KEY') or os.environ.get('OPENROUTER_API_KEY')
+    base_url = os.environ.get('GROQ_BASE_URL', 'https://api.groq.com/openai/v1')
     if not key:
-        raise RuntimeError('OPENROUTER_API_KEY absent; no synthetic fallback')
+        raise RuntimeError('GROQ_API_KEY (or OPENROUTER_API_KEY) absent; no synthetic fallback')
     # No hidden SDK retry, model fallback, automatic truncation retry or reasoning setting switch.
-    client = OpenAI(base_url='https://openrouter.ai/api/v1',api_key=key,timeout=timeout,max_retries=0)
+    client = OpenAI(base_url=base_url, api_key=key, timeout=timeout, max_retries=0)
     messages = llm_messages(config,query,catalog)
     response = client.chat.completions.create(model=model,messages=messages,temperature=temperature,max_tokens=tokens)
     raw = dict(messages=messages,response=response.model_dump(mode='json'))

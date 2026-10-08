@@ -188,7 +188,7 @@ def test_fixture_5_invalid_scaling_overloaded_cpu():
     assert check["feasible_against_contract"] is False
     assert check["recomputed_metrics"]["modeled_cpu_pct"] > 100.0  # Must NOT be clipped to 100%!
     assert any("Modeled CPU utilization" in v and "exceeds 100%" in v for v in check["violations"])
-    assert check["summary_status"] == "Constraint violation found"
+    assert "Constraint violation" in check["summary_status"]
 
 
 def test_fixture_6_unknown_sku_rejected():

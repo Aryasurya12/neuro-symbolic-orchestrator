@@ -13,6 +13,11 @@ import textwrap
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from dotenv import load_dotenv
+
+# Ensure environment variables from .env are loaded into os.environ
+load_dotenv()
+
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -855,30 +860,38 @@ def execute_live_pipeline(query_text: str) -> Dict[str, Any]:
     )
     from templates.ILP_VM_Knapsack_Allocation import solve_ilp_vm_knapsack
     from templates.Continuous_PSO_Dynamic_Scaling import solve_pso_continuous_scaling
+    from src.semantic.nvidia_extractor import NVIDIAExtractor
+    from src.semantic.schemas import CloudOptimizationContract
 
     t_pipeline_start = time.perf_counter()
 
-    # Stage 1: Parse Semantic Tokens & Contract (Mode 4 / Neurasym parsing boundary)
+    # Stage 1: Mode 4 Genuine NVIDIA Neural Interpretation
     t_parse_start = time.perf_counter()
-    extracted_constraints = parser_engine.extract_constraints_from_text(query_text)
-    params = parser_engine.extract_parameters(query_text)
-
-    # Stage 2: CARM Jaccard Similarity Scoring across all templates
-    jaccard_scores = {}
-    for archetype, data in matcher_engine.TEMPLATE_INDEX.items():
-        score = matcher_engine.compute_jaccard_score(
-            extracted_constraints, data["constraints"]  # type: ignore[arg-type]
-        )
-        jaccard_scores[archetype] = round(score, 4)
-
-    # Determine matched archetype and template
-    contract, matched_template, best_jaccard = parser_engine.parse_query_to_contract(query_text)
+    nvd_extractor = NVIDIAExtractor()
+    nvd_res = nvd_extractor.extract_contract_from_query(query_text, offline=True)
+    parse_latency_ms = nvd_res.latency_ms
+    contract = nvd_res.contract or CloudOptimizationContract(
+        problem_type="ILP_VM_Allocation",
+        budget_max_usd=1000.0,
+        required_vcpus=4,
+        required_ram_gb=16.0,
+    )
     problem_type = contract.problem_type
-    parse_latency_ms = (time.perf_counter() - t_parse_start) * 1000.0
+    matched_template = problem_type
+    jaccard_scores = {}
 
     # Stage 3: Mode 4 Symbolic Solver Execution (Single Run)
     t_solve_start = time.perf_counter()
-    solver_res = orchestrator_engine.optimize_contract(contract)
+    if nvd_res.is_executable:
+        solver_res = orchestrator_engine.optimize_contract(contract)
+    else:
+        solver_res = {
+            "status": "Extraction Rejected",
+            "is_feasible": False,
+            "error_message": nvd_res.error_message or "NVIDIA extraction incomplete",
+            "total_monthly_cost_usd": 0.0,
+            "allocated_vms": [],
+        }
     solve_latency_ms = (time.perf_counter() - t_solve_start) * 1000.0
 
     # Stage 4: Mode 4 FinOps Explanation Synthesis
@@ -1253,7 +1266,7 @@ def build_4way_comparison_data(
                 "cost_color": "#F5365C",
                 "is_feasible": None,
                 "raw_content": m1_run.get("content", ""),
-                "error": m1_run.get("error_message", "OpenRouter free-tier daily quota limit reached."),
+                "error": m1_run.get("error_message", "Free-tier daily quota limit reached."),
             }
         else:
             err_msg = m1_run.get("error_message", "Request Failed")
@@ -1350,11 +1363,11 @@ def build_4way_comparison_data(
                 "error_usd": None,
                 "error_pct": None,
                 "overflow_usd": None,
-                "violations": "Daily Free Quota Exhausted (50/50)",
+                "violations": "Daily Free Quota Exhausted (429)",
                 "cost_color": "#F5365C",
                 "is_feasible": None,
                 "raw_content": m2_run.get("content", ""),
-                "error": m2_run.get("error_message", "OpenRouter free-tier daily quota limit reached."),
+                "error": m2_run.get("error_message", "Free-tier daily quota limit reached."),
             }
         else:
             err_msg = m2_run.get("error_message", "Request Failed")
@@ -1555,223 +1568,7 @@ def run_live_4way_benchmark(
     )
 
 
-def execute_dashboard_llm_request(
-    mode_num: int,
-    query: str,
-    contract: Any = None,
-    timeout_seconds: Optional[float] = None,
-) -> Dict[str, Any]:
-    """Executes a single, isolated live inference request to OpenRouter for Mode 1 or Mode 2.
-    Uses configurable timeout from settings (default: 360s), max_retries=0, single target model.
-    Never fabricates fallback costs; captures exact timing, raw content, and failure reason.
-    """
-    import os
-    import re
-    import time
-    from datetime import datetime, timezone
-    from config.settings import settings
-
-    api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
-    if not api_key:
-        return {
-            "status": "missing_credentials",
-            "error_type": "ConfigurationError",
-            "error_message": "OPENROUTER_API_KEY is missing in environment or settings.",
-            "elapsed_seconds": 0.0,
-            "elapsed_ms": 0.0,
-            "content": "",
-            "reported_cost_usd": None,
-            "actual_cost_usd": None,
-            "error_usd": None,
-            "error_pct": None,
-            "overflow_usd": None,
-            "is_feasible": None,
-        }
-
-    effective_timeout = timeout_seconds if timeout_seconds is not None else getattr(
-        settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0
-    )
-    model = os.getenv("OPENROUTER_MODEL") or getattr(
-        settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
-    )
-    max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
-
-    t0 = time.perf_counter()
-    run_record: Dict[str, Any] = {
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "mode_num": mode_num,
-        "query": query,
-        "model": model,
-        "timeout": effective_timeout,
-        "content": "",
-        "reported_cost_usd": None,
-        "actual_cost_usd": None,
-        "error_usd": None,
-        "error_pct": None,
-        "overflow_usd": None,
-        "is_feasible": None,
-    }
-
-    try:
-        from openai import OpenAI
-
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-            timeout=effective_timeout,
-            max_retries=0,
-        )
-
-        if mode_num == 1:
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You are a Cloud Solutions Architect. Recommend a concrete cloud VM allocation plan. State the recommended provider, instance types, quantities, and the exact total monthly cost in USD ($/month). Be concise.",
-                },
-                {"role": "user", "content": f"Recommend cloud VMs for this request: \"{query}\""},
-            ]
-        else:
-            req_vcpus = int(getattr(contract, "required_vcpus", 4)) if contract else 4
-            req_ram = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
-            schema_sample = {
-                "cloud_provider": "AWS",
-                "instances": [{"sku": "t3.medium", "quantity": 2, "monthly_cost": 60.74}],
-                "total_monthly_cost": 60.74,
-                "total_vcpus": req_vcpus,
-                "total_ram_gb": req_ram,
-            }
-            messages = [
-                {
-                    "role": "system",
-                    "content": f"You are a Cloud Optimization System. Respond ONLY with valid JSON matching this schema: {json.dumps(schema_sample)}. No explanatory text.",
-                },
-                {"role": "user", "content": f"Optimize allocation for: \"{query}\". Respond in JSON."},
-            ]
-
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.0 if mode_num == 2 else 0.2,
-            max_tokens=max_tokens,
-        )
-        elapsed_s = time.perf_counter() - t0
-        run_record["elapsed_seconds"] = round(elapsed_s, 2)
-        run_record["elapsed_ms"] = round(elapsed_s * 1000.0, 1)
-
-        choice = resp.choices[0] if resp.choices else None
-        if not choice:
-            run_record["status"] = "empty_response"
-            run_record["error_message"] = "Provider returned no choices."
-            return run_record
-
-        finish_reason = getattr(choice, "finish_reason", "unknown")
-        run_record["finish_reason"] = finish_reason
-        raw_content = (choice.message.content or "").strip()
-        run_record["content"] = raw_content
-        run_record["response_id"] = getattr(resp, "id", None)
-        if hasattr(resp, "usage") and resp.usage:
-            run_record["usage"] = {
-                "prompt_tokens": resp.usage.prompt_tokens,
-                "completion_tokens": resp.usage.completion_tokens,
-                "total_tokens": resp.usage.total_tokens,
-            }
-
-        if not raw_content:
-            run_record["status"] = "empty_response"
-            run_record["error_message"] = "Model returned empty content."
-            return run_record
-
-        if finish_reason == "length":
-            run_record["status"] = "truncated"
-            run_record["error_message"] = "Generation reached max token limit and was truncated."
-
-        # Compute ground truth catalog cost if possible
-        budget = float(getattr(contract, "budget_max_usd", 500.0)) if contract else 500.0
-        req_v = int(getattr(contract, "required_vcpus", 4)) if contract else 4
-        req_r = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
-
-        catalog_cost_lookup = None
-        try:
-            catalog = DatabaseBackedCatalog()
-            matching_costs = [
-                sku.monthly_cost() for sku in catalog.VM_CATALOG
-                if sku.vcpus >= req_v and sku.ram_gb >= req_r
-            ]
-            if matching_costs:
-                catalog_cost_lookup = min(matching_costs)
-        except Exception:
-            catalog_cost_lookup = None
-
-        if mode_num == 1:
-            cost_match = re.search(r"\$\s*(\d+(?:\.\d+)?)", raw_content)
-            if cost_match:
-                rep_cost = float(cost_match.group(1))
-                run_record["reported_cost_usd"] = rep_cost
-                run_record["actual_cost_usd"] = catalog_cost_lookup
-                if catalog_cost_lookup and catalog_cost_lookup > 0:
-                    err_usd = round(abs(catalog_cost_lookup - rep_cost), 2)
-                    err_pct = round((err_usd / catalog_cost_lookup) * 100.0, 1)
-                    run_record["error_usd"] = err_usd
-                    run_record["error_pct"] = err_pct
-                    run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
-                run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
-            else:
-                run_record["status"] = "unparseable_prose"
-                run_record["error_message"] = "No dollar amount ($XX.XX) found in natural language response."
-        else:
-            try:
-                first_b = raw_content.find("{")
-                last_b = raw_content.rfind("}")
-                if first_b != -1 and last_b != -1:
-                    p_json = json.loads(raw_content[first_b:last_b+1])
-                    run_record["parsed_json"] = p_json
-                    rep_cost = float(p_json.get("total_monthly_cost", p_json.get("total_monthly_cost_usd", 0.0)))
-                    run_record["reported_cost_usd"] = rep_cost
-                    run_record["actual_cost_usd"] = catalog_cost_lookup
-                    if catalog_cost_lookup and catalog_cost_lookup > 0:
-                        err_usd = round(abs(catalog_cost_lookup - rep_cost), 2)
-                        err_pct = round((err_usd / catalog_cost_lookup) * 100.0, 1)
-                        run_record["error_usd"] = err_usd
-                        run_record["error_pct"] = err_pct
-                        run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
-                    run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
-                else:
-                    run_record["status"] = "invalid_schema"
-                    run_record["error_message"] = "Response does not contain valid JSON brackets."
-            except Exception as e:
-                run_record["status"] = "invalid_schema"
-                run_record["error_message"] = f"JSON parse error: {e}"
-
-        return run_record
-
-    except Exception as exc:
-        elapsed_s = time.perf_counter() - t0
-        run_record["elapsed_seconds"] = round(elapsed_s, 2)
-        run_record["elapsed_ms"] = round(elapsed_s * 1000.0, 1)
-        err_type_name = type(exc).__name__
-        err_msg = str(exc)
-
-        if "RateLimitError" in err_type_name or "429" in err_msg:
-            is_daily = "free-models-per-day" in err_msg.lower() or "free_tier_daily" in err_msg.lower()
-            if is_daily:
-                run_record["status"] = "daily_quota_exhausted"
-                reset_str = "07 Oct 2026 at 05:30 IST (00:00 UTC)"
-                run_record["reset_str"] = reset_str
-                run_record["error_message"] = f"OpenRouter daily free request limit reached (50/50). Resets on {reset_str}."
-            else:
-                run_record["status"] = "rate_limited"
-                run_record["error_message"] = f"OpenRouter rate limit: {err_msg[:120]}"
-        elif "Timeout" in err_type_name or "readtimeout" in err_msg.lower():
-            run_record["status"] = "timeout"
-            run_record["error_message"] = f"Request exceeded configured timeout of {effective_timeout:.0f}s."
-        elif "AuthenticationError" in err_type_name or "401" in err_msg:
-            run_record["status"] = "auth_error"
-            run_record["error_message"] = "Authentication failed: invalid API key (401)."
-        else:
-            run_record["status"] = "error"
-            run_record["error_message"] = f"{err_type_name}: {err_msg[:120]}"
-
-        return run_record
+from src.semantic.llm_client import execute_dashboard_llm_request
 
 
 def check_openrouter_account_quota() -> Dict[str, Any]:
@@ -2292,32 +2089,49 @@ with st.sidebar:
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
-    # Live API Status Card
+    # Live API Status Cards
     from dotenv import load_dotenv
     load_dotenv()
-    env_api_key = os.getenv("OPENROUTER_API_KEY", "")
-    has_key = bool(env_api_key and len(env_api_key) > 10)
-    key_disp = f"{env_api_key[:8]}...{env_api_key[-4:]}" if has_key else "Missing"
-    status_tag = "ACTIVE (Connected)" if has_key else "NOT CONFIGURED"
-    status_col = "#00D09C" if has_key else "#F5365C"
-    bg_col = "rgba(0, 129, 98, 0.15)" if has_key else "rgba(245, 54, 92, 0.15)"
-    border_col = "rgba(0, 129, 98, 0.4)" if has_key else "rgba(245, 54, 92, 0.4)"
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    has_groq = bool(groq_key and len(groq_key) > 5)
+    groq_disp = f"{groq_key[:6]}...{groq_key[-4:]}" if has_groq else "Missing"
+    groq_status_tag = "ACTIVE (Connected)" if has_groq else "NOT CONFIGURED"
+    groq_col = "#00D09C" if has_groq else "#F5365C"
+    groq_bg = "rgba(0, 129, 98, 0.15)" if has_groq else "rgba(245, 54, 92, 0.15)"
+    groq_border = "rgba(0, 129, 98, 0.4)" if has_groq else "rgba(245, 54, 92, 0.4)"
+
+    nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+    has_nvidia = bool(nvidia_key and len(nvidia_key) > 5)
+    nvidia_disp = f"{nvidia_key[:6]}...{nvidia_key[-4:]}" if has_nvidia else "Missing"
+    nvidia_status_tag = "ACTIVE (Connected)" if has_nvidia else "NOT CONFIGURED"
+    nvidia_col = "#00D09C" if has_nvidia else "#F5365C"
+    nvidia_bg = "rgba(0, 129, 98, 0.15)" if has_nvidia else "rgba(245, 54, 92, 0.15)"
+    nvidia_border = "rgba(0, 129, 98, 0.4)" if has_nvidia else "rgba(245, 54, 92, 0.4)"
 
     render_html(
         f"""
-        <div style="background: {bg_col}; border: 1px solid {border_col}; border-radius: 8px; padding: 10px 12px; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: {status_col};">OpenRouter LLM API</span>
-                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {status_col};"></span>
+        <div style="background: {groq_bg}; border: 1px solid {groq_border}; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: {groq_col};">Groq API (Modes 1/2)</span>
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {groq_col};"></span>
             </div>
-            <div style="font-size: 0.78rem; color: var(--text-primary); font-weight: 600;">
-                {status_tag}
+            <div style="font-size: 0.76rem; color: var(--text-primary); font-weight: 600;">
+                {groq_status_tag}
             </div>
-            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 3px; font-family: var(--font-mono);">
-                Key: {key_disp}
+            <div style="font-size: 0.70rem; color: var(--text-secondary); margin-top: 2px; font-family: var(--font-mono);">
+                Key: {groq_disp} | Model: {os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')[:20]}
             </div>
-            <div style="font-size: 0.70rem; color: var(--text-secondary); margin-top: 2px;">
-                Model: nvidia/nemotron-3.5-lightning
+        </div>
+        <div style="background: {nvidia_bg}; border: 1px solid {nvidia_border}; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: {nvidia_col};">NVIDIA API (Mode 4 Explainer)</span>
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {nvidia_col};"></span>
+            </div>
+            <div style="font-size: 0.76rem; color: var(--text-primary); font-weight: 600;">
+                {nvidia_status_tag}
+            </div>
+            <div style="font-size: 0.70rem; color: var(--text-secondary); margin-top: 2px; font-family: var(--font-mono);">
+                Key: {nvidia_disp} | Model: {os.getenv('NVIDIA_MODEL', 'nemotron-70b-instruct')[:20]}
             </div>
         </div>
         """
@@ -3631,7 +3445,7 @@ else:
                 f"""
                 <div style="background: rgba(245, 54, 92, 0.12); border: 1px solid rgba(245, 54, 92, 0.4); border-radius: 8px; padding: 12px 16px; margin-top: 12px; margin-bottom: 12px;">
                     <div style="font-size: 0.9rem; font-weight: 700; color: #F5365C; margin-bottom: 4px;">
-                        ⚠️ OpenRouter Free-Tier Daily Quota Exhausted (50/50 requests)
+                        ⚠️ Groq Free-Tier Daily Quota Limit Reached (429)
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">
                         Live LLM requests are paused for this session until quota reset on <strong>{st.session_state.get('daily_quota_reset_str', '07 Oct 2026 at 05:30 IST')}</strong>.
@@ -3642,16 +3456,8 @@ else:
             )
             col_qc1, col_qc2 = st.columns([1, 2])
             with col_qc1:
-                if st.button("🔄 Recheck Account Quota (0 tokens)", key="btn_recheck_quota", use_container_width=True):
-                    with st.spinner("Checking OpenRouter account key status..."):
-                        q_res = check_openrouter_account_quota()
-                        if q_res.get("has_quota"):
-                            st.session_state["daily_quota_exhausted"] = False
-                            st.session_state["mode1_rate_limited"] = False
-                            st.session_state["mode2_rate_limited"] = False
-                            st.success("Account quota restored!")
-                        else:
-                            st.warning(f"Quota not restored yet: {q_res.get('remaining', 0)} free requests remaining (Used: {q_res.get('used', '50')}/{q_res.get('limit', '50')}).")
+                if st.button("🔄 Clear Status", key="btn_recheck_quota", use_container_width=True):
+                    st.session_state["daily_quota_exhausted"] = False
                     st.rerun()
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
@@ -3659,7 +3465,7 @@ else:
         # Explicit Live Call Controls (Mode 1 & Mode 2 - Configurable 360s Timeout, 0 Retries)
         from config.settings import settings as central_settings
         eff_timeout = getattr(central_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0)
-        target_model_name = os.getenv("OPENROUTER_MODEL") or getattr(central_settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
+        target_model_name = os.getenv("GROQ_MODEL") or getattr(central_settings, "GROQ_MODEL", "openai/gpt-oss-120b")
 
         col_live1, col_live2, col_clear = st.columns([2, 2, 1])
         with col_live1:

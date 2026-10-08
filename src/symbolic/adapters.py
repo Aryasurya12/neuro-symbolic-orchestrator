@@ -15,6 +15,17 @@ def from_contract(contract: CloudOptimizationContract) -> SymbolicOptimizationRe
         required_ram_gb=contract.required_ram_gb,
         latency_max_ms=contract.latency_max_ms,
         sla_availability_pct=contract.sla_availability_pct,
+        target_bandwidth_mbps=contract.target_bandwidth_mbps,
+        min_bandwidth_mbps=contract.min_bandwidth_mbps,
+        max_bandwidth_mbps=contract.max_bandwidth_mbps,
+        min_replicas=contract.min_replicas,
+        max_replicas=contract.max_replicas,
+        target_replicas=contract.target_replicas,
+        target_cpu_pct=contract.target_cpu_pct,
+        max_cpu_pct=contract.max_cpu_pct,
+        primary_region=contract.primary_region,
+        secondary_region=contract.secondary_region,
+        metadata=contract.metadata,
     )
 
 def to_explainer_dict(result: OptimizationResult, contract: CloudOptimizationContract) -> dict:
@@ -74,15 +85,18 @@ def to_explainer_dict(result: OptimizationResult, contract: CloudOptimizationCon
         res["total_ram_gb"] = total_ram
 
     elif problem == "PSO_Continuous_Scaling":
-        bw = decision_vars.get("bandwidth_mbps", 0.0)
-        reps = decision_vars.get("replicas", 1.0)
+        bw = float(decision_vars.get("bandwidth_mbps", 0.0))
+        reps = max(1, int(round(float(decision_vars.get("replicas", 1.0)))))
+        discrete_cost = round((bw * 0.08) + (reps * 45.0), 2)
         # Reconstruct target CPU (from objective logic)
-        simulated_cpu = min(max((bw / (reps * 75.0)) * 100.0, 10.0), 99.0) if reps > 0 else 0.0
+        simulated_cpu = min(max((bw / (reps * 75.0)) * 100.0, 10.0), 100.0) if reps > 0 else 0.0
         
+        res["total_monthly_cost_usd"] = discrete_cost
         res["optimal_bandwidth_mbps"] = bw
-        res["recommended_replicas"] = round(reps)
+        res["recommended_replicas"] = reps
         res["target_cpu_utilization_pct"] = simulated_cpu
-        res["estimated_hourly_cost_usd"] = cand.objective_cost_usd / 730.0
+        res["estimated_monthly_cost_usd"] = discrete_cost
+        res["estimated_hourly_cost_usd"] = round(discrete_cost / 730.0, 4)
 
     elif problem == "Z3_Graph_Disaster_Recovery":
         res["primary_region"] = decision_vars.get("primary_region", "N/A")

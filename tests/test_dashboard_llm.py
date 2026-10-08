@@ -46,6 +46,9 @@ class MockResponse:
 
 class TestDashboardLLMHandling(unittest.TestCase):
     def setUp(self):
+        import os
+        self._orig_groq_key = os.environ.get("GROQ_API_KEY")
+        os.environ["GROQ_API_KEY"] = "gsk_test_mock_dashboard_key"
         self.contract = CloudOptimizationContract(
             problem_type="ILP_VM_Allocation",
             cloud_providers=["AWS"],
@@ -57,6 +60,13 @@ class TestDashboardLLMHandling(unittest.TestCase):
             latency_max_ms=100.0,
         )
         self.query = "Deploy 2 web microservices on AWS requiring 4 vCPUs and 16GB RAM with $500 monthly budget."
+
+    def tearDown(self):
+        import os
+        if self._orig_groq_key is not None:
+            os.environ["GROQ_API_KEY"] = self._orig_groq_key
+        else:
+            os.environ.pop("GROQ_API_KEY", None)
 
     # -------------------------------------------------------------------------
     # 1. Successful plain-text response (Mode 1)
@@ -84,8 +94,8 @@ class TestDashboardLLMHandling(unittest.TestCase):
 
         # Verify client configuration: timeout=360s, max_retries=0
         mock_openai_cls.assert_called_once_with(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=settings.OPENROUTER_API_KEY,
+            base_url=settings.GROQ_BASE_URL,
+            api_key="gsk_test_mock_dashboard_key",
             timeout=360.0,
             max_retries=0,
         )
@@ -326,7 +336,22 @@ class TestDashboardLLMHandling(unittest.TestCase):
         mock_openai_cls.assert_not_called()
 
     # -------------------------------------------------------------------------
-    # 11. Verification of Safe Formatters & Chart Handlers (No Fabricated Baselines)
+    # 11. Missing GROQ_API_KEY returns clear configuration error
+    # -------------------------------------------------------------------------
+    @patch.dict("os.environ", {"GROQ_API_KEY": ""}, clear=False)
+    @patch("config.settings.settings.GROQ_API_KEY", "")
+    def test_missing_groq_api_key_returns_clear_error(self):
+        result = execute_dashboard_llm_request(
+            mode_num=1,
+            query=self.query,
+            contract=self.contract,
+        )
+        self.assertEqual(result["status"], "missing_credentials")
+        self.assertEqual(result["error_type"], "ConfigurationError")
+        self.assertIn("GROQ_API_KEY is missing", result["error_message"])
+
+    # -------------------------------------------------------------------------
+    # 12. Verification of Safe Formatters & Chart Handlers (No Fabricated Baselines)
     # -------------------------------------------------------------------------
     def test_safe_formatters_and_charts(self):
         # Test format_currency handles None without throwing TypeError

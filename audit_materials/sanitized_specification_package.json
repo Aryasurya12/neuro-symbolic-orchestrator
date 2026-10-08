@@ -1,0 +1,346 @@
+{
+  "package_title": "NEURASYM Ground-Truth Specification & Authoring Guide",
+  "version": "3.0.0-auditable",
+  "status": "APPROVED_SPECIFICATION_FOR_PROMPT_AUTHORING",
+  "resource_catalog_vm_skus": {
+    "t3.medium": {
+      "provider": "AWS",
+      "vcpus": 2,
+      "ram_gb": 4.0,
+      "hourly_cost_usd": 0.0416,
+      "monthly_cost_usd": 30.37
+    },
+    "t3.large": {
+      "provider": "AWS",
+      "vcpus": 2,
+      "ram_gb": 8.0,
+      "hourly_cost_usd": 0.0832,
+      "monthly_cost_usd": 60.74
+    },
+    "t3.xlarge": {
+      "provider": "AWS",
+      "vcpus": 4,
+      "ram_gb": 16.0,
+      "hourly_cost_usd": 0.1664,
+      "monthly_cost_usd": 121.47
+    },
+    "c5.large": {
+      "provider": "AWS",
+      "vcpus": 2,
+      "ram_gb": 4.0,
+      "hourly_cost_usd": 0.085,
+      "monthly_cost_usd": 62.05
+    },
+    "c5.xlarge": {
+      "provider": "AWS",
+      "vcpus": 4,
+      "ram_gb": 8.0,
+      "hourly_cost_usd": 0.17,
+      "monthly_cost_usd": 124.1
+    },
+    "m5.large": {
+      "provider": "AWS",
+      "vcpus": 2,
+      "ram_gb": 8.0,
+      "hourly_cost_usd": 0.096,
+      "monthly_cost_usd": 70.08
+    },
+    "m5.xlarge": {
+      "provider": "AWS",
+      "vcpus": 4,
+      "ram_gb": 16.0,
+      "hourly_cost_usd": 0.192,
+      "monthly_cost_usd": 140.16
+    },
+    "m5.2xlarge": {
+      "provider": "AWS",
+      "vcpus": 8,
+      "ram_gb": 32.0,
+      "hourly_cost_usd": 0.384,
+      "monthly_cost_usd": 280.32
+    },
+    "Standard_D4s_v5": {
+      "provider": "Azure",
+      "vcpus": 4,
+      "ram_gb": 16.0,
+      "hourly_cost_usd": 0.192,
+      "monthly_cost_usd": 140.16
+    },
+    "e2-standard-4": {
+      "provider": "GCP",
+      "vcpus": 4,
+      "ram_gb": 16.0,
+      "hourly_cost_usd": 0.134,
+      "monthly_cost_usd": 97.82
+    }
+  },
+  "disaster_recovery_infrastructure": {
+    "regions": {
+      "us-east-1": {
+        "provider": "AWS",
+        "geo": "US_East",
+        "base_cost_usd": 120.0,
+        "sla_pct": 99.95,
+        "peer_latencies_ms": {
+          "us-west-2": 65.0,
+          "eu-west-1": 85.0,
+          "eastus": 12.0,
+          "us-central1": 32.0
+        }
+      },
+      "us-west-2": {
+        "provider": "AWS",
+        "geo": "US_West",
+        "base_cost_usd": 130.0,
+        "sla_pct": 99.95,
+        "peer_latencies_ms": {
+          "us-east-1": 65.0,
+          "eu-west-1": 135.0,
+          "eastus": 70.0,
+          "us-central1": 42.0
+        }
+      },
+      "eu-west-1": {
+        "provider": "AWS",
+        "geo": "Europe",
+        "base_cost_usd": 140.0,
+        "sla_pct": 99.95,
+        "peer_latencies_ms": {
+          "us-east-1": 85.0,
+          "us-west-2": 135.0,
+          "eastus": 90.0,
+          "us-central1": 105.0
+        }
+      },
+      "eastus": {
+        "provider": "Azure",
+        "geo": "US_East",
+        "base_cost_usd": 125.0,
+        "sla_pct": 99.95,
+        "peer_latencies_ms": {
+          "us-east-1": 12.0,
+          "us-west-2": 70.0,
+          "eu-west-1": 90.0,
+          "us-central1": 28.0
+        }
+      },
+      "us-central1": {
+        "provider": "GCP",
+        "geo": "US_Central",
+        "base_cost_usd": 115.0,
+        "sla_pct": 99.95,
+        "peer_latencies_ms": {
+          "us-east-1": 32.0,
+          "us-west-2": 42.0,
+          "eu-west-1": 105.0,
+          "eastus": 28.0
+        }
+      }
+    },
+    "cost_constants": {
+      "latency_cost_per_ms_monthly_usd": 0.25
+    },
+    "formulas": {
+      "monthly_cost_usd": "base_cost(region_a) + base_cost(region_b) + (peer_latency_ms * 0.25)",
+      "composite_availability_sla": "1.0 - ((1.0 - (sla_a / 100.0)) * (1.0 - (sla_b / 100.0)))"
+    },
+    "constraints": {
+      "geographic_isolation": "geo(region_a) != geo(region_b) (Must be distinct geographical regions)",
+      "distinct_nodes": "region_a != region_b"
+    }
+  },
+  "continuous_dynamic_scaling": {
+    "operational_bounds": {
+      "bandwidth_min_mbps": 100.0,
+      "bandwidth_max_mbps": 1000.0,
+      "replicas_min": 1,
+      "replicas_max": 16
+    },
+    "cost_constants": {
+      "cost_per_mbps_monthly_usd": 0.08,
+      "cost_per_replica_monthly_usd": 45.0,
+      "capacity_factor_mbps_per_replica": 75.0
+    },
+    "formulas": {
+      "monthly_cost_usd": "(bandwidth_mbps * 0.08) + (replicas * 45.00)",
+      "modeled_cpu_utilization_pct": "(bandwidth_mbps / (replicas * 75.0)) * 100.0"
+    },
+    "constraints": {
+      "physical_saturation_limit": "<= 100.0% CPU",
+      "custom_max_ceiling": "<= max_cpu_pct (if specified in contract)"
+    }
+  },
+  "supported_contract_schemas": {
+    "ILP_VM_Allocation": {
+      "problem_type": "ILP_VM_Allocation",
+      "required_fields": [
+        "required_vcpus",
+        "required_ram_gb",
+        "budget_max_usd"
+      ],
+      "optional_fields": [
+        "cloud_providers (default: ['AWS'])"
+      ],
+      "description": "Discrete knapsack VM selection satisfying compute and memory under financial budget."
+    },
+    "Z3_Graph_Disaster_Recovery": {
+      "problem_type": "Z3_Graph_Disaster_Recovery",
+      "required_fields": [
+        "latency_max_ms",
+        "sla_availability_pct",
+        "budget_max_usd"
+      ],
+      "optional_fields": [],
+      "description": "Multi-region disaster recovery deployment satisfying inter-region sync latency, composite SLA, and budget."
+    },
+    "PSO_Continuous_Scaling": {
+      "problem_type": "PSO_Continuous_Scaling",
+      "required_fields": [
+        "target_bandwidth_mbps (or min_bandwidth_mbps)",
+        "target_cpu_pct",
+        "budget_max_usd"
+      ],
+      "optional_fields": [
+        "max_cpu_pct"
+      ],
+      "description": "Continuous dynamic scaling determining optimal bandwidth allocation and worker replicas."
+    }
+  },
+  "authoring_and_evaluation_policies": {
+    "missing_budget_policy": "Flag query with expected_outcome='CLARIFICATION_REQUIRED' when budget is omitted or ambiguous.",
+    "unsupported_domain_policy": "Flag query with expected_outcome='UNSUPPORTED' for out-of-domain requests (e.g. quantum computing, DB administration, DNS routing, Auth0).",
+    "conflicting_constraints_policy": "Flag query with expected_outcome='INFEASIBLE' when requested parameters exceed mathematical or physical catalog capacity.",
+    "provider_default_policy": "If no cloud provider is specified for VM allocations, default to ['AWS']."
+  },
+  "verifier_limits_and_tolerances": {
+    "solver_timeouts_sec": 10.0,
+    "cost_tolerance_usd": 0.5,
+    "sla_tolerance_pct": 0.0001,
+    "latency_tolerance_ms": 0.0,
+    "hours_per_month_standard": 730.0
+  },
+  "development_queries_count": 36,
+  "sample_development_queries": [
+    {
+      "query_id": "Q01_VM_FORMAL_BASIC",
+      "scenario_family_id": "FAM_VM_01_COMPUTE",
+      "query_text": "Deploy an application requiring 8 vCPUs and 16GB RAM for under $300 a month on AWS.",
+      "category": "FORMAL_ENGLISH",
+      "intended_archetype": "ILP_VM_Allocation",
+      "expected_outcome": "FEASIBLE",
+      "required_vcpus": 8,
+      "required_ram_gb": 16.0,
+      "target_bandwidth_mbps": null,
+      "min_bandwidth_mbps": null,
+      "target_cpu_pct": null,
+      "max_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null,
+      "budget_max_usd": 300.0,
+      "cloud_providers": [
+        "AWS"
+      ],
+      "annotation_source": "AI_DRAFT/DEVELOPMENT",
+      "approval_status": "UNAPPROVED",
+      "is_approved": false,
+      "notes": "Standard formal VM knapsack request."
+    },
+    {
+      "query_id": "Q02_VM_HINGLISH_COMPUTE",
+      "scenario_family_id": "FAM_VM_01_COMPUTE",
+      "query_text": "Bhai AWS pe 8 vCPU aur 16GB RAM ka setup lagade 300 dollar per month ke andar.",
+      "category": "COLLOQUIAL_HINGLISH",
+      "intended_archetype": "ILP_VM_Allocation",
+      "expected_outcome": "FEASIBLE",
+      "required_vcpus": 8,
+      "required_ram_gb": 16.0,
+      "target_bandwidth_mbps": null,
+      "min_bandwidth_mbps": null,
+      "target_cpu_pct": null,
+      "max_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null,
+      "budget_max_usd": 300.0,
+      "cloud_providers": [
+        "AWS"
+      ],
+      "annotation_source": "AI_DRAFT/DEVELOPMENT",
+      "approval_status": "UNAPPROVED",
+      "is_approved": false,
+      "notes": "Hinglish paraphrase of Q01."
+    },
+    {
+      "query_id": "Q03_VM_HIGH_MEM",
+      "scenario_family_id": "FAM_VM_01_COMPUTE",
+      "query_text": "We need high memory instances totaling 32GB RAM and 4 vCPUs on AWS with budget $250.",
+      "category": "FORMAL_ENGLISH",
+      "intended_archetype": "ILP_VM_Allocation",
+      "expected_outcome": "FEASIBLE",
+      "required_vcpus": 4,
+      "required_ram_gb": 32.0,
+      "target_bandwidth_mbps": null,
+      "min_bandwidth_mbps": null,
+      "target_cpu_pct": null,
+      "max_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null,
+      "budget_max_usd": 250.0,
+      "cloud_providers": [
+        "AWS"
+      ],
+      "annotation_source": "AI_DRAFT/DEVELOPMENT",
+      "approval_status": "UNAPPROVED",
+      "is_approved": false,
+      "notes": "Memory-weighted VM selection."
+    },
+    {
+      "query_id": "Q04_VM_AZURE_GCP_MULTI",
+      "scenario_family_id": "FAM_VM_01_COMPUTE",
+      "query_text": "Provision 4 vCPUs and 16GB RAM across Azure or GCP under $150 monthly limit.",
+      "category": "FORMAL_ENGLISH",
+      "intended_archetype": "ILP_VM_Allocation",
+      "expected_outcome": "FEASIBLE",
+      "required_vcpus": 4,
+      "required_ram_gb": 16.0,
+      "target_bandwidth_mbps": null,
+      "min_bandwidth_mbps": null,
+      "target_cpu_pct": null,
+      "max_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null,
+      "budget_max_usd": 150.0,
+      "cloud_providers": [
+        "Azure",
+        "GCP"
+      ],
+      "annotation_source": "AI_DRAFT/DEVELOPMENT",
+      "approval_status": "UNAPPROVED",
+      "is_approved": false,
+      "notes": "Cross-cloud provider selection."
+    },
+    {
+      "query_id": "Q05_VM_INCOMPLETE_BUDGET",
+      "scenario_family_id": "FAM_VM_01_COMPUTE",
+      "query_text": "I want to run a web backend with 8 vCPUs and 16GB RAM on AWS.",
+      "category": "MISSING_OR_AMBIGUOUS",
+      "intended_archetype": "ILP_VM_Allocation",
+      "expected_outcome": "CLARIFICATION_REQUIRED",
+      "required_vcpus": 8,
+      "required_ram_gb": 16.0,
+      "target_bandwidth_mbps": null,
+      "min_bandwidth_mbps": null,
+      "target_cpu_pct": null,
+      "max_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null,
+      "budget_max_usd": null,
+      "cloud_providers": [
+        "AWS"
+      ],
+      "annotation_source": "AI_DRAFT/DEVELOPMENT",
+      "approval_status": "UNAPPROVED",
+      "is_approved": false,
+      "notes": "Missing budget constraint; requires confirmation or default policy."
+    }
+  ]
+}

@@ -52,35 +52,61 @@ class ObjectiveEvaluator:
         request: SymbolicOptimizationRequest,
         cost_per_mbps_month: float = 0.08,
         cost_per_replica_month: float = 45.0,
-        target_cpu_pct: float = 70.0
+        target_cpu_pct: float = 70.0,
     ) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
         """
         Evaluates a continuous swarm (shape: [N, 2]) where pos[0]=bandwidth, pos[1]=replicas.
         
         Returns:
-            costs: np.ndarray of shape (N,) with total cost of each particle.
+            costs: np.ndarray of shape (N,) with total deployable cost of each particle.
             is_feasible: np.ndarray of shape (N,) boolean mask.
             constraints: dict of specific constraint masks.
         """
         bw = positions[:, 0]
         reps = positions[:, 1]
 
-        # Calculate base monthly infrastructure cost
-        costs = (bw * cost_per_mbps_month) + (reps * cost_per_replica_month)
+        # Use deployable discrete integer replicas for all cost and capacity calculations
+        discrete_reps = np.round(np.maximum(1.0, np.minimum(16.0, reps)))
 
-        # Feasibility check based on budget
+        # Calculate base monthly infrastructure cost with deployable integer replicas
+        costs = (bw * cost_per_mbps_month) + (discrete_reps * cost_per_replica_month)
+
+        # Budget constraint check
         budget_ok = costs <= request.budget_max_usd
 
-        # CPU constraint check (ensure we don't massively under-provision or over-provision)
-        # We define a loose "acceptable" range for soft feasibility since PSO continuously optimizes it.
-        simulated_cpu = np.clip((bw / (reps * 75.0)) * 100.0, 10.0, 99.0)
-        
-        # We'll consider it functionally feasible if it's within bounds and budget.
-        is_feasible = budget_ok
+        # CPU ceiling constraint check: strictly enforce physical limit (100%) and declared max_cpu_pct
+        max_cpu_ceiling = (
+            float(request.max_cpu_pct)
+            if request.max_cpu_pct is not None
+            else 100.0
+        )
+        raw_cpu = (bw / (discrete_reps * 75.0)) * 100.0
+        cpu_ok = (raw_cpu <= 100.0) & (raw_cpu <= max_cpu_ceiling)
+        simulated_cpu = raw_cpu
+
+        # Offered workload bound: optimizer cannot arbitrarily shrink bandwidth below user request
+        min_bw_req = (
+            float(request.target_bandwidth_mbps)
+            if request.target_bandwidth_mbps is not None
+            else (
+                float(request.min_bandwidth_mbps)
+                if request.min_bandwidth_mbps is not None
+                else 100.0
+            )
+        )
+        bw_in_bounds = (bw >= min_bw_req) & (bw <= 1000.0)
+        reps_in_bounds = (discrete_reps >= 1.0) & (discrete_reps <= 16.0)
+
+        # Consider feasible if within budget, within bounds, and satisfying CPU ceiling
+        is_feasible = budget_ok & cpu_ok & bw_in_bounds & reps_in_bounds
 
         constraints = {
             "budget_ok": budget_ok,
+            "cpu_ok": cpu_ok,
             "simulated_cpu": simulated_cpu,
+            "discrete_reps": discrete_reps,
+            "bw_in_bounds": bw_in_bounds,
+            "reps_in_bounds": reps_in_bounds,
         }
 
         return costs, is_feasible, constraints

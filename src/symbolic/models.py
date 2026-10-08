@@ -12,11 +12,22 @@ class SymbolicOptimizationRequest(BaseModel):
     problem_type: str
     cloud_providers: List[str]
     budget_max_usd: float
-    service_count: int
-    required_vcpus: int
-    required_ram_gb: float
-    latency_max_ms: float
-    sla_availability_pct: float
+    service_count: int = 1
+    required_vcpus: int = 1
+    required_ram_gb: float = 1.0
+    latency_max_ms: float = 100.0
+    sla_availability_pct: float = 99.9
+    target_bandwidth_mbps: Optional[float] = None
+    min_bandwidth_mbps: Optional[float] = None
+    max_bandwidth_mbps: Optional[float] = None
+    min_replicas: Optional[int] = None
+    max_replicas: Optional[int] = None
+    target_replicas: Optional[int] = None
+    target_cpu_pct: Optional[float] = None
+    max_cpu_pct: Optional[float] = None
+    primary_region: Optional[str] = None
+    secondary_region: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 class ConstraintStatus(BaseModel):
     is_feasible: bool

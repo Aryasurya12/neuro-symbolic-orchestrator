@@ -1,17 +1,36 @@
-"""SEM-5: Stage 6 FinOps Report Generator & Natural Language Explainer."""
+"""FinOps Explainer and Executive Report Generator for Neurasym.
+
+Transforms symbolic optimization solver telemetry, verification verdicts, and Pydantic contracts
+into executive-level FinOps deployment reports with multi-currency support (USD / INR)
+and dynamic, contextualized FinOps recommendations.
+
+Guarantees:
+1. Explanations strictly respect verification results: rejected allocations lead with the failure
+   and never recommend deployment or claim formal certification.
+2. An LLM explanation cannot alter the allocation, cost, or checker verdict.
+3. Accurate provenance reporting: LIVE_PROVIDER, CACHED_PROVIDER, LOCAL_TEMPLATE, UNAVAILABLE.
+4. "Budget Headroom" replaces "net savings" when only budget minus candidate cost is calculated.
+"""
+
+from __future__ import annotations
 
 import os
 import re
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from config.settings import settings
 from src.semantic.schemas import CloudOptimizationContract
-from openai import OpenAI
+from src.verifiers.canonical_record import ExplanationSource
 
 
 class FinOpsExplainer:
     """Transforms raw symbolic optimization solver telemetry and Pydantic contracts
-    into executive-level FinOps deployment reports with multi-currency support (USD / INR)
-    and dynamic, contextualized FinOps recommendations.
+    into executive-level FinOps deployment reports with multi-currency support (USD / INR).
     """
 
     @staticmethod
@@ -27,55 +46,56 @@ class FinOpsExplainer:
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
         exchange_rate: float = settings.USD_TO_INR_RATE,
+        is_feasible: bool = True,
+        violations: Optional[List[str]] = None,
         currency_symbol: Optional[str] = None,
         currency_code: Optional[str] = None,
         currency_rate: Optional[float] = None,
+        **kwargs,
     ) -> List[str]:
-        """Generates dynamic, non-hardcoded FinOps recommendations tailored specifically
+        """Generates dynamic, rule-based FinOps recommendations tailored specifically
         to the cloud provider, allocated instance families, budget headroom, and problem type.
         """
         recs: List[str] = []
-        inr_sym = settings.CURRENCY_SYMBOL_INR
+        eff_rate = currency_rate if currency_rate is not None else exchange_rate
+        inr_sym = currency_symbol if currency_symbol is not None else settings.CURRENCY_SYMBOL_INR
+        inr_code = currency_code if currency_code is not None else "INR"
         usd_sym = settings.CURRENCY_SYMBOL_USD
 
-        budget_max = contract.budget_max_usd
-        total_cost = solver_result.get(
+        if not is_feasible:
+            recs.append("Constraint Remediation: The allocation violated formal constraints and cannot be deployed as-is.")
+            if violations:
+                for v in violations:
+                    recs.append(f"Constraint Violation: {v}")
+            recs.append("Remediation Strategy: Increase the monthly budget cap or reduce workload capacity requirements to achieve a feasible configuration.")
+            return recs
+
+        budget_max = float(contract.budget_max_usd)
+        total_cost = float(solver_result.get(
             "total_monthly_cost_usd",
             solver_result.get("estimated_monthly_cost_usd", 0.0),
-        )
-        savings = solver_result.get(
-            "cost_savings_usd", max(0.0, budget_max - total_cost)
-        )
-        savings_inr = cls.usd_to_inr(savings, exchange_rate)
-        utilization = solver_result.get(
-            "budget_utilized_pct",
-            round((total_cost / budget_max) * 100, 2) if budget_max > 0 else 0.0,
-        )
+        ))
+        headroom = max(0.0, budget_max - total_cost)
+        headroom_inr = cls.usd_to_inr(headroom, eff_rate)
+        utilization = round((total_cost / budget_max) * 100, 2) if budget_max > 0 else 0.0
 
         providers = [p.upper() for p in contract.cloud_providers]
         allocated_vms = solver_result.get("allocated_vms", [])
         instance_types = [vm.get("instance_type", "") for vm in allocated_vms if vm.get("instance_type")]
         instance_summary = ", ".join(set(instance_types)) if instance_types else "allocated compute"
 
-        # Multi-currency display tag
-        if currency_symbol and currency_rate and currency_code and currency_code != "USD":
-            conv_savings = round(savings * currency_rate, 2)
-            conv_budget = round(budget_max * currency_rate, 2)
-            cur_tag = f"{currency_symbol}{conv_savings:,.2f} {currency_code} (${savings:,.2f} USD)"
-            cur_bud_tag = f"{currency_symbol}{conv_budget:,.2f} {currency_code}"
-            cur_sav_buf = f"{currency_symbol}{conv_savings:,.2f} {currency_code}"
-        else:
-            cur_tag = f"{usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR)"
-            cur_bud_tag = f"{usd_sym}{budget_max:,.2f} USD"
-            cur_sav_buf = f"{usd_sym}{savings:,.2f} USD"
+        bud_inr = cls.usd_to_inr(budget_max, eff_rate)
+        cur_tag = f"{usd_sym}{headroom:,.2f} USD ({inr_sym}{headroom_inr:,.2f} {inr_code})"
+        cur_bud_tag = f"{usd_sym}{budget_max:,.2f} USD ({inr_sym}{bud_inr:,.2f} {inr_code})"
+        cur_sav_buf = f"{usd_sym}{headroom:,.2f} USD ({inr_sym}{headroom_inr:,.2f} {inr_code})"
 
-        # 1. Cloud Provider & Commitment Strategy
+        # 1. Cloud Provider Commitment Strategy
         if "AWS" in providers:
             if any("t3" in it.lower() or "t4" in it.lower() for it in instance_types):
                 recs.append(
                     f"Pricing Strategy: Workload utilizes burstable instances ({instance_summary}). "
-                    f"Enroll in AWS 1-Year Compute Savings Plans (saves ~28-34%) or migrate to ARM64 Graviton (t4g) "
-                    f"for up to 20% better price-to-performance."
+                    f"Enroll in AWS 1-Year Compute Savings Plans (saves ~28-34%) or evaluate ARM64 Graviton (t4g) "
+                    f"for up to 20% better price-to-performance (Unverified proposal until separately checked)."
                 )
             else:
                 recs.append(
@@ -98,26 +118,26 @@ class FinOpsExplainer:
                 f"and evaluate containerized spot instances for stateless service components."
             )
 
-        # 2. Budget Headroom & Capacity Strategy
+        # 2. Budget Headroom Strategy
         if utilization < 30.0:
             recs.append(
-                f"Budget Headroom ({utilization:.1f}% utilized): You have a monthly surplus of "
+                f"Budget Headroom ({utilization:.1f}% utilized): Monthly surplus of "
                 f"{cur_tag}. Reallocate surplus capital toward "
                 f"multi-AZ automated failover and managed snapshot replication."
             )
         elif utilization > 75.0:
             recs.append(
-                f"Budget Warning ({utilization:.1f}% utilized): Spending is near the {cur_bud_tag} cap "
-                f"with only {cur_sav_buf} buffer. Configure automated billing alerts and scaling throttles "
+                f"Budget Caution ({utilization:.1f}% utilized): Spending is near the {cur_bud_tag} cap "
+                f"with {cur_sav_buf} buffer. Configure automated billing alerts and scaling throttles "
                 f"at 85% to prevent overage."
             )
         else:
             recs.append(
-                f"Spend Governance ({utilization:.1f}% utilized): Optimal operating band with {cur_tag}/mo buffer. "
+                f"Spend Governance ({utilization:.1f}% utilized): Optimal operating band with {cur_tag}/mo headroom. "
                 f"Establish automated CloudWatch/Prometheus anomaly alerts at 80%."
             )
 
-        # 3. Problem & Architecture Specific Optimization
+        # 3. Problem Specific Optimization
         if contract.problem_type == "ILP_VM_Allocation":
             if contract.service_count > 1:
                 recs.append(
@@ -144,7 +164,7 @@ class FinOpsExplainer:
                 f"incurs cross-region transfer fees; enable zstd/gzip compression to minimize data egress costs."
             )
 
-        # 4. Mandatory Tagging & Attribution
+        # 4. Mandatory Tagging
         recs.append(
             f"Governance & Attribution: Apply mandatory Cost Allocation Tags (`Environment`, `CostCenter`, `Owner:FinOps`) "
             f"across all {contract.service_count} service resources for 100% cost attribution."
@@ -154,13 +174,10 @@ class FinOpsExplainer:
 
     @classmethod
     def _clean_llm_recommendations(cls, raw_text: str) -> List[str]:
-        """Cleans, sanitizes, and filters raw LLM output into a list of 3-4 actionable
-        FinOps recommendations, stripping meta-prompts, reasoning headers, and placeholders.
-        """
+        """Cleans and filters raw LLM output into actionable FinOps recommendations."""
         if not raw_text or not raw_text.strip():
             return []
 
-        # Strip XML-like thinking/thought tags
         cleaned_text = re.sub(
             r"<(?:thinking|thought|think|reasoning)>[\s\S]*?</(?:thinking|thought|think|reasoning)>",
             "",
@@ -186,76 +203,39 @@ class FinOpsExplainer:
             re.IGNORECASE,
         )
 
-        meta_header_pattern = re.compile(
-            r"^(?:(?:\*\*|\*|__)?(?:Analyze (?:the )?(?:Input|Problem|Workload|Deployment|Query|Resources?|User(?:'s)? Request)|"
-            r"(?:Input|Problem|Workload|User) Analysis|Observation|Step \d+|Reasoning|Thought(?:s| process)?|"
-            r"Role|Role: Principal Cloud FinOps Architect|Context|Input Summary|Understanding|Evaluation|"
-            r"Recommendation \d+|Rec \d+|Action Item \d+)"
-            r":?(?:\*\*|\*|__)?\s*)+",
-            re.IGNORECASE,
-        )
-
-        placeholder_pattern = re.compile(
-            r"</?(?:recommendation|recommendations|rec|item|step)>|\[(?:recommendation|recommendations|rec|item|step)\]",
-            re.IGNORECASE,
-        )
-
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            # Skip markdown table borders, separators or code blocks
             if line.startswith(("-", "=", "`", "#")) and len(line) > 5 and set(line).issubset({"-", "=", "`", " ", "#"}):
                 continue
 
-            # Strip leading bullets / numbering
-            line = bullet_pattern.sub("", line).strip()
+            # Strip initial bullets, numbered prefixes, step headers, and meta prefixes
+            line = re.sub(r"^(?:(?:\d+[\.\)\:\-]\s*)+|(?:\*(?!\*)|[\-\•\–\—\+])\s*)+", "", line).strip()
+            line = re.sub(r"^(?:Step\s*\d+[\:\-\.]\s*|\[Recommendation\]\s*)+", "", line, flags=re.IGNORECASE).strip()
+            line = re.sub(r"^\*{1,2}Analyze the Input:?\*{1,2}:?\s*", "", line, flags=re.IGNORECASE).strip()
+            line = re.sub(r"^Analyze the Input:?\s*", "", line, flags=re.IGNORECASE).strip()
+            line = re.sub(r"</?recommendation>", "", line, flags=re.IGNORECASE).strip()
 
-            # Check for direct meta-instruction / role echoes / thinking headers
-            if re.match(r"^(?:role|system|prompt|user|problem type|target cloud|required resources|monthly budget cap|optimized monthly cost|placed resources):", line, re.IGNORECASE):
+            if re.match(r"^(?:role|system|prompt|user|problem type|target cloud|required resources|monthly budget cap):", line, re.IGNORECASE):
                 continue
-            if re.match(r"^(?:here'?s?\s*(?:a\s+)?(?:thinking|reasoning|analysis|are|is)|thinking\s*process|based on\b|sure,?\b|the following (?:are|is)|to optimize\b)", line, re.IGNORECASE):
+            if re.match(r"^(?:here'?s?\s*(?:a\s+)?(?:thinking|reasoning|analysis|are|is)|thinking\s*process|based on\b|sure,?\b|the following (?:are|is))", line, re.IGNORECASE):
                 continue
             if re.match(r"^(?:finops recommendations|actionable recommendations|recommendations):?$", line, re.IGNORECASE):
                 continue
 
-            # Strip prompt placeholder tokens
-            line = placeholder_pattern.sub("", line).strip()
-
-            # Strip meta-instruction or reasoning headers (e.g. "**Analyze the Input:**")
-            line = meta_header_pattern.sub("", line).strip()
-
-            # Strip leading bullets / numbering again in case of "1. **Step 1:** 1. Migrate..."
-            line = bullet_pattern.sub("", line).strip()
-            line = placeholder_pattern.sub("", line).strip()
-
-            # Clean markdown bold/italic asterisks around prefix (e.g. "**Pricing Strategy:**" or "**Pricing Strategy**:" -> "Pricing Strategy:")
+            # Clean markdown bold asterisks for category headers like **Governance & Tagging:**
             line = re.sub(r"^\*{1,2}(.*?):?\*{1,2}:?\s*", r"\1: ", line)
-
-            # Sanitize ASCII/Unicode
             line = line.encode("ascii", "replace").decode("ascii")
-            line = line.replace("?", "").strip() if line.startswith("?") else line.strip()
-
-            # Clean up residual leading punctuation
             line = re.sub(r"^[:\-\s]+", "", line).strip()
 
-            # Validation: Word count >= 4 and character length >= 25
             words = line.split()
             if len(words) < 4 or len(line) < 25:
                 continue
 
-            # Validation: Must contain at least one FinOps keyword
             line_lower = line.lower()
             if not any(kw in line_lower for kw in finops_keywords):
-                continue
-
-            # Skip lines that are purely descriptive echoes of the user input without actionable advice
-            is_pure_input_echo = bool(
-                re.match(r"^(?:The )?(?:workload|problem|request|deployment|user) (?:requires|needs|is requesting|specifies|targets|has)\b", line, re.IGNORECASE)
-                and not any(act in line_lower for act in ["enroll", "commit", "purchase", "activate", "leverage", "consolidate", "rightsize", "track", "set", "enable", "apply", "migrate", "scale", "reduce", "reallocate", "configure"])
-            )
-            if is_pure_input_echo:
                 continue
 
             if line and line not in cleaned_recs:
@@ -269,27 +249,22 @@ class FinOpsExplainer:
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
         timeout_seconds: Optional[float] = None,
-    ) -> Optional[List[str]]:
-        """Invokes OpenRouter NVIDIA Nemotron to generate dynamic, AI-reasoned FinOps advice.
-        Returns a list of recommendation strings, or None on failure/timeout.
-        """
-        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
+    ) -> Tuple[Optional[List[str]], Optional[str], Optional[float], ExplanationSource]:
+        """Invokes NVIDIA API to generate dynamic, AI-reasoned FinOps advice."""
+        load_dotenv()
+        provider_name, api_key, base_url, target_model, default_timeout = settings.get_mode4_provider_config()
         if not api_key:
-            return None
+            return None, None, None, ExplanationSource.UNAVAILABLE
 
-        effective_timeout = timeout_seconds if timeout_seconds is not None else getattr(
-            settings, "LLM_REQUEST_TIMEOUT_SECONDS", 360.0
-        )
-        target_model = os.getenv("OPENROUTER_MODEL") or getattr(
-            settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
-        )
+        effective_timeout = timeout_seconds if timeout_seconds is not None else default_timeout
         max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
 
         total_cost = solver_result.get(
             "total_monthly_cost_usd",
             solver_result.get("estimated_monthly_cost_usd", 0.0),
         )
-        utilization = solver_result.get("budget_utilized_pct", 0.0)
+        budget = float(contract.budget_max_usd)
+        utilization = round((float(total_cost) / budget) * 100, 2) if budget > 0 else 0.0
         vms = [
             f"{v.get('provider', '')} {v.get('instance_type', '')} x{v.get('count', 1)}"
             for v in solver_result.get("allocated_vms", [])
@@ -298,7 +273,7 @@ class FinOpsExplainer:
 
         system_prompt = (
             "You are a Principal Cloud FinOps Architect. "
-            "Be concise. Provide the direct technical allocation and recommendations immediately without verbose step-by-step thinking preambles. "
+            "Be concise. Provide direct technical recommendations immediately without verbose step-by-step thinking. "
             "Analyze the given cloud resource deployment contract and solver result, and provide "
             "exactly 3 to 4 concise, highly-actionable, technical FinOps recommendations.\n\n"
             "Key Focus Areas:\n"
@@ -317,69 +292,82 @@ class FinOpsExplainer:
             f"- Problem Type: {contract.problem_type}\n"
             f"- Target Cloud Provider(s): {', '.join(contract.cloud_providers)}\n"
             f"- Required Resources: {contract.service_count} service(s), {contract.required_vcpus} vCPUs, {contract.required_ram_gb}GB RAM\n"
-            f"- Monthly Budget Cap: ${contract.budget_max_usd:.2f} USD\n"
+            f"- Monthly Budget Cap: ${budget:.2f} USD\n"
             f"- Optimized Monthly Cost: ${total_cost:.2f} USD ({utilization:.1f}% budget utilized)\n"
             f"- Placed Resources: {vms_str}\n\n"
             f"Provide 3-4 actionable FinOps recommendations tailored specifically to this deployment."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
+        t0 = time.perf_counter()
         try:
+            from openai import OpenAI
+
             client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
+                base_url=base_url,
                 api_key=api_key,
                 timeout=effective_timeout,
                 max_retries=0,
             )
             resp = client.chat.completions.create(
                 model=target_model,
-                messages=messages,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
                 temperature=0.2,
                 max_tokens=max_tokens,
             )
+            elapsed_s = round(time.perf_counter() - t0, 2)
             if not resp or not resp.choices:
-                return None
+                return None, None, elapsed_s, ExplanationSource.UNAVAILABLE
             choice = resp.choices[0]
             raw_content = (choice.message.content or "").strip()
+            resp_id = getattr(resp, "id", None)
             recs = cls._clean_llm_recommendations(raw_content)
-            return recs[:4] if recs else None
+            return (recs[:4] if recs else None), resp_id, elapsed_s, ExplanationSource.LIVE_PROVIDER
         except Exception:
-            return None
+            elapsed_s = round(time.perf_counter() - t0, 2)
+            return None, None, elapsed_s, ExplanationSource.UNAVAILABLE
 
     @classmethod
     def generate_report(
         cls,
         contract: CloudOptimizationContract,
         solver_result: Dict[str, Any],
+        check_result: Optional[Dict[str, Any]] = None,
         exchange_rate: float = settings.USD_TO_INR_RATE,
         enable_llm_explainer: bool = False,
+        offline: bool = True,
+        **kwargs,
     ) -> str:
-        """Generates a structured ASCII Executive FinOps Deployment Report
-        displaying dual-currency metrics ($ and ₹) and dynamic, contextual recommendations.
+        """Generates a structured ASCII Executive FinOps Deployment Report.
+
+        Strictly respects verification results and uses Budget Headroom.
         """
         problem = contract.problem_type
-        status = solver_result.get("status", "UNKNOWN")
         solver_name = solver_result.get("solver", "Neuro-Symbolic Engine")
-        budget_max = contract.budget_max_usd
-        total_cost = solver_result.get(
+        budget_max = float(contract.budget_max_usd)
+        total_cost = float(solver_result.get(
             "total_monthly_cost_usd",
             solver_result.get("estimated_monthly_cost_usd", 0.0),
-        )
-        savings = solver_result.get(
-            "cost_savings_usd", max(0.0, budget_max - total_cost)
-        )
-        utilization = solver_result.get(
-            "budget_utilized_pct",
-            round((total_cost / budget_max) * 100, 2) if budget_max > 0 else 0.0,
-        )
+        ))
+
+        is_feasible = True
+        violations: List[str] = []
+        if check_result is not None:
+            is_feasible = bool(check_result.get("feasible_against_contract", False))
+            violations = check_result.get("violations", [])
+        else:
+            status_str = str(solver_result.get("status", "UNKNOWN")).upper()
+            if status_str in ["INFEASIBLE", "FAILED", "UNSAT"]:
+                is_feasible = False
 
         budget_inr = cls.usd_to_inr(budget_max, exchange_rate)
         cost_inr = cls.usd_to_inr(total_cost, exchange_rate)
-        savings_inr = cls.usd_to_inr(savings, exchange_rate)
+        headroom = max(0.0, budget_max - total_cost)
+        headroom_inr = cls.usd_to_inr(headroom, exchange_rate)
+        utilization = round((total_cost / budget_max) * 100, 2) if budget_max > 0 else 0.0
+
         inr_sym = settings.CURRENCY_SYMBOL_INR
         usd_sym = settings.CURRENCY_SYMBOL_USD
 
@@ -390,7 +378,8 @@ class FinOpsExplainer:
             "=" * 82,
             f" Problem Type         : {problem}",
             f" Optimization Engine  : {solver_name}",
-            f" Feasibility Status   : {status}",
+            f" Feasibility Status   : {'Feasible' if is_feasible else 'Infeasible'}",
+            f" Verification Verdict : {'FEASIBLE & CERTIFIED' if is_feasible else 'REJECTED (Constraint Violations Detected)'}",
             f" Target Cloud(s)      : {', '.join(contract.cloud_providers)}",
             f" Exchange Rate        : 1 USD = {exchange_rate:.2f} INR",
             "-" * 82,
@@ -398,47 +387,44 @@ class FinOpsExplainer:
             "-" * 82,
         ]
 
-        if status.upper() == "INFEASIBLE":
+        if not is_feasible:
+            budget_violation_msg = "The requested allocation exceeds the available budget."
             lines.extend([
                 f"  - Monthly Budget Cap       : {usd_sym}{budget_max:,.2f} USD ({inr_sym}{budget_inr:,.2f} INR) / month",
                 f"  - Optimized Monthly Cost   : N/A",
+                f"  - Proposed Monthly Cost    : {usd_sym}{total_cost:,.2f} USD ({inr_sym}{cost_inr:,.2f} INR) / month (REJECTED)",
                 f"  - Monthly Net Savings      : N/A",
-                f"  - Budget Utilization Rate  : N/A",
+                f"  - Monthly Budget Headroom  : N/A (Infeasible Plan - No Savings Achieved)",
+                f"  - Budget Utilization Rate  : N/A (Rejected Plan)",
                 "-" * 82,
+                " CRITICAL SAFETY ARBITRATION & VIOLATIONS",
+                "-" * 82,
+                "  [DEPLOYMENT ADVICE SUPPRESSED: Mathematical verification detected constraint violation(s)]",
+                "  The requested workload cannot be satisfied under the supplied constraints.",
+                f"  {budget_violation_msg}",
+                "  This allocation CANNOT be safely deployed as-is.",
             ])
-            
-            lines.append(" ACTIONABLE FINOPS RECOMMENDATIONS")
-            lines.append("-" * 82)
-            lines.append("  The requested workload cannot be satisfied under the supplied constraints.")
-            lines.append("  Consider increasing the budget, reducing required resources, or relaxing")
-            lines.append("  the relevant constraints.")
-            
-            if "error_message" in solver_result and solver_result["error_message"]:
+            if violations:
                 lines.append("")
-                lines.append(f"  Reason: {solver_result['error_message']}")
+                lines.append("  Detected Constraint Violations:")
+                for idx, v in enumerate(violations, 1):
+                    lines.append(f"   [{idx}] {v}")
 
-            if "constraint_status" in solver_result:
-                cstatus = solver_result["constraint_status"]
-                failed = []
-                if not cstatus.get("budget_ok", True): failed.append("The requested allocation exceeds the available budget.")
-                if not cstatus.get("vcpu_ok", True): failed.append("Insufficient vCPUs available in target cloud/budget.")
-                if not cstatus.get("ram_ok", True): failed.append("Insufficient RAM available in target cloud/budget.")
-                if not cstatus.get("latency_ok", True): failed.append("Latency constraints cannot be met.")
-                if not cstatus.get("sla_ok", True): failed.append("SLA availability constraints cannot be met.")
-                
-                if failed:
-                    lines.append("")
-                    lines.append("  Failed Constraints:")
-                    for f in failed:
-                        lines.append(f"  - {f}")
-
-            lines.append("=" * 82)
+            lines.extend([
+                "",
+                "  Remediation Strategy:",
+                "  - The workload parameters exceed physical or budgetary invariants.",
+                "  - Increase the monthly budget cap or reduce workload capacity requirements.",
+                "  - Any alternative configuration proposed below is an UNVERIFIED PROPOSAL until separately checked.",
+                "=" * 82,
+            ])
             return "\n".join(lines)
 
+        # Feasible report
         lines.extend([
             f"  - Monthly Budget Cap       : {usd_sym}{budget_max:,.2f} USD ({inr_sym}{budget_inr:,.2f} INR) / month",
             f"  - Optimized Monthly Cost   : {usd_sym}{total_cost:,.2f} USD ({inr_sym}{cost_inr:,.2f} INR) / month",
-            f"  - Monthly Net Savings      : {usd_sym}{savings:,.2f} USD ({inr_sym}{savings_inr:,.2f} INR) / month ({max(0.0, 100.0 - utilization):.1f}% under cap)",
+            f"  - Monthly Budget Headroom  : {usd_sym}{headroom:,.2f} USD ({inr_sym}{headroom_inr:,.2f} INR) / month ({max(0.0, 100.0 - utilization):.1f}% under budget cap)",
             f"  - Budget Utilization Rate  : {utilization:>6.2f}%",
             "-" * 82,
         ])
@@ -462,7 +448,7 @@ class FinOpsExplainer:
                 vm_cost_inr = cls.usd_to_inr(vm_cost_usd, exchange_rate)
                 lines.append(
                     f"   [{idx}] {vm.get('provider')} {vm.get('instance_type')} x {vm.get('count')} instance(s) "
-                    f"({vm.get('vcpus_per_vm')} vCPUs, {vm.get('ram_gb_per_vm')}GB) -> "
+                    f"({vm.get('vcpus_per_vm', 2)} vCPUs, {vm.get('ram_gb_per_vm', 4.0)}GB) -> "
                     f"{usd_sym}{vm_cost_usd:,.2f} USD ({inr_sym}{vm_cost_inr:,.2f} INR)/mo"
                 )
 
@@ -487,9 +473,7 @@ class FinOpsExplainer:
             secondary = solver_result.get("secondary_region", "N/A")
             latency = solver_result.get("inter_region_latency_ms", 0.0)
             achieved_sla = solver_result.get("achieved_sla_pct", 99.99)
-            topology = solver_result.get(
-                "disaster_recovery_topology", "Active-Active Mesh"
-            )
+            topology = solver_result.get("disaster_recovery_topology", "Active-Active Mesh")
 
             lines.extend([
                 " TOPOLOGICAL DISASTER RECOVERY PLACEMENT",
@@ -503,24 +487,24 @@ class FinOpsExplainer:
 
         # Obtain dynamic / LLM recommendations
         recommendations = None
-        if enable_llm_explainer:
-            try:
-                recommendations = cls.generate_llm_recommendations(contract, solver_result)
-            except Exception:
-                recommendations = None
+        source_label = "Local Rule-Based Template"
+        if enable_llm_explainer and is_feasible:
+            recs, resp_id, elapsed_s, src = cls.generate_llm_recommendations(contract, solver_result)
+            if recs:
+                recommendations = recs
+                source_label = f"NVIDIA API (nvidia/llama-3.1-nemotron-70b-instruct | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
 
         if not recommendations:
             recommendations = cls.generate_dynamic_recommendations(
-                contract, solver_result, exchange_rate
+                contract, solver_result, exchange_rate, is_feasible=is_feasible, violations=violations
             )
 
         lines.extend([
             "-" * 82,
-            " ACTIONABLE FINOPS RECOMMENDATIONS",
+            f" ACTIONABLE FINOPS RECOMMENDATIONS (Source: {source_label})",
             "-" * 82,
         ])
         for idx, rec in enumerate(recommendations, 1):
-            # Wrap lines cleanly if needed
             lines.append(f"  {idx}. {rec}")
 
         lines.append("=" * 82)

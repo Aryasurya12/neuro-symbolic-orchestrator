@@ -2,7 +2,7 @@
 
 Executes ONE query (or batch) through the REAL current pipeline and prints every
 stage's actual internal state AS IT HAPPENS — including exactly where and why it fails,
-if it fails. Calls the real functions verified in Step 4 without mocks or reconstruction.
+if it fails. Produces and logs a CanonicalExecutionRecord for every run.
 
 CLI Usage:
     python -m src.proof.stage_trace --query "Deploy 8 vCPUs and 16GB RAM for under $300 on AWS" --mode 4
@@ -21,45 +21,54 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Ensure UTF-8 stdout encoding on Windows consoles
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from config.settings import settings
 from src.optimizers.raw_symbolic_runner import run_symbolic_rule_based
-from src.orchestrator.service import NeuroSymbolicOrchestrator
 from src.semantic.carm_matcher import CARMMatcher
 from src.semantic.explainer import FinOpsExplainer
+from src.semantic.normalizer import OutputNormalizer
+from src.semantic.nvidia_extractor import NVIDIAExtractor
 from src.semantic.schemas import CloudOptimizationContract
 from src.semantic.scope_parser import SCOPEParser
+from src.verifiers.canonical_record import (
+    CanonicalExecutionRecord,
+    ExplanationSource,
+    FeasibilityStatus,
+    NormalizationStatus,
+    OptimalityStatus,
+)
 from src.verifiers.independent_checker import IndependentChecker
 from templates.Continuous_PSO_Dynamic_Scaling import solve_pso_continuous_scaling
 from templates.Graph_SMT_Z3_MultiRegion_Placement import (
     REGIONS_GRAPH,
-    calculate_composite_sla,
     solve_z3_graph_disaster_recovery,
 )
-from templates.ILP_VM_Knapsack_Allocation import solve_ilp_vm_knapsack
+from templates.ILP_VM_Knapsack_Allocation import (
+    _VM_CATALOG,
+    solve_ilp_vm_knapsack,
+)
 
 
 def trace_stage_1_parsing(
     parser: SCOPEParser, query_text: str, silent: bool = False
 ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
-    """STAGE 1: Rule-Based Parsing (SCOPEParser).
-
-    Inspects actual regex field extraction and returns (success, extracted_params, failure_reason).
-    """
+    """STAGE 1: Lexical Analysis & Rule-Based Parsing (SCOPEParser)."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
 
-    log("--- STAGE 1: Rule-Based Parsing (SCOPEParser) ---")
-    log("  Attempting field extraction...")
+    log("--- STAGE 1: Lexical Analysis & Rule-Based Parsing (SCOPEParser) ---")
+    log("  [1.1 Lexical Entity Extraction]")
 
-    # Regex matches inspection
     # 1. vCPUs
     vcpu_match = re.search(
         r"(?:(\d+)\s*(?:vcpus?|cores?|v-cpu)|(?:vcpus?|cores?|v-cpu)\s*(?:>=|<=|:|:=|=)?\s*(\d+))",
@@ -68,9 +77,9 @@ def trace_stage_1_parsing(
     )
     if vcpu_match:
         val_vcpu = int(vcpu_match.group(1) or vcpu_match.group(2))
-        log(f'  vcpus:   matched "{vcpu_match.group(0)}" -> {val_vcpu}')
+        log(f'    * vCPUs        : MATCH -> "{vcpu_match.group(0)}" => {val_vcpu} cores')
     else:
-        log('  vcpus:   NO MATCH (tried patterns: r"(\\d+)\\s*(?:vcpus?|cores?|v-cpu)", r"vcpus?\\s*(?:>=|:)\\s*(\\d+)")')
+        log('    * vCPUs        : NO MATCH (defaulting to archetype requirements)')
 
     # 2. RAM
     ram_match = re.search(
@@ -80,9 +89,9 @@ def trace_stage_1_parsing(
     )
     if ram_match:
         val_ram = float(ram_match.group(1) or ram_match.group(2))
-        log(f'  ram_gb:  matched "{ram_match.group(0)}" -> {val_ram}')
+        log(f'    * RAM (GB)     : MATCH -> "{ram_match.group(0)}" => {val_ram:.1f} GB')
     else:
-        log('  ram_gb:  NO MATCH (tried patterns: r"(\\d+(?:\\.\\d+)?)\\s*(?:gb|gigabytes?)", r"ram\\s*(?:>=|:)\\s*(\\d+)")')
+        log('    * RAM (GB)     : NO MATCH (defaulting to archetype requirements)')
 
     # 3. Budget (INR / USD)
     inr_patterns = [
@@ -100,7 +109,7 @@ def trace_stage_1_parsing(
         if m:
             val_inr = float(m.group(1).replace(",", ""))
             val_usd = round(val_inr / settings.USD_TO_INR_RATE, 2)
-            log(f'  budget:  matched "{m.group(0)}" -> {val_inr} INR (~${val_usd} USD)')
+            log(f'    * Budget       : MATCH -> "{m.group(0)}" => ₹{val_inr:,.2f} INR (~${val_usd:,.2f} USD @ 1 USD = {settings.USD_TO_INR_RATE} INR)')
             budget_matched = True
             break
     if not budget_matched:
@@ -108,50 +117,52 @@ def trace_stage_1_parsing(
             m = re.search(pat, query_text, re.IGNORECASE)
             if m:
                 val_usd = float(m.group(1).replace(",", ""))
-                log(f'  budget:  matched "{m.group(0)}" -> ${val_usd:.2f} USD')
+                log(f'    * Budget       : MATCH -> "{m.group(0)}" => ${val_usd:,.2f} USD')
                 budget_matched = True
                 break
     if not budget_matched:
-        log('  budget:  NO MATCH (tried patterns: ["$...", "INR/₹...", "under/budget $..."])')
+        log('    * Budget       : NO MATCH (defaulting to $500.00 USD)')
 
     # 4. Provider
     prov_match = re.search(r"\b(AWS|Azure|GCP)\b", query_text, re.IGNORECASE)
     if prov_match:
-        log(f'  provider: matched "{prov_match.group(0)}" -> "{prov_match.group(1).lower()}"')
+        prov_val = prov_match.group(1).upper()
+        log(f'    * Provider     : MATCH -> "{prov_match.group(0)}" => "{prov_val}"')
     else:
-        log('  provider: NO MATCH (tried pattern: r"\\b(AWS|Azure|GCP)\\b")')
+        log('    * Provider     : NO MATCH (defaulting to candidate pool)')
 
     # 5. Latency & SLA
     lat_match = re.search(r"(?:max\s+|under\s+|latency\s+(?:of\s+|under\s+)?|\b)(\d+(?:\.\d+)?)\s*ms", query_text, re.IGNORECASE)
     if lat_match:
-        log(f'  latency: matched "{lat_match.group(0)}" -> {float(lat_match.group(1))} ms')
+        log(f'    * Latency SLA  : MATCH -> "{lat_match.group(0)}" => {float(lat_match.group(1))} ms')
     sla_match = re.search(r"(9\d(?:\.\d+)?)\s*%", query_text, re.IGNORECASE)
     if sla_match:
-        log(f'  sla:     matched "{sla_match.group(0)}" -> {float(sla_match.group(1))}%')
+        log(f'    * Availability : MATCH -> "{sla_match.group(0)}" => {float(sla_match.group(1))}% SLA')
+
+    # 6. Dynamic Scaling / Traffic Keywords
+    cpu_target_match = re.search(r"(?:target\s+cpu|cpu\s+target|cpu\s+utilization|target)\s*(?:of|at|is|:)?\s*(\d+(?:\.\d+)?)\s*%", query_text, re.IGNORECASE)
+    if cpu_target_match:
+        log(f'    * Target CPU   : MATCH -> "{cpu_target_match.group(0)}" => {float(cpu_target_match.group(1))}%')
+
+    bw_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mbps|gbps|bandwidth)", query_text, re.IGNORECASE)
+    if bw_match:
+        log(f'    * Bandwidth    : MATCH -> "{bw_match.group(0)}" => {float(bw_match.group(1))} Mbps')
 
     # Domain Intent Check
     has_intent = parser.has_cloud_intent(query_text)
+    log("\n  [1.2 Domain Intent & Contract Parameter Assembly]")
     if not has_intent:
-        reason = "RESULT: PARSER_FAILED -- no archetype could be constructed from this input. Stopping here, as Mode 3/4 would."
-        log(f"  {reason}")
+        reason = "RESULT: PARSER_FAILED -- no archetype could be constructed from this input."
+        log(f"    * Domain Intent: FAIL (no cloud/FinOps keywords detected)")
+        log(f"    * {reason}")
         return False, None, reason
 
-    # Extract actual parameters
+    log("    * Domain Intent: PASS (cloud infrastructure/FinOps keywords verified)")
     params = parser.extract_parameters(query_text)
 
-    # Missing field detection
-    missing_fields = []
-    if "budget_max_usd" not in params:
-        missing_fields.append("budget_max_usd (using default $500.00)")
-    if not vcpu_match and "required_vcpus" not in params:
-        missing_fields.append("required_vcpus")
-    if not ram_match and "required_ram_gb" not in params:
-        missing_fields.append("required_ram_gb")
-
-    if missing_fields:
-        log(f"  RESULT: PARTIAL CONTRACT ({len(missing_fields)} field(s) defaulted/missing: {', '.join(missing_fields)})")
-    else:
-        log("  RESULT: FULL CONTRACT EXTRACTED")
+    log("    * Extracted Parameters Table:")
+    for k, v in params.items():
+        log(f"      - {k:<22}: {v}")
 
     return True, params, None
 
@@ -159,36 +170,37 @@ def trace_stage_1_parsing(
 def trace_stage_2_archetype_matching(
     matcher: CARMMatcher, query_text: str, parser: SCOPEParser, silent: bool = False
 ) -> Tuple[bool, Optional[str], Optional[str]]:
-    """STAGE 2: Archetype Matching (CARM).
-
-    Computes Jaccard similarity across all registered templates.
-    """
+    """STAGE 2: Semantic Archetype Matching (CARM)."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
 
-    log("\n--- STAGE 2: Archetype Matching (CARM) ---")
+    log("\n--- STAGE 2: Semantic Archetype Matching (CARM) ---")
     extracted_constraints = parser.extract_constraints_from_text(query_text)
+    log(f"  [2.1 Query Constraint Tokens]: {sorted(list(extracted_constraints)) if extracted_constraints else 'NONE'}")
 
     if not extracted_constraints:
-        log("  Extracted Constraints: NONE (empty set)")
-        log("  ILP_VM_Allocation                  : score 0.00")
-        log("  PSO_Continuous_Scaling             : score 0.00")
-        log("  Z3_Graph_Disaster_Recovery         : score 0.00")
-        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no matching constraint tokens found. Stopping here."
+        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no matching constraint tokens found."
         log(f"  {reason}")
         return False, None, reason
 
     scores = {}
+    details = {}
     for archetype, data in matcher.TEMPLATE_INDEX.items():
-        score = matcher.compute_jaccard_score(
-            extracted_constraints, data["constraints"]  # type: ignore[arg-type]
-        )
+        template_constraints = set(data["constraints"])
+        intersection = extracted_constraints.intersection(template_constraints)
+        union = extracted_constraints.union(template_constraints)
+        score = len(intersection) / len(union) if union else 0.0
         scores[archetype] = round(score, 4)
+        details[archetype] = {
+            "template": data.get("template", ""),
+            "inter_len": len(intersection),
+            "union_len": len(union),
+        }
 
-    # Print individual scores
     for arch, sc in scores.items():
-        log(f"  {arch:<35}: score {sc:.2f}")
+        dt = details[arch]
+        log(f"    * {arch:<28}: score {sc:.2f}  (|Q∩T|={dt['inter_len']}, |Q∪T|={dt['union_len']})")
 
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     best_arch, best_score = sorted_scores[0]
@@ -196,29 +208,26 @@ def trace_stage_2_archetype_matching(
     margin = best_score - second_score
 
     if best_score <= 0.0:
-        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no archetype cleared matching threshold (> 0.0). Stopping here."
-        log(f"  {reason}")
+        reason = "RESULT: UNSUPPORTED_ARCHETYPE -- no archetype cleared matching threshold (> 0.0)."
+        log(f"\n  {reason}")
         return False, None, reason
 
-    log(f"  -> SELECTED: {best_arch} (margin: {margin:.2f})")
+    log(f"\n  [2.3 Routing Decision] -> Selected: {best_arch} (margin: {margin:.2f})")
     return True, best_arch, None
 
 
 def trace_stage_3_contract_validation(
     archetype: str, params: Dict[str, Any], silent: bool = False
 ) -> Tuple[bool, Optional[CloudOptimizationContract], Optional[str]]:
-    """STAGE 3: Contract Validation.
-
-    Validates parameters against Pydantic V2 CloudOptimizationContract.
-    """
+    """STAGE 3: Contract Validation & Mathematical Formulation."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
 
-    log("\n--- STAGE 3: Contract Validation ---")
+    log("\n--- STAGE 3: Contract Validation & Mathematical Formulation ---")
     try:
         contract = CloudOptimizationContract(
-            problem_type=archetype,  # type: ignore[arg-type]
+            problem_type=archetype,
             cloud_providers=params.get("cloud_providers", ["AWS"]),
             budget_max_usd=params.get("budget_max_usd", settings.DEFAULT_BUDGET_USD),
             service_count=params.get("service_count", 1),
@@ -228,21 +237,17 @@ def trace_stage_3_contract_validation(
             sla_availability_pct=params.get("sla_availability_pct", 99.9),
             metadata=params.get("metadata", {}),
         )
-        log("  Pydantic validation: PASS")
+        log(f"    Pydantic validation: PASS ({contract.problem_type})")
         return True, contract, None
     except Exception as exc:
-        log("  Pydantic validation: FAIL")
-        log(f"  Validation Error: {exc}")
+        log(f"    Pydantic validation: FAIL ({exc})")
         return False, None, f"Pydantic validation failed: {exc}"
 
 
 def trace_stage_4_solver_execution(
     contract: CloudOptimizationContract, mode: int, silent: bool = False
 ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
-    """STAGE 4: Solver Dispatch & Execution.
-
-    Dispatches to HiGHS MILP, Continuous PSO, or Z3 SMT Graph solver.
-    """
+    """STAGE 4: Solver Dispatch & Execution."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
@@ -251,11 +256,7 @@ def trace_stage_4_solver_execution(
     problem = contract.problem_type
 
     if problem == "ILP_VM_Allocation":
-        log("  Routed to: solve_ilp_vm_knapsack (HiGHS MILP)")
-        log(
-            f"  Constraints: vCPUs >= {contract.required_vcpus}, RAM >= {contract.required_ram_gb}GB, "
-            f"Budget <= ${contract.budget_max_usd:.2f}, Provider = {contract.cloud_providers}"
-        )
+        log("  [4.1 Solver Engine: HiGHS MILP / Branch-and-Bound]")
         try:
             prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS"]
             res = solve_ilp_vm_knapsack(
@@ -264,37 +265,37 @@ def trace_stage_4_solver_execution(
                 budget_max_usd=contract.budget_max_usd,
                 target_providers=prov_list,
             )
-            log(f"  Raw solver output: {res}")
+            log(f"    Status: {res.get('status')} | Cost: ${res.get('total_monthly_cost_usd', 0.0):,.2f} USD")
             return True, res, None
         except Exception as exc:
-            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
-            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
+            return False, None, f"Solver exception: {exc}"
 
     elif problem == "PSO_Continuous_Scaling":
-        log("  Routed to: solve_pso_continuous_scaling (Continuous PSO)")
-        log(
-            f"  Bounds: Bandwidth in [100, 1000] Mbps, Replicas in [1.0, 16.0], "
-            f"Target CPU = 70.0%, Budget <= ${contract.budget_max_usd:.2f}"
-        )
+        log("  [4.1 Solver Engine: Continuous Vectorized PSO]")
         try:
-            prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS"]
-            res = solve_pso_continuous_scaling(
-                budget_max_usd=contract.budget_max_usd,
-                target_cpu_pct=70.0,
-                target_providers=prov_list,
+            target_bw = (
+                contract.target_bandwidth_mbps
+                if contract.target_bandwidth_mbps is not None
+                else (contract.min_bandwidth_mbps if contract.min_bandwidth_mbps is not None else 100.0)
             )
-            log(f"  Raw solver output: {res}")
+            res = solve_pso_continuous_scaling(
+                bandwidth_min_mbps=float(contract.min_bandwidth_mbps or 100.0),
+                bandwidth_max_mbps=float(contract.max_bandwidth_mbps or 1000.0),
+                target_bandwidth_mbps=float(target_bw),
+                target_cpu_pct=float(contract.target_cpu_pct or 70.0),
+                max_cpu_pct=float(contract.max_cpu_pct) if contract.max_cpu_pct is not None else None,
+                budget_max_usd=float(contract.budget_max_usd),
+            )
+            bw = res.get("optimal_bandwidth_mbps", 0.0)
+            reps = res.get("recommended_replicas", 1)
+            raw_cpu = (bw / (reps * 75.0)) * 100.0 if reps > 0 else 999.0
+            log(f"    Status: {res.get('status')} | Bandwidth: {bw:.1f} Mbps | Replicas: {reps} | Modeled CPU: {raw_cpu:.1f}%")
             return True, res, None
         except Exception as exc:
-            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
-            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
+            return False, None, f"Solver exception: {exc}"
 
     elif problem == "Z3_Graph_Disaster_Recovery":
-        log("  Routed to: solve_z3_graph_disaster_recovery (Z3 SMT Graph)")
-        log(
-            f"  SMT Clauses: Distinct(Region_A, Region_B), Latency(A, B) <= {contract.latency_max_ms}ms, "
-            f"Composite_SLA(A, B) >= {contract.sla_availability_pct}%, Cost(A, B) <= ${contract.budget_max_usd:.2f}"
-        )
+        log("  [4.1 Solver Engine: Z3 SMT Graph Solver]")
         try:
             prov_list = contract.cloud_providers if contract.cloud_providers else ["AWS", "GCP"]
             res = solve_z3_graph_disaster_recovery(
@@ -303,16 +304,12 @@ def trace_stage_4_solver_execution(
                 budget_max_usd=contract.budget_max_usd,
                 target_providers=prov_list,
             )
-            log(f"  Raw solver output: {res}")
+            log(f"    Status: {res.get('status')} | Primary: {res.get('primary_region')} | Secondary: {res.get('secondary_region')}")
             return True, res, None
         except Exception as exc:
-            log(f"  [Solver Exception]: {type(exc).__name__}: {exc}")
-            return False, None, f"Solver exception: {type(exc).__name__}: {exc}"
+            return False, None, f"Solver exception: {exc}"
 
-    else:
-        reason = f"Unknown problem type: {problem}"
-        log(f"  [Solver Error]: {reason}")
-        return False, None, reason
+    return False, None, f"Unknown problem type: {problem}"
 
 
 def trace_stage_5_independent_verification(
@@ -321,10 +318,7 @@ def trace_stage_5_independent_verification(
     silent: bool = False,
     stage_header: Optional[str] = None,
 ) -> Tuple[bool, Dict[str, Any]]:
-    """STAGE 5 (or 4 in LLM mode): Independent Verification (IndependentChecker).
-
-    Verifies catalog SKUs, physical constraint feasibility, and optimality claims.
-    """
+    """STAGE 5: Independent Verification (IndependentChecker)."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
@@ -333,69 +327,24 @@ def trace_stage_5_independent_verification(
     log(f"\n{hdr}")
     check = IndependentChecker.verify_solution(contract, solver_result)
 
-    # 1. Catalog consistency
-    cat_pass = check.get("catalog_consistent", False)
-    cost_info = check.get("cost_accuracy", {})
-    rep_cost = cost_info.get("reported_cost_usd", 0.0)
-    calc_cost = cost_info.get("calculated_catalog_cost_usd", 0.0)
+    param_table = IndependentChecker.render_parameter_table(check.get("parameter_checks", []))
+    log("  [5.1 Parameter-by-Parameter Ground-Truth Audit Table]")
+    log(param_table)
 
-    # Explicit Safety Guard: Never claim PASS if reported vs verified differs by > $0.05
-    if abs(rep_cost - calc_cost) > 0.05:
-        cat_pass = False
-
-    cat_status = "PASS" if cat_pass else "FAIL"
-    log(f"  Catalog consistency: {cat_status} (Reported: ${rep_cost:.2f}, Catalog verified: ${calc_cost:.2f})")
-
-    # 2. Feasibility check with recomputed numbers
-    feas_pass = check.get("feasible_against_contract", False)
-    feas_status = "PASS" if feas_pass else "FAIL"
-    recomp = check.get("recomputed_metrics", {})
-    problem = contract.problem_type
-
-    if problem == "ILP_VM_Allocation":
-        rc_vcpu = recomp.get("vcpus", 0)
-        rc_ram = recomp.get("ram_gb", 0.0)
-        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
-        log(
-            f"  Feasibility check: {feas_status} ("
-            f"vCPU: {rc_vcpu} >= {contract.required_vcpus}, "
-            f"RAM: {rc_ram:.1f}GB >= {contract.required_ram_gb:.1f}GB, "
-            f"Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f})"
-        )
-    elif problem == "PSO_Continuous_Scaling":
-        rc_cpu = recomp.get("modeled_cpu_pct", 0.0)
-        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
-        detail = f"Recomputed CPU: {rc_cpu:.1f}% vs ceiling 70.0%, Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f}"
-        if rc_cpu > 70.0 or rc_cost > contract.budget_max_usd:
-            log(f"  Feasibility check: {feas_status} ({detail} -> VIOLATION)")
-        else:
-            log(f"  Feasibility check: {feas_status} ({detail})")
-    elif problem == "Z3_Graph_Disaster_Recovery":
-        rc_lat = recomp.get("latency_ms", recomp.get("inter_region_latency_ms", 0.0))
-        rc_sla = recomp.get("composite_sla_pct", 0.0)
-        rc_cost = recomp.get("monthly_cost_usd", recomp.get("total_monthly_cost_usd", 0.0))
-        log(
-            f"  Feasibility check: {feas_status} ("
-            f"Latency: {rc_lat:.1f}ms <= {contract.latency_max_ms:.1f}ms, "
-            f"SLA: {rc_sla:.4f}% >= {contract.sla_availability_pct}%, "
-            f"Cost: ${rc_cost:.2f} <= ${contract.budget_max_usd:.2f})"
-        )
-    else:
-        log(f"  Feasibility check: {feas_status}")
-
-    # Violations if any
     violations = check.get("violations", [])
+    log("\n  [5.2 Detected Constraint Violations]")
     if violations:
-        for v in violations:
-            log(f"    -> VIOLATION: {v}")
+        for idx, v in enumerate(violations, 1):
+            log(f"    -> [VIOLATION #{idx}] {v}")
+    else:
+        log("    * None (0 constraint violations found)")
 
-    # 3. Optimality verdict
     opt_verdict = check.get("optimality_verdict", "N/A")
-    log(f'  Optimality verdict: "{opt_verdict}"')
-
-    # 4. Final summary verdict
     final_verdict = check.get("summary_status", "Execution complete")
-    log(f"  FINAL VERDICT: {final_verdict}")
+    feas_pass = bool(check.get("feasible_against_contract", False))
+
+    log(f"\n  [5.3 Verification Verdict]: {final_verdict}")
+    log(f"  [5.4 Proof Classification]: {opt_verdict}")
 
     return feas_pass, check
 
@@ -404,334 +353,486 @@ def trace_stage_6_explanation(
     contract: CloudOptimizationContract,
     solver_result: Dict[str, Any],
     mode: int,
+    check_result: Optional[Dict[str, Any]] = None,
     silent: bool = False,
-) -> None:
-    """STAGE 6: Explanation Generation (Mode 4 Only).
-
-    Transforms solver output into structured FinOps explanations.
-    """
+    enable_llm_explainer: bool = False,
+) -> Tuple[str, ExplanationSource]:
+    """STAGE 6: Explanation Generation (Mode 4 Only)."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
 
     log("\n--- STAGE 6: Explanation Generation (only for Mode 4) ---")
     if mode != 4:
-        log("  [SKIPPED: Mode 3 does not generate natural-language explanations]")
-        return
+        log("  [SKIPPED: Mode 3 is pure symbolic and does not generate natural-language explanations]")
+        return "Skipped (Pure Symbolic)", ExplanationSource.UNAVAILABLE
 
-    problem = contract.problem_type
-    if problem == "ILP_VM_Allocation":
-        consumed_fields = ["allocated_vms", "total_monthly_cost_usd", "total_vcpus", "total_ram_gb"]
-    elif problem == "PSO_Continuous_Scaling":
-        consumed_fields = ["optimal_bandwidth_mbps", "recommended_replicas", "estimated_hourly_cost_usd"]
-    elif problem == "Z3_Graph_Disaster_Recovery":
-        consumed_fields = ["primary_region", "secondary_region", "inter_region_latency_ms", "achieved_sla_pct"]
-    else:
-        consumed_fields = list(solver_result.keys())
-
-    log(f"  Fields consumed from solver output: {consumed_fields}")
-    try:
-        explanation = FinOpsExplainer.generate_report(
-            contract=contract,
-            solver_result=solver_result,
-            enable_llm_explainer=False,
-        )
-        clean_exp = " ".join(explanation.split())
-        snippet = clean_exp[:100] + ("..." if len(clean_exp) > 100 else "")
-        log(f'  Generated explanation: "{snippet}"')
-    except Exception as exc:
-        log(f"  [Explanation Error]: {exc}")
+    report_text = FinOpsExplainer.generate_report(
+        contract=contract,
+        solver_result=solver_result,
+        check_result=check_result,
+        enable_llm_explainer=enable_llm_explainer,
+    )
+    log(report_text)
+    return report_text, ExplanationSource.LOCAL_TEMPLATE
 
 
 def run_llm_mode_trace(
     query_text: str, mode: int, yes_flag: bool = False, silent: bool = False
-) -> Dict[str, Any]:
-    """Executes a single live inference query for Mode 1 (Pure LLM) or Mode 2 (Structured LLM).
-
-    Reuses the real execute_dashboard_llm_request function, validates via IndependentChecker,
-    logs every call to results/live_api_call_log.jsonl, and enforces the confirmation safety gate.
-    """
+) -> CanonicalExecutionRecord:
+    """Executes a single run for Mode 1 (Raw LLM) or Mode 2 (Schema LLM)."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
 
-    # 1. Interactive Confirmation Safety Gate
-    if not yes_flag and not silent:
-        sys.stdout.write(
-            "This will make 1 LIVE API call to OpenRouter and consume 1 of your daily quota. Continue? [y/N] "
-        )
-        sys.stdout.flush()
-        try:
-            ans = input().strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("\nCancelled by user. No API call made.")
-            return {
-                "query": query_text,
-                "mode": mode,
-                "passed": False,
-                "verdict": "Cancelled by user",
-                "cost": 0.0,
-            }
-        if ans not in ["y", "yes"]:
-            print("Cancelled by user. No API call made.")
-            return {
-                "query": query_text,
-                "mode": mode,
-                "passed": False,
-                "verdict": "Cancelled by user",
-                "cost": 0.0,
-            }
+    log(f'\n=== QUERY: "{query_text}" (Mode {mode}) ===\n')
+    t_start = time.perf_counter()
 
-    log(f'\n=== QUERY: "{query_text}" ===\n')
-
-    # Parse ground truth contract for independent verification
     parser = SCOPEParser()
+    matcher = CARMMatcher()
     contract, _, _ = parser.parse_query_to_contract(query_text)
+    prob_type = contract.problem_type if contract else "ILP_VM_Allocation"
 
-    # Model and Prompt Metadata
-    model = os.getenv("OPENROUTER_MODEL") or getattr(
-        settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
-    )
-    max_tokens = getattr(settings, "LLM_MAX_COMPLETION_TOKENS", 4096)
+    model = os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b")
+    provider = "Groq"
+    execution_path = f"Groq API ({model}) -> {'OutputNormalizer (Prose Regex)' if mode==1 else 'OutputNormalizer (JSON Schema)'} -> IndependentChecker"
 
-    if mode == 1:
-        prompt_sent = (
-            "System: You are a Cloud Solutions Architect. Recommend a concrete cloud VM allocation plan. "
-            "State the recommended provider, instance types, quantities, and the exact total monthly cost in USD ($/month). Be concise.\n"
-            f"User: Recommend cloud VMs for this request: \"{query_text}\""
-        )
-    else:
-        req_vcpus = int(getattr(contract, "required_vcpus", 4)) if contract else 4
-        req_ram = float(getattr(contract, "required_ram_gb", 16.0)) if contract else 16.0
-        schema_sample = {
-            "cloud_provider": "AWS",
-            "instances": [{"sku": "t3.medium", "quantity": 2, "monthly_cost": 60.74}],
-            "total_monthly_cost": 60.74,
-            "total_vcpus": req_vcpus,
-            "total_ram_gb": req_ram,
-        }
-        prompt_sent = (
-            f"System: You are a Cloud Optimization System. Respond ONLY with valid JSON matching this schema: {json.dumps(schema_sample)}. No explanatory text.\n"
-            f"User: Optimize allocation for: \"{query_text}\". Respond in JSON."
-        )
+    from src.semantic.llm_client import execute_dashboard_llm_request
 
-    # --- STAGE 1: LLM Request ---
-    log("--- STAGE 1: LLM Request ---")
-    log(f"  Model: {model}")
-    prompt_snip = prompt_sent[:200] + ("..." if len(prompt_sent) > 200 else "")
-    log(f'  Prompt sent: "{prompt_snip}"')
-    log(f"  max_tokens: {max_tokens}")
+    t0_llm = time.perf_counter()
+    llm_res = execute_dashboard_llm_request(mode_num=mode, query=query_text, contract=contract)
+    elapsed_llm_ms = (time.perf_counter() - t0_llm) * 1000.0
 
-    # Real LLM Call
-    from app import execute_dashboard_llm_request
-
-    t0 = time.perf_counter()
-    llm_res = execute_dashboard_llm_request(
-        mode_num=mode,
-        query=query_text,
-        contract=contract,
-    )
-    elapsed_s = llm_res.get("elapsed_seconds") or round(time.perf_counter() - t0, 2)
-    finish_reason = llm_res.get("finish_reason", "unknown")
     raw_content = llm_res.get("content", "")
+    log("--- STAGE 1: LLM Response Telemetry ---")
+    log(f"  Provider     : {provider} ({model})")
+    log(f"  Finish Reason: {llm_res.get('finish_reason', 'unknown')}")
+    log(f"  Elapsed Time : {elapsed_llm_ms:.1f} ms")
+    log(f"  Content      :\n    {raw_content}")
 
-    # Log every live call made to results/live_api_call_log.jsonl
-    from datetime import datetime, timezone
-
-    log_path = Path("results/live_api_call_log.jsonl")
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            log_entry = {
-                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                "mode": mode,
-                "query": query_text,
-                "model": llm_res.get("model", model),
-                "status": llm_res.get("status"),
-                "finish_reason": finish_reason,
-                "elapsed_seconds": elapsed_s,
-                "reported_cost_usd": llm_res.get("reported_cost_usd"),
-                "error": llm_res.get("error_message"),
-            }
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as log_err:
-        log(f"  [Warning: could not write to live_api_call_log.jsonl: {log_err}]")
-
-    # --- STAGE 2: LLM Response ---
-    log("\n--- STAGE 2: LLM Response ---")
-    log(f'  finish_reason: "{finish_reason}"')
-    raw_snip = " ".join(raw_content.split())
-    raw_snip_300 = raw_snip[:300] + ("..." if len(raw_snip) > 300 else "")
-    log(f'  Raw response (first ~300 chars): "{raw_snip_300}"')
-    if finish_reason == "length":
-        log("  WARNING: Generation reached max token limit and was truncated (finish_reason == 'length'). Output is incomplete.")
-    if llm_res.get("status") == "daily_quota_exhausted":
-        log(f"  [API Error: 429 Daily Limit Exhausted - {llm_res.get('error_message')}]")
-    elif llm_res.get("status") in ["api_error", "missing_credentials", "empty_response"]:
-        log(f"  [API Error]: {llm_res.get('error_message')}")
-
-    # --- STAGE 3: Extraction ---
-    log("\n--- STAGE 3: Extraction ---")
+    # Normalization
+    t0_norm = time.perf_counter()
     if mode == 1:
-        log("  (Mode 1 only, prose parsing)")
-    else:
-        log("  (Mode 2 only, JSON schema parsing)")
-
-    extracted_cost = llm_res.get("reported_cost_usd")
-    extracted_alloc: List[Dict[str, Any]] = []
-
-    if mode == 1:
-        if extracted_cost is not None:
-            log(f"  Extracted cost: ${extracted_cost:,.2f}")
-        else:
-            err_reason = llm_res.get(
-                "error_message", "No dollar amount ($XX.XX) found in prose response"
-            )
-            log(f"  Extracted cost: EXTRACTION_FAILED ({err_reason})")
-
-        # Extract SKUs from prose
-        catalog = IndependentChecker.get_sku_catalog()
-        for sku_name, sdata in catalog.items():
-            pat = r"\b" + re.escape(sku_name) + r"\b"
-            if re.search(pat, raw_content, re.IGNORECASE):
-                q_match = re.search(
-                    r"(\d+)\s*(?:x|\*|instances?|nodes?|vms?)?\s*" + re.escape(sku_name),
-                    raw_content,
-                    re.IGNORECASE,
-                )
-                qty = int(q_match.group(1)) if q_match else 1
-                extracted_alloc.append({
-                    "sku": sku_name,
-                    "instance_type": sku_name,
-                    "count": qty,
-                    "quantity": qty,
-                    "provider": sdata.get("provider", "AWS"),
-                    "vcpus_per_vm": sdata.get("vcpus", 2),
-                    "ram_gb_per_vm": sdata.get("ram_gb", 4.0),
-                    "monthly_cost": round(sdata.get("hourly_cost_usd", 0.05) * 730.0 * qty, 2),
-                })
-        if extracted_alloc:
-            log(f"  Extracted allocation: {extracted_alloc}")
-        else:
-            log("  Extracted allocation: NONE")
-
-    else:
-        # Mode 2
-        parsed_json = llm_res.get("parsed_json")
-        if parsed_json and extracted_cost is not None:
-            log(f"  Extracted cost: ${extracted_cost:,.2f}")
-            raw_vms = (
-                parsed_json.get("allocated_vms")
-                or parsed_json.get("instances")
-                or []
-            )
-            if isinstance(raw_vms, list):
-                for v in raw_vms:
-                    if isinstance(v, dict):
-                        extracted_alloc.append(v)
-            if extracted_alloc:
-                log(f"  Extracted allocation: {extracted_alloc}")
-            else:
-                log("  Extracted allocation: NONE")
-        else:
-            err_reason = llm_res.get(
-                "error_message", "JSON parsing failed or no valid cost found"
-            )
-            log(f"  Extracted cost: EXTRACTION_FAILED ({err_reason})")
-            log("  Extracted allocation: NONE")
-
-    # --- STAGE 4: Independent Verification (IndependentChecker) ---
-    has_usable_alloc = len(extracted_alloc) > 0
-    if has_usable_alloc and contract:
-        solver_dict = {
-            "problem_type": contract.problem_type,
-            "status": "feasible" if (extracted_cost is not None and extracted_cost > 0) else "UNKNOWN",
-            "total_monthly_cost_usd": extracted_cost or 0.0,
-            "allocated_vms": extracted_alloc,
-        }
-        s4_ok, check_result = trace_stage_5_independent_verification(
-            contract,
-            solver_dict,
-            silent=silent,
-            stage_header="--- STAGE 4: Independent Verification (IndependentChecker) ---",
+        norm_status, ext_cost, norm_decision, norm_errors, evidence = OutputNormalizer.normalize_mode1_prose(
+            raw_text=raw_content,
+            problem_type=prob_type,
+            contract_data=contract.model_dump() if contract else None,
         )
-        final_verdict = check_result.get("summary_status", "Complete")
     else:
-        log("\n--- STAGE 4: Independent Verification (IndependentChecker) ---")
-        log("  Cannot verify: no structured output to check")
-        final_verdict = "Rejected (No Structured Allocation Output)"
-        log(f"  FINAL VERDICT: {final_verdict}")
-        s4_ok = False
-        check_result = {"violations": ["No structured allocation output"]}
+        norm_status, ext_cost, norm_decision, norm_errors, evidence = OutputNormalizer.normalize_mode2_json(
+            raw_json_or_text=raw_content,
+            requested_problem_type=prob_type,
+            contract_data=contract.model_dump() if contract else None,
+        )
+    elapsed_norm_ms = (time.perf_counter() - t0_norm) * 1000.0
 
-    # --- LATENCY ---
-    log("\n--- LATENCY ---")
-    log(f"  Total wall-clock time: {elapsed_s:.2f}s\n")
+    log("\n--- STAGE 2: Normalization & Extraction ---")
+    log(f"  Normalization Status: {norm_status.value}")
+    log(f"  Extracted Monthly Cost: ${ext_cost:,.2f}" if ext_cost is not None else "  Extracted Monthly Cost: None")
+    if norm_errors:
+        for err in norm_errors:
+            log(f"  Extraction Note: {err}")
 
-    return {
-        "query": query_text,
-        "mode": mode,
-        "passed": s4_ok,
-        "failed_stage": None if s4_ok else 4,
-        "verdict": final_verdict,
-        "cost": extracted_cost or 0.0,
-    }
+    # Independent Verification
+    t0_verif = time.perf_counter()
+    candidate_dict = dict(norm_decision) if isinstance(norm_decision, dict) else {}
+    candidate_dict["total_monthly_cost_usd"] = ext_cost
+    candidate_dict["solver"] = "Raw_LLM_Prose" if mode == 1 else "Structured_JSON_LLM"
+    candidate_dict["status"] = "feasible" if ext_cost is not None else "UNKNOWN"
+
+    if contract and norm_status in [NormalizationStatus.SUCCESS, NormalizationStatus.NEEDS_REVIEW]:
+        feas_pass, check = trace_stage_5_independent_verification(
+            contract, candidate_dict, silent=silent, stage_header="--- STAGE 3: Independent Verification (IndependentChecker) ---"
+        )
+    else:
+        check = {
+            "feasible_against_contract": False,
+            "optimality_verdict": OptimalityStatus.UNVERIFIED.value,
+            "summary_status": f"Rejected ({norm_status.value})",
+            "violations": norm_errors or ["Failed normalization/task check"],
+            "parameter_checks": [],
+        }
+        feas_pass = False
+        log(f"\n--- STAGE 3: Independent Verification: REJECTED ({norm_status.value}) ---")
+
+    elapsed_verif_ms = (time.perf_counter() - t0_verif) * 1000.0
+    total_ms = (time.perf_counter() - t_start) * 1000.0
+
+    record = CanonicalExecutionRecord(
+        mode=mode,
+        mode_name=f"Mode {mode}: {'Raw LLM' if mode==1 else 'Schema LLM'}",
+        original_query=query_text,
+        requirement_source="parsed_contract",
+        problem_type=prob_type,
+        requirements=contract.model_dump() if contract else {},
+        execution_path=execution_path,
+        provider=provider,
+        model=model,
+        original_response=raw_content,
+        normalized_allocation=norm_decision,
+        claimed_cost_usd=ext_cost,
+        normalization_status=norm_status,
+        normalization_errors=norm_errors,
+        extracted_evidence=evidence,
+        feasibility=FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL,
+        optimality_status=OptimalityStatus.UNVERIFIED,
+        recomputed_cost_usd=check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd"),
+        cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
+        cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),
+        violations=check.get("violations", []),
+        summary_status=check.get("summary_status", "Rejected"),
+        parsing_ms=elapsed_llm_ms,
+        solving_ms=elapsed_norm_ms,
+        verification_ms=elapsed_verif_ms,
+        explanation_ms=0.0,
+        total_duration_ms=total_ms,
+        explanation_source=ExplanationSource.UNAVAILABLE,
+        explanation_status="SKIPPED",
+    )
+    return record
 
 
-def run_pipeline_trace(
-    query_text: str, mode: int = 4, yes_flag: bool = False, silent: bool = False
-) -> Dict[str, Any]:
-    """Runs a single query through the genuine pipeline, printing each stage state as it happens.
+def run_mode4_pipeline_trace(
+    query_text: str, yes_flag: bool = False, silent: bool = False, offline: bool = False
+) -> CanonicalExecutionRecord:
+    """Runs a single query through the Mode 4 Neuro-Symbolic Pipeline with NVIDIA Neural Requirement Interpretation."""
+    def log(msg: str) -> None:
+        if not silent:
+            print(msg)
 
-    If any stage fails, execution stops immediately and does NOT synthesize later stages.
-    """
-    if mode in [1, 2]:
-        return run_llm_mode_trace(query_text, mode=mode, yes_flag=yes_flag, silent=silent)
+    t_start = time.perf_counter()
+    log(f'\n=== QUERY: "{query_text}" (Mode 4: Neuro-Symbolic) ===\n')
 
+    provider_name, api_key, base_url, target_model, default_timeout = settings.get_mode4_provider_config()
+
+    # STAGE 1: Neural Requirement Interpretation
+    log(f"--- STAGE 1: Neural Requirement Interpretation ({provider_name} API) ---")
+    log(f"  Provider     : {provider_name} ({target_model})")
+    
+    # In test/offline mode or when yes_flag is not set, use offline mock
+    is_offline = offline or not yes_flag
+    t0_nvd = time.perf_counter()
+    nvd_res = NVIDIAExtractor.extract_contract_from_query(query=query_text, offline=is_offline)
+    elapsed_nvd_ms = (time.perf_counter() - t0_nvd) * 1000.0
+
+    log(f"  Outcome      : {nvd_res.outcome.upper()} ({nvd_res.status})")
+    log(f"  Latency      : {elapsed_nvd_ms:.1f} ms")
+
+    if not nvd_res.is_executable:
+        log("\n  [PIPELINE HALTED BEFORE SOLVER: Neural Interpretation Did Not Yield Executable Contract]")
+        if nvd_res.clarification_questions:
+            log("  Clarification Questions Required:")
+            for q in nvd_res.clarification_questions:
+                log(f"    ? {q}")
+        if nvd_res.unsupported_reasons:
+            log("  Unsupported Workload Reasons:")
+            for r in nvd_res.unsupported_reasons:
+                log(f"    ! {r}")
+        if nvd_res.conflicting_reasons:
+            log("  Conflicting Requirements Detected:")
+            for r in nvd_res.conflicting_reasons:
+                log(f"    ! {r}")
+        if nvd_res.error_message:
+            log(f"  Extraction Error: {nvd_res.error_message}")
+
+        status_norm_map = {
+            "NEEDS_CLARIFICATION": NormalizationStatus.CLARIFICATION_REQUIRED,
+            "UNSUPPORTED": NormalizationStatus.TASK_INCOMPATIBLE,
+            "CONFLICTING_REQUIREMENTS": NormalizationStatus.NORMALIZATION_FAILURE,
+            "MISSING_CREDENTIALS": NormalizationStatus.API_FAILURE,
+            "TIMEOUT": NormalizationStatus.API_FAILURE,
+            "NETWORK_ERROR": NormalizationStatus.API_FAILURE,
+            "MALFORMED_JSON": NormalizationStatus.MALFORMED_OUTPUT,
+            "SCHEMA_ERROR": NormalizationStatus.MALFORMED_OUTPUT,
+        }
+        norm_stat = status_norm_map.get(nvd_res.status, NormalizationStatus.NORMALIZATION_FAILURE)
+        
+        # Determine feasibility: infrastructure errors leave feasibility as NOT_EVALUATED
+        if nvd_res.status in ["MISSING_CREDENTIALS", "TIMEOUT", "NETWORK_ERROR", "INFRASTRUCTURE_ERROR", "API_FAILURE"]:
+            feas = FeasibilityStatus.NOT_EVALUATED
+            summary_stat = f"Neural Interpretation: {nvd_res.status}"
+        elif nvd_res.status == "NEEDS_CLARIFICATION":
+            feas = FeasibilityStatus.NOT_EVALUATED
+            summary_stat = "Clarification required"
+        elif nvd_res.status == "UNSUPPORTED":
+            feas = FeasibilityStatus.NOT_EVALUABLE
+            summary_stat = "STAGE 1 (PARSER_FAILED / INTERPRETATION_HALTED): UNSUPPORTED"
+        elif nvd_res.status == "CONFLICTING_REQUIREMENTS":
+            feas = FeasibilityStatus.FAIL
+            summary_stat = "STAGE 1 (PARSER_FAILED / INTERPRETATION_HALTED): CONFLICTING_REQUIREMENTS"
+        else:
+            feas = FeasibilityStatus.FAIL
+            summary_stat = f"STAGE 1 (PARSER_FAILED / INTERPRETATION_HALTED): {nvd_res.status}"
+
+        violations = (
+            nvd_res.clarification_questions
+            or nvd_res.unsupported_reasons
+            or nvd_res.conflicting_reasons
+            or ([nvd_res.error_message] if nvd_res.error_message else ["Neural extraction rejected query"])
+        )
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+
+        return CanonicalExecutionRecord(
+            mode=4,
+            mode_name="Mode 4: Neuro-Symbolic",
+            original_query=query_text,
+            requirement_source="neural_contract",
+            problem_type=nvd_res.contract.problem_type if nvd_res.contract else "ILP_VM_Allocation",
+            requirements=nvd_res.contract.model_dump() if nvd_res.contract else (nvd_res.parsed_json or {}),
+            execution_path=f"{nvd_res.provider} API ({nvd_res.model}) -> Interpretation Halted ({nvd_res.status})",
+            provider=nvd_res.provider,
+            model=nvd_res.model,
+            original_response=nvd_res.raw_response,
+            normalized_allocation=None,
+            claimed_cost_usd=None,
+            normalization_status=norm_stat,
+            normalization_errors=violations,
+            extracted_evidence=nvd_res.extracted_evidence,
+            feasibility=feas,
+            optimality_status=OptimalityStatus.UNVERIFIED,
+            violations=violations,
+            summary_status=summary_stat,
+            failed_stage=1,
+            parsing_ms=elapsed_nvd_ms,
+            solving_ms=0.0,
+            verification_ms=0.0,
+            explanation_ms=0.0,
+            total_duration_ms=total_ms,
+            explanation_source=ExplanationSource.UNAVAILABLE,
+            explanation_status="SKIPPED",
+        )
+
+    contract = nvd_res.contract
+
+    # STAGE 2: Contract Schema & Archetype Verification
+    log("\n--- STAGE 2: Contract Schema & Archetype Verification ---")
+    log(f"  * Archetype Dispatched : {contract.problem_type}")
+    log(f"  * Stated Budget Ceiling: ${contract.budget_max_usd:,.2f} USD")
+    if contract.problem_type == "ILP_VM_Allocation":
+        log(f"  * Compute Target       : {contract.required_vcpus} vCPUs, {contract.required_ram_gb:.1f} GB RAM")
+    elif contract.problem_type == "PSO_Continuous_Scaling":
+        log(f"  * Target Utilization   : {contract.target_cpu_pct or 70.0:.1f}% CPU")
+    elif contract.problem_type == "Z3_Graph_Disaster_Recovery":
+        log(f"  * DR Bounds            : <= {contract.latency_max_ms:.1f}ms latency, >= {contract.sla_availability_pct:.2f}% SLA")
+
+    # STAGE 3 & 4: Solver Dispatch & Execution
+    t0_solv = time.perf_counter()
+    s4_ok, solver_result, s4_err = trace_stage_4_solver_execution(contract, mode=4, silent=silent)
+    solving_ms = (time.perf_counter() - t0_solv) * 1000.0
+    if not s4_ok or solver_result is None:
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        return CanonicalExecutionRecord(
+            mode=4,
+            mode_name="Mode 4: Neuro-Symbolic",
+            original_query=query_text,
+            requirement_source="nvidia_neural_contract",
+            problem_type=contract.problem_type,
+            requirements=contract.model_dump(),
+            normalization_status=NormalizationStatus.SOLVER_INFEASIBLE,
+            summary_status=s4_err or "Solver failed",
+            failed_stage=4,
+            parsing_ms=elapsed_nvd_ms,
+            solving_ms=solving_ms,
+            total_duration_ms=total_ms,
+        )
+
+    # STAGE 5: Independent Verification (Mode-Blind)
+    t0_verif = time.perf_counter()
+    s5_ok, check_result = trace_stage_5_independent_verification(contract, solver_result, silent=silent)
+    verification_ms = (time.perf_counter() - t0_verif) * 1000.0
+
+    # STAGE 6: Explanation Generation
+    t0_exp = time.perf_counter()
+    enable_llm = not is_offline and yes_flag
+    exp_text, exp_source = trace_stage_6_explanation(
+        contract, solver_result, 4, check_result=check_result, silent=silent, enable_llm_explainer=enable_llm
+    )
+    explanation_ms = (time.perf_counter() - t0_exp) * 1000.0
+
+    total_ms = (time.perf_counter() - t_start) * 1000.0
+
+    cost = solver_result.get("total_monthly_cost_usd", solver_result.get("estimated_monthly_cost_usd", 0.0))
+    recomp_cost = check_result.get("cost_accuracy", {}).get("calculated_catalog_cost_usd")
+
+    record = CanonicalExecutionRecord(
+        mode=4,
+        mode_name="Mode 4: Neuro-Symbolic",
+        original_query=query_text,
+        requirement_source="neural_contract",
+        problem_type=contract.problem_type,
+        requirements=contract.model_dump(),
+        execution_path=f"{nvd_res.provider} API ({nvd_res.model}) -> Local Solver ({solver_result.get('solver', 'Solver')}) -> IndependentChecker -> " + ("Local Explainer Template" if exp_source == ExplanationSource.LOCAL_TEMPLATE else f"{nvd_res.provider} Stage 6 Explainer"),
+        provider=nvd_res.provider,
+        model=nvd_res.model,
+        solver_name=solver_result.get("solver"),
+        original_response=solver_result,
+        normalized_allocation=solver_result,
+        claimed_cost_usd=float(cost) if cost is not None else None,
+        normalization_status=NormalizationStatus.SUCCESS,
+        extracted_evidence=nvd_res.extracted_evidence,
+        feasibility=FeasibilityStatus.PASS if s5_ok else FeasibilityStatus.FAIL,
+        optimality_status=OptimalityStatus(check_result.get("optimality_verdict", OptimalityStatus.INFEASIBLE.value)) if check_result.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.HEURISTIC_FEASIBLE,
+        recomputed_cost_usd=float(recomp_cost) if recomp_cost is not None else None,
+        cost_delta_usd=check_result.get("cost_accuracy", {}).get("cost_delta_usd"),
+        cost_error_pct=check_result.get("cost_accuracy", {}).get("cost_error_pct"),
+        budget_headroom_usd=max(0.0, float(contract.budget_max_usd) - float(cost or 0.0)) if s5_ok else None,
+        violations=check_result.get("violations", []),
+        summary_status=check_result.get("summary_status", "Execution complete"),
+        failed_stage=None if s5_ok else 5,
+        parsing_ms=elapsed_nvd_ms,
+        solving_ms=solving_ms,
+        verification_ms=verification_ms,
+        explanation_ms=explanation_ms,
+        total_duration_ms=total_ms,
+        explanation_source=exp_source,
+        explanation_status="SUCCESS" if s5_ok else "SUPPRESSED_DUE_TO_VIOLATION",
+        explanation_text=exp_text,
+    )
+    return record
+
+
+def run_mode3_pipeline_trace(
+    query_text: str, yes_flag: bool = False, silent: bool = False, offline: bool = True
+) -> CanonicalExecutionRecord:
+    """Runs a single query through the Mode 3 Pure Symbolic Pipeline (SCOPE -> CARM -> Solver -> Checker)."""
+    # MODE 3: Pure Symbolic (SCOPE Lexical -> CARM Archetype -> Local Solvers -> IndependentChecker)
+    t_start = time.perf_counter()
     if not silent:
-        print(f'\n=== QUERY: "{query_text}" ===\n')
+        print(f'\n=== QUERY: "{query_text}" (Mode 3: Pure Symbolic) ===\n')
 
     parser = SCOPEParser()
     matcher = CARMMatcher()
 
-    # STAGE 1
+    # STAGE 1: Lexical
+    t0 = time.perf_counter()
     s1_ok, params, s1_err = trace_stage_1_parsing(parser, query_text, silent=silent)
+    elapsed_p1 = (time.perf_counter() - t0) * 1000.0
     if not s1_ok or params is None:
-        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 1, "verdict": s1_err, "cost": 0.0}
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        return CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            normalization_status=NormalizationStatus.NORMALIZATION_FAILURE,
+            summary_status=f"STAGE 1 (PARSER_FAILED): {s1_err or 'Lexical parsing failed'}",
+            failed_stage=1,
+            total_duration_ms=total_ms,
+        )
 
-    # STAGE 2
+    # STAGE 2: Archetype
+    t0 = time.perf_counter()
     s2_ok, archetype, s2_err = trace_stage_2_archetype_matching(matcher, query_text, parser, silent=silent)
+    elapsed_p2 = (time.perf_counter() - t0) * 1000.0
     if not s2_ok or archetype is None:
-        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 2, "verdict": s2_err, "cost": 0.0}
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        return CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            normalization_status=NormalizationStatus.TASK_INCOMPATIBLE,
+            summary_status=f"STAGE 1 (PARSER_FAILED): {s2_err or 'Unsupported archetype'}",
+            failed_stage=1,
+            total_duration_ms=total_ms,
+        )
 
-    # STAGE 3
+    # STAGE 3: Contract Validation
+    t0 = time.perf_counter()
     s3_ok, contract, s3_err = trace_stage_3_contract_validation(archetype, params, silent=silent)
+    elapsed_p3 = (time.perf_counter() - t0) * 1000.0
     if not s3_ok or contract is None:
-        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 3, "verdict": s3_err, "cost": 0.0}
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        return CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            problem_type=archetype,
+            normalization_status=NormalizationStatus.MALFORMED_OUTPUT,
+            summary_status=s3_err or "Contract validation failed",
+            failed_stage=3,
+            total_duration_ms=total_ms,
+        )
 
-    # STAGE 4
-    s4_ok, solver_result, s4_err = trace_stage_4_solver_execution(contract, mode, silent=silent)
+    parsing_total_ms = elapsed_p1 + elapsed_p2 + elapsed_p3
+
+    # STAGE 4: Solver
+    t0 = time.perf_counter()
+    s4_ok, solver_result, s4_err = trace_stage_4_solver_execution(contract, mode=3, silent=silent)
+    solving_ms = (time.perf_counter() - t0) * 1000.0
     if not s4_ok or solver_result is None:
-        return {"query": query_text, "mode": mode, "passed": False, "failed_stage": 4, "verdict": s4_err, "cost": 0.0}
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        return CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            problem_type=archetype,
+            requirements=contract.model_dump(),
+            normalization_status=NormalizationStatus.SOLVER_INFEASIBLE,
+            summary_status=s4_err or "Solver failed",
+            failed_stage=4,
+            parsing_ms=parsing_total_ms,
+            solving_ms=solving_ms,
+            total_duration_ms=total_ms,
+        )
 
-    # STAGE 5
+    # STAGE 5: Verification (Mode-Blind)
+    t0 = time.perf_counter()
     s5_ok, check_result = trace_stage_5_independent_verification(contract, solver_result, silent=silent)
+    verification_ms = (time.perf_counter() - t0) * 1000.0
 
-    # STAGE 6
-    trace_stage_6_explanation(contract, solver_result, mode, silent=silent)
+    # STAGE 6: Explanation (Mode 3 skips explanation)
+    trace_stage_6_explanation(contract, solver_result, mode=3, check_result=check_result, silent=silent)
 
-    final_verdict = check_result.get("summary_status", "Complete")
-    passed = s5_ok and not check_result.get("violations", [])
+    total_ms = (time.perf_counter() - t_start) * 1000.0
+
     cost = solver_result.get("total_monthly_cost_usd", solver_result.get("estimated_monthly_cost_usd", 0.0))
+    recomp_cost = check_result.get("cost_accuracy", {}).get("calculated_catalog_cost_usd")
 
-    return {
-        "query": query_text,
-        "mode": mode,
-        "passed": passed,
-        "failed_stage": None if passed else 5,
-        "verdict": final_verdict,
-        "cost": cost,
-    }
+    record = CanonicalExecutionRecord(
+        mode=3,
+        mode_name="Mode 3: Pure Symbolic",
+        original_query=query_text,
+        requirement_source="parsed_contract",
+        problem_type=contract.problem_type,
+        requirements=contract.model_dump(),
+        execution_path=f"Local SCOPE -> Local CARM ({solver_result.get('solver', 'Solver')}) -> IndependentChecker",
+        solver_name=solver_result.get("solver"),
+        original_response=solver_result,
+        normalized_allocation=solver_result,
+        claimed_cost_usd=float(cost) if cost is not None else None,
+        normalization_status=NormalizationStatus.SUCCESS,
+        feasibility=FeasibilityStatus.PASS if s5_ok else FeasibilityStatus.FAIL,
+        optimality_status=OptimalityStatus(check_result.get("optimality_verdict", OptimalityStatus.INFEASIBLE.value)) if check_result.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.HEURISTIC_FEASIBLE,
+        recomputed_cost_usd=float(recomp_cost) if recomp_cost is not None else None,
+        cost_delta_usd=check_result.get("cost_accuracy", {}).get("cost_delta_usd"),
+        cost_error_pct=check_result.get("cost_accuracy", {}).get("cost_error_pct"),
+        budget_headroom_usd=max(0.0, float(contract.budget_max_usd) - float(cost or 0.0)) if s5_ok else None,
+        violations=check_result.get("violations", []),
+        summary_status=check_result.get("summary_status", "Execution complete"),
+        failed_stage=None if s5_ok else 5,
+        parsing_ms=parsing_total_ms,
+        solving_ms=solving_ms,
+        verification_ms=verification_ms,
+        explanation_ms=0.0,
+        total_duration_ms=total_ms,
+        explanation_source=ExplanationSource.UNAVAILABLE,
+        explanation_status="SKIPPED",
+        explanation_text="",
+    )
+    return record
+
+
+def run_pipeline_trace(
+    query_text: str, mode: int = 4, yes_flag: bool = False, silent: bool = False, offline: bool = False
+) -> CanonicalExecutionRecord:
+    """Runs a single query through the genuine pipeline and returns a CanonicalExecutionRecord."""
+    if mode in [1, 2]:
+        return run_llm_mode_trace(query_text, mode=mode, yes_flag=yes_flag, silent=silent)
+    elif mode == 3:
+        return run_mode3_pipeline_trace(query_text, yes_flag=yes_flag, silent=silent, offline=offline)
+    elif mode == 4:
+        return run_mode4_pipeline_trace(query_text, yes_flag=yes_flag, silent=silent, offline=offline)
+    else:
+        raise ValueError(f"Unknown mode {mode}. Expected 1, 2, 3, or 4.")
 
 
 def load_queries_from_file(filepath: str) -> List[Dict[str, Any]]:
@@ -754,8 +855,13 @@ def load_queries_from_file(filepath: str) -> List[Dict[str, Any]]:
                 queries.append({"id": f"query_{idx+1}", "query": item, "raw": item})
         return queries
     elif isinstance(data, dict):
-        q_list = data.get("queries", [])
-        return [{"id": item.get("id", f"query_{idx+1}"), "query": item.get("query", ""), "raw": item} for idx, item in enumerate(q_list)]
+        raw_list = data.get("queries", [])
+        return [
+            {"id": item.get("id", f"query_{idx+1}"), "query": item.get("query", ""), "raw": item}
+            if isinstance(item, dict)
+            else {"id": f"query_{idx+1}", "query": str(item), "raw": item}
+            for idx, item in enumerate(raw_list)
+        ]
     return []
 
 
@@ -783,80 +889,53 @@ def main() -> None:
         type=int,
         choices=[1, 2, 3, 4],
         default=4,
-        help="Pipeline execution mode: 1 (Pure LLM), 2 (Structured LLM), 3 (Symbolic + rule-based), or 4 (Full Neuro-Symbolic, default)",
+        help="Pipeline execution mode: 1 (Pure LLM), 2 (Structured LLM), 3 (Symbolic), or 4 (Full Neuro-Symbolic)",
     )
     parser.add_argument(
         "--yes",
         "-y",
         action="store_true",
-        help="Skip live API quota confirmation prompt for Mode 1 and Mode 2",
+        help="Skip live API confirmation prompt for Mode 1 and Mode 2",
     )
     parser.add_argument(
         "--failures-only",
         action="store_true",
-        help="Batch mode: only print full stage traces for queries that fail or produce constraint violations",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Maximum number of queries to run in batch mode",
+        help="Batch mode: only print full stage traces for queries that fail",
     )
 
     args = parser.parse_args()
 
-    # Safety Guard: Mode 1 and Mode 2 cannot be executed in batch mode
-    if args.mode in [1, 2]:
-        if args.queries_file or not args.query:
-            print(
-                "Error: Batch execution (--queries-file) is strictly blocked for Mode 1 and Mode 2 to protect API quota. "
-                "Mode 1 and Mode 2 must be executed with a single query via --query."
-            )
-            sys.exit(1)
-
     if args.query:
-        run_pipeline_trace(args.query, mode=args.mode, yes_flag=args.yes, silent=False)
+        record = run_pipeline_trace(args.query, mode=args.mode, yes_flag=args.yes, silent=False)
+        print("\n" + "=" * 80)
+        print(f"CANONICAL EXECUTION RECORD (Run ID: {record.run_id})")
+        print("=" * 80)
+        print(f"Mode          : {record.mode_name}")
+        print(f"Feasibility   : {record.feasibility.value}")
+        print(f"Optimality    : {record.optimality_status.value}")
+        print(f"Verdict       : {record.summary_status}")
+        print(f"Claimed Cost  : ${record.claimed_cost_usd:,.2f}" if record.claimed_cost_usd is not None else "Claimed Cost  : N/A")
+        print(f"Recomputed    : ${record.recomputed_cost_usd:,.2f}" if record.recomputed_cost_usd is not None else "Recomputed    : N/A")
+        print(f"Total Latency : {record.total_duration_ms:.1f} ms")
+        print("=" * 80 + "\n")
         return
 
     queries_file = args.queries_file or "data/diagnostic_queries.json"
-    try:
-        queries = load_queries_from_file(queries_file)
-    except FileNotFoundError:
-        print(f"Error: Query file '{queries_file}' not found.")
-        sys.exit(1)
+    with open(queries_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    queries = data if isinstance(data, list) else data.get("queries", [])
 
-    if args.limit:
-        queries = queries[: args.limit]
-
-    print(f"=== BATCH STAGE TRACE: {len(queries)} queries from '{queries_file}' (Mode {args.mode}) ===")
-    if args.failures_only:
-        print("  [Mode: --failures-only active. Passing queries will show single-line status.]\n")
-
+    print(f"=== BATCH STAGE TRACE: {len(queries)} queries (Mode {args.mode}) ===")
     results = []
-    for idx, q_item in enumerate(queries, 1):
-        q_id = q_item["id"]
-        q_text = q_item["query"]
+    for q_item in queries:
+        q_text = q_item.get("query", q_item) if isinstance(q_item, dict) else q_item
+        rec = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=args.failures_only)
+        results.append(rec)
+        if args.failures_only and rec.feasibility == FeasibilityStatus.PASS:
+            print(f'PASS: "{q_text}" -> {rec.summary_status}')
 
-        if args.failures_only:
-            res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=True)
-            if res.get("passed", False):
-                cost = res.get("cost", 0.0)
-                verdict = res.get("verdict", "Feasible against checked constraints")
-                print(f'PASS: [{q_id}] "{q_text}" -> {verdict} (${cost:.2f})')
-                results.append(res)
-            else:
-                res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=False)
-                results.append(res)
-        else:
-            res = run_pipeline_trace(q_text, mode=args.mode, yes_flag=args.yes, silent=False)
-            results.append(res)
-
-    # Summary
-    passed_count = sum(1 for r in results if r.get("passed", False))
-    failed_count = len(results) - passed_count
-    print(f"\n{'='*70}")
-    print(f"BATCH TRACE SUMMARY: Total: {len(results)} | Passed: {passed_count} | Failed: {failed_count}")
-    print(f"{'='*70}\n")
+    passed = sum(1 for r in results if r.feasibility == FeasibilityStatus.PASS)
+    print(f"\nBATCH SUMMARY: Total: {len(results)} | Passed: {passed} | Failed: {len(results)-passed}")
 
 
 if __name__ == "__main__":

@@ -454,6 +454,41 @@ class SCOPEParser:
             except ValueError:
                 pass
 
+        # Scaling parameters: Target CPU vs Maximum CPU vs Bandwidth
+        cpu_max_match = re.search(
+            r"(?:max(?:imum)?\s+cpu|cpu\s+(?:must\s+not\s+exceed|under|<=|<|max))\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%",
+            text,
+            re.IGNORECASE,
+        )
+        if cpu_max_match:
+            try:
+                val = float(cpu_max_match.group(1))
+                params["max_cpu_pct"] = val
+                params["target_cpu_pct"] = val
+            except ValueError:
+                pass
+
+        cpu_target_match = re.search(
+            r"(?:target\s+cpu|cpu\s+target|cpu\s+utilization|target)\s*(?:of|at|is|:)?\s*(\d+(?:\.\d+)?)\s*%",
+            text,
+            re.IGNORECASE,
+        )
+        if cpu_target_match and "target_cpu_pct" not in params:
+            try:
+                params["target_cpu_pct"] = float(cpu_target_match.group(1))
+            except ValueError:
+                pass
+
+        bw_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mbps|gbps|bandwidth)", text, re.IGNORECASE)
+        if bw_match:
+            try:
+                val = float(bw_match.group(1))
+                if "gbps" in bw_match.group(0).lower():
+                    val = val * 1000.0
+                params["bandwidth_mbps"] = val
+            except ValueError:
+                pass
+
         # Cloud Provider extraction preserving appearance order
         detected_providers = []
         for match in re.finditer(r"\b(AWS|Azure|GCP)\b", text, re.IGNORECASE):

@@ -25,7 +25,6 @@ class NeuroSymbolicOrchestrator:
         self.graph = InfrastructureGraph()
         self.graph_steering_layer = GraphSteeringLayer(self.graph)
         
-        # Hoist solvers to instance level: instantiated once per orchestrator lifetime
         self.ga_solver = GeneticAlgorithm(random_seed=42)
         self.pso_solver = ParticleSwarmOptimization(random_seed=42)
         self.z3_solver = GraphSteeredZ3Solver(
@@ -33,23 +32,38 @@ class NeuroSymbolicOrchestrator:
             graph=self.graph,
         )
 
-    def process_query(self, user_query: str) -> str:
+    def process_query(self, user_query: str, mode: int = 4, offline: bool = True, enable_llm_explainer: bool = False) -> str:
         """
         Executes the end-to-end flow from natural language to final explanation report.
+        Mode 4 uses NVIDIA neural requirement interpretation.
+        Mode 3 uses local rule-based SCOPE parsing.
         """
-        # 1. Semantic Layer: Parse Query -> Structured Contract
-        contract, matched_template, score = self.parser.parse_query_to_contract(user_query)
-        
-        # Stage 1 Logging: Indicate why baseline sizing was selected if qualitative intent was detected
-        if contract.metadata and "qualitative_intent" in contract.metadata:
-            intent = contract.metadata["qualitative_intent"]
-            print(f"🎯 [Stage 1] Qualitative Intent Detected: '{intent}' -> Baseline set to {contract.required_vcpus} vCPUs / {contract.required_ram_gb:.0f}GB RAM")
+        if mode == 4:
+            from src.semantic.nvidia_extractor import NVIDIAExtractor
+            extractor = NVIDIAExtractor()
+            ext_res = extractor.extract_contract_from_query(user_query, offline=offline)
+            if not ext_res.is_executable:
+                if ext_res.clarification_questions:
+                    questions_formatted = "\n- " + "\n- ".join(ext_res.clarification_questions)
+                    return f"[NVIDIA Requirement Interpretation - Clarification Needed]\nStatus: {ext_res.outcome}\nQuestions required to proceed:{questions_formatted}"
+                return f"[NVIDIA Requirement Interpretation - {ext_res.outcome.upper()}]\nReason: {ext_res.error_message or 'Unsupported or conflicting requirements'}"
+            contract = ext_res.contract
+        else:
+            # 1. Semantic Layer: Parse Query -> Structured Contract (Mode 3 Rule-based)
+            contract, matched_template, score = self.parser.parse_query_to_contract(user_query)
+            
+            # Stage 1 Logging: Indicate why baseline sizing was selected if qualitative intent was detected
+            if contract.metadata and "qualitative_intent" in contract.metadata:
+                intent = contract.metadata["qualitative_intent"]
+                print(f"🎯 [Stage 1] Qualitative Intent Detected: '{intent}' -> Baseline set to {contract.required_vcpus} vCPUs / {contract.required_ram_gb:.0f}GB RAM")
 
         # 2. Optimization Layer
         result_dict = self.optimize_contract(contract)
 
         # 3. Explanation Layer: Result -> Natural Language Report
-        report = FinOpsExplainer.generate_report(contract, result_dict)
+        report = FinOpsExplainer.generate_report(
+            contract, result_dict, enable_llm_explainer=enable_llm_explainer, offline=offline
+        )
         return report
 
     def optimize_contract(self, contract: CloudOptimizationContract) -> dict:

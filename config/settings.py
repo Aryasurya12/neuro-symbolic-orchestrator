@@ -20,15 +20,75 @@ class Settings:
     ENABLE_Z3_GRAPH_OPTIMIZER: bool = True
     CHROMA_DB_PATH: str = "./chroma_db"
 
-    # API Keys & External Integrations
+    # API Keys & External Integrations for Modes 1 & 2 (Groq API exclusively)
+    GROQ_API_KEY: str = field(
+        default_factory=lambda: os.getenv("GROQ_API_KEY", "")
+    )
+    GROQ_BASE_URL: str = field(
+        default_factory=lambda: os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+    )
+    GROQ_MODEL: str = field(
+        default_factory=lambda: os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    )
+
+    # API Keys & Integrations for Mode 4 (OpenRouter / NVIDIA)
+    MODE4_PROVIDER: str = field(
+        default_factory=lambda: os.getenv("MODE4_PROVIDER", "OpenRouter")
+    )
     OPENROUTER_API_KEY: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_API_KEY", "")
+    )
+    OPENROUTER_BASE_URL: str = field(
+        default_factory=lambda: os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     )
     OPENROUTER_MODEL: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
     )
+
+    NVIDIA_API_KEY: str = field(
+        default_factory=lambda: os.getenv("NVIDIA_API_KEY", "")
+    )
+    NVIDIA_BASE_URL: str = field(
+        default_factory=lambda: os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    )
+    NVIDIA_MODEL: str = field(
+        default_factory=lambda: os.getenv("NVIDIA_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
+    )
+
     LLM_REQUEST_TIMEOUT_SECONDS: float = 360.0
     LLM_MAX_COMPLETION_TOKENS: int = 4096
+
+    def get_mode4_provider_config(self) -> Tuple[str, str, str, str, float]:
+        """Returns (provider_name, api_key, base_url, model, timeout) for Mode 4.
+        
+        Strictly preserves provider routing consistency across key, base URL, and model.
+        """
+        # 1. If OpenRouter key is set or Mode 4 explicitly configured for OpenRouter
+        if self.OPENROUTER_API_KEY or self.MODE4_PROVIDER.lower() == "openrouter":
+            return (
+                "OpenRouter",
+                self.OPENROUTER_API_KEY,
+                self.OPENROUTER_BASE_URL,
+                self.OPENROUTER_MODEL,
+                self.LLM_REQUEST_TIMEOUT_SECONDS,
+            )
+        # 2. Direct NVIDIA endpoint
+        if self.NVIDIA_API_KEY:
+            return (
+                "NVIDIA",
+                self.NVIDIA_API_KEY,
+                self.NVIDIA_BASE_URL,
+                self.NVIDIA_MODEL,
+                self.LLM_REQUEST_TIMEOUT_SECONDS,
+            )
+        # 3. Default fallback route (OpenRouter)
+        return (
+            "OpenRouter",
+            self.OPENROUTER_API_KEY,
+            self.OPENROUTER_BASE_URL,
+            self.OPENROUTER_MODEL,
+            self.LLM_REQUEST_TIMEOUT_SECONDS,
+        )
 
     # Currency conversion & formatting settings
     USD_TO_INR_RATE: float = 85.0
@@ -81,6 +141,11 @@ settings = Settings()
 
 # Module-level constant exports for direct importing
 USD_TO_INR_RATE: float = settings.USD_TO_INR_RATE
+GROQ_API_KEY: str = settings.GROQ_API_KEY
+GROQ_BASE_URL: str = settings.GROQ_BASE_URL
+GROQ_MODEL: str = settings.GROQ_MODEL
+NVIDIA_API_KEY: str = settings.NVIDIA_API_KEY
+NVIDIA_BASE_URL: str = settings.NVIDIA_BASE_URL
+NVIDIA_MODEL: str = settings.NVIDIA_MODEL
 OPENROUTER_API_KEY: str = settings.OPENROUTER_API_KEY
 OPENROUTER_MODEL: str = settings.OPENROUTER_MODEL
-

@@ -291,12 +291,22 @@ class BenchmarkModeResult:
 
 class FourWayBenchmarker:
     def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY") or getattr(settings, "OPENROUTER_API_KEY", "")
-        self.model = os.getenv("OPENROUTER_MODEL") or getattr(
-            settings, "OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free"
+        self.api_key = (
+            os.getenv("GROQ_API_KEY")
+            or getattr(settings, "GROQ_API_KEY", "")
+            or os.getenv("OPENROUTER_API_KEY")
+            or getattr(settings, "OPENROUTER_API_KEY", "")
+        )
+        self.base_url = (
+            os.getenv("GROQ_BASE_URL")
+            or getattr(settings, "GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+        )
+        self.model = (
+            os.getenv("GROQ_MODEL")
+            or getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
         )
         self.client = (
-            OpenAI(base_url="https://openrouter.ai/api/v1", api_key=self.api_key)
+            OpenAI(base_url=self.base_url, api_key=self.api_key)
             if self.api_key
             else None
         )
