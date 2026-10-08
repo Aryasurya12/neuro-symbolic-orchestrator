@@ -625,7 +625,7 @@ def run_mode4_pipeline_trace(
             mode=4,
             mode_name="Mode 4: Neuro-Symbolic",
             original_query=query_text,
-            requirement_source="nvidia_neural_contract",
+            requirement_source="neural_contract",
             problem_type=contract.problem_type,
             requirements=contract.model_dump(),
             normalization_status=NormalizationStatus.SOLVER_INFEASIBLE,

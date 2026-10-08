@@ -31,9 +31,9 @@ class Settings:
         default_factory=lambda: os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     )
 
-    # API Keys & Integrations for Mode 4 (OpenRouter / NVIDIA)
+    # API Keys & Integrations for Mode 4 (Groq Neural Interpretation)
     MODE4_PROVIDER: str = field(
-        default_factory=lambda: os.getenv("MODE4_PROVIDER", "OpenRouter")
+        default_factory=lambda: os.getenv("MODE4_PROVIDER", "Groq")
     )
     OPENROUTER_API_KEY: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_API_KEY", "")
@@ -55,15 +55,25 @@ class Settings:
         default_factory=lambda: os.getenv("NVIDIA_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
     )
 
-    LLM_REQUEST_TIMEOUT_SECONDS: float = 360.0
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 60.0
     LLM_MAX_COMPLETION_TOKENS: int = 4096
 
     def get_mode4_provider_config(self) -> Tuple[str, str, str, str, float]:
         """Returns (provider_name, api_key, base_url, model, timeout) for Mode 4.
         
         Strictly preserves provider routing consistency across key, base URL, and model.
+        Mode 4 uses Groq API with GROQ_API_KEY, GROQ_BASE_URL, and GROQ_MODEL from .env.
         """
-        # 1. If OpenRouter key is set or Mode 4 explicitly configured for OpenRouter
+        # Primary provider: Groq
+        if self.GROQ_API_KEY or self.MODE4_PROVIDER.lower() == "groq":
+            return (
+                "Groq",
+                self.GROQ_API_KEY,
+                self.GROQ_BASE_URL,
+                self.GROQ_MODEL,
+                self.LLM_REQUEST_TIMEOUT_SECONDS,
+            )
+        # OpenRouter fallback if explicitly requested
         if self.OPENROUTER_API_KEY or self.MODE4_PROVIDER.lower() == "openrouter":
             return (
                 "OpenRouter",
@@ -72,21 +82,12 @@ class Settings:
                 self.OPENROUTER_MODEL,
                 self.LLM_REQUEST_TIMEOUT_SECONDS,
             )
-        # 2. Direct NVIDIA endpoint
-        if self.NVIDIA_API_KEY:
-            return (
-                "NVIDIA",
-                self.NVIDIA_API_KEY,
-                self.NVIDIA_BASE_URL,
-                self.NVIDIA_MODEL,
-                self.LLM_REQUEST_TIMEOUT_SECONDS,
-            )
-        # 3. Default fallback route (OpenRouter)
+        # Default fallback route (Groq)
         return (
-            "OpenRouter",
-            self.OPENROUTER_API_KEY,
-            self.OPENROUTER_BASE_URL,
-            self.OPENROUTER_MODEL,
+            "Groq",
+            self.GROQ_API_KEY,
+            self.GROQ_BASE_URL,
+            self.GROQ_MODEL,
             self.LLM_REQUEST_TIMEOUT_SECONDS,
         )
 

@@ -262,7 +262,7 @@ class CSVExporter:
                 "timestamp": r.timestamp_utc,
                 "provider": r.provider or "",
                 "model": r.model or "",
-                "parser": "SCOPE" if r.mode == 3 else ("NVIDIA_Neural" if r.mode == 4 else "LLM_Direct"),
+                "parser": "SCOPE" if r.mode == 3 else ("Groq_Neural" if r.mode == 4 else "LLM_Direct"),
                 "solver": r.solver_name or "",
                 "solver_seed": _fmt_val(r.solver_seed),
                 "execution_status": "COMPLETED" if r.normalization_status != NormalizationStatus.API_FAILURE else "FAILED",

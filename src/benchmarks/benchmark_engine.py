@@ -66,7 +66,7 @@ class BenchmarkEnvironmentFingerprint:
     tolerances_hash: str
     prompt_version_hash: str
     groq_model: str
-    nvidia_model: str
+    mode4_model: str = "llama-3.3-70b-versatile"
     code_version: str = "2.0.0-prompt3"
     timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -91,13 +91,13 @@ class BenchmarkEnvironmentFingerprint:
         tol_str = json.dumps(tolerances, sort_keys=True)
         tol_hash = hashlib.sha256(tol_str.encode("utf-8")).hexdigest()[:16]
 
-        prompt_str = "PROMPT_VERSIONS_V2_DISCRIMINATED_NVIDIA_EXTRACTOR"
+        prompt_str = "PROMPT_VERSIONS_V2_DISCRIMINATED_GROQ_EXTRACTOR"
         p_hash = hashlib.sha256(prompt_str.encode("utf-8")).hexdigest()[:16]
 
-        groq_m = os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b")
-        nvd_m = os.getenv("NVIDIA_MODEL") or getattr(settings, "NVIDIA_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
+        groq_m = os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+        _, _, _, mode4_m, _ = settings.get_mode4_provider_config()
 
-        combined = f"{cat_hash}:{reg_hash}:{tol_hash}:{p_hash}:{groq_m}:{nvd_m}"
+        combined = f"{cat_hash}:{reg_hash}:{tol_hash}:{p_hash}:{groq_m}:{mode4_m}"
         ver_id = f"fp_{hashlib.sha256(combined.encode('utf-8')).hexdigest()[:12]}"
 
         return cls(
@@ -107,7 +107,7 @@ class BenchmarkEnvironmentFingerprint:
             tolerances_hash=tol_hash,
             prompt_version_hash=p_hash,
             groq_model=groq_m,
-            nvidia_model=nvd_m,
+            mode4_model=mode4_m,
         )
 
     def to_dict(self) -> Dict[str, Any]:

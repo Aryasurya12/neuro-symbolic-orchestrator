@@ -35,7 +35,7 @@ class NeuroSymbolicOrchestrator:
     def process_query(self, user_query: str, mode: int = 4, offline: bool = True, enable_llm_explainer: bool = False) -> str:
         """
         Executes the end-to-end flow from natural language to final explanation report.
-        Mode 4 uses NVIDIA neural requirement interpretation.
+        Mode 4 uses Groq neural requirement interpretation.
         Mode 3 uses local rule-based SCOPE parsing.
         """
         if mode == 4:
@@ -45,8 +45,8 @@ class NeuroSymbolicOrchestrator:
             if not ext_res.is_executable:
                 if ext_res.clarification_questions:
                     questions_formatted = "\n- " + "\n- ".join(ext_res.clarification_questions)
-                    return f"[NVIDIA Requirement Interpretation - Clarification Needed]\nStatus: {ext_res.outcome}\nQuestions required to proceed:{questions_formatted}"
-                return f"[NVIDIA Requirement Interpretation - {ext_res.outcome.upper()}]\nReason: {ext_res.error_message or 'Unsupported or conflicting requirements'}"
+                    return f"[Groq Requirement Interpretation - Clarification Needed]\nStatus: {ext_res.outcome}\nQuestions required to proceed:{questions_formatted}"
+                return f"[Groq Requirement Interpretation - {ext_res.outcome.upper()}]\nReason: {ext_res.error_message or 'Unsupported or conflicting requirements'}"
             contract = ext_res.contract
         else:
             # 1. Semantic Layer: Parse Query -> Structured Contract (Mode 3 Rule-based)

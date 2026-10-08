@@ -39,7 +39,7 @@ def test_mode4_vm_contract_routes_to_ilp():
     
     assert rec.problem_type == "ILP_VM_Allocation"
     assert "SciPy" in rec.solver_name or "ILP" in rec.solver_name or "HiGHS" in rec.solver_name
-    assert "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
+    assert "Groq" in rec.execution_path or "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
     assert rec.requirements.get("required_vcpus") == 8
     assert rec.requirements.get("required_ram_gb") == 32.0
     assert rec.requirements.get("budget_max_usd") == 300.0
@@ -54,7 +54,7 @@ def test_mode4_dr_contract_routes_to_z3():
     
     assert rec.problem_type == "Z3_Graph_Disaster_Recovery"
     assert "Z3" in rec.solver_name or "SMT" in rec.solver_name
-    assert "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
+    assert "Groq" in rec.execution_path or "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
     assert rec.requirements.get("latency_max_ms") == 80.0
     assert rec.requirements.get("sla_availability_pct") == 99.99
     assert rec.feasibility == FeasibilityStatus.PASS
@@ -67,7 +67,7 @@ def test_mode4_scaling_contract_routes_to_pso():
     
     assert rec.problem_type == "PSO_Continuous_Scaling"
     assert "PSO" in rec.solver_name or "Continuous" in rec.solver_name
-    assert "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
+    assert "Groq" in rec.execution_path or "NVIDIA" in rec.execution_path or "OpenRouter" in rec.execution_path
     assert rec.requirements.get("target_bandwidth_mbps") == 200.0 or rec.requirements.get("target_rps") is not None
     assert rec.feasibility == FeasibilityStatus.PASS
 
@@ -95,7 +95,7 @@ def test_mode4_does_not_invoke_scope_or_carm(monkeypatch):
     
     assert rec.mode == 4
     assert rec.requirements.get("required_vcpus") == 4
-    assert rec.provider in ["NVIDIA", "OpenRouter"]
+    assert rec.provider in ["Groq", "NVIDIA", "OpenRouter"]
     assert rec.feasibility == FeasibilityStatus.PASS
 
 
@@ -241,8 +241,8 @@ def test_mode4_explanation_is_separate_request():
     rec = run_mode4_pipeline_trace(query, offline=True, silent=True)
     
     # Stage 1 interpretation provenance
-    assert rec.provider in ["NVIDIA", "OpenRouter"]
-    assert "nemotron" in rec.model or "llama" in rec.model
+    assert rec.provider in ["Groq", "NVIDIA", "OpenRouter"]
+    assert rec.model is not None and len(rec.model) > 0
     assert rec.parsing_ms > 0.0
     
     # Stage 6 explanation has distinct status and timing tracking
@@ -271,6 +271,6 @@ def test_modes_3_and_4_use_identical_solvers_and_checker():
     assert rec_m3.cost_delta_usd == 0.0
     assert rec_m4.cost_delta_usd == 0.0
     
-    # Provenance correctly distinguishes local rule-based parsing vs NVIDIA interpretation
+    # Provenance correctly distinguishes local rule-based parsing vs Groq neural interpretation
     assert "SCOPE" in rec_m3.execution_path
-    assert "NVIDIA" in rec_m4.execution_path or "OpenRouter" in rec_m4.execution_path
+    assert "Groq" in rec_m4.execution_path or "NVIDIA" in rec_m4.execution_path or "OpenRouter" in rec_m4.execution_path

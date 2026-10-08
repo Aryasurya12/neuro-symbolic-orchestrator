@@ -780,6 +780,7 @@ def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecor
         "feasibility",
         "optimality_status",
         "verdict",
+        "is_mock",
         "core_ms",
         "explanation_ms",
         "total_ms",
@@ -796,7 +797,7 @@ def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecor
     for path in csv_paths:
         file_exists = os.path.exists(path) and os.path.getsize(path) > 0
         with open(path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=csv_headers)
+            writer = csv.DictWriter(f, fieldnames=csv_headers, extrasaction="ignore")
             if not file_exists:
                 writer.writeheader()
             for row in rows:
@@ -864,7 +865,7 @@ def main() -> None:
     # Add Mode 3
     records.append(m3_rec)
 
-    # 4. Mode 4 (Genuine NVIDIA interpretation + solver dispatch)
+    # 4. Mode 4 (Genuine Groq interpretation + solver dispatch)
     m4_rec = execute_mode_4_neuro_symbolic(query_text, mock_llm=is_mock)
     records.append(m4_rec)
 

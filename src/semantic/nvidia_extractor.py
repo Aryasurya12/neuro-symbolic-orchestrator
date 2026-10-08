@@ -36,8 +36,8 @@ class NVIDIAExtractionResult:
     parsed_json: Optional[Dict[str, Any]] = None
     elapsed_ms: float = 0.0
     response_id: Optional[str] = None
-    model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
-    provider: str = "NVIDIA"
+    model: str = "llama-3.3-70b-versatile"
+    provider: str = "Groq"
     extracted_evidence: List[ExtractedEvidence] = field(default_factory=list)
     error_message: Optional[str] = None
     unsupported_reason: Optional[str] = None
@@ -527,7 +527,7 @@ class NVIDIAExtractor:
         raw_response: str,
         elapsed_ms: float,
         model: str,
-        provider: str = "NVIDIA",
+        provider: str = "Groq",
         response_id: Optional[str] = None,
     ) -> NVIDIAExtractionResult:
         """Validates the extracted dictionary against Pydantic schema and returns a structured result."""

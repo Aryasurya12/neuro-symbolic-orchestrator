@@ -488,11 +488,12 @@ class FinOpsExplainer:
         # Obtain dynamic / LLM recommendations
         recommendations = None
         source_label = "Local Rule-Based Template"
+        provider_name, _, _, target_model, _ = settings.get_mode4_provider_config()
         if enable_llm_explainer and is_feasible:
             recs, resp_id, elapsed_s, src = cls.generate_llm_recommendations(contract, solver_result)
             if recs:
                 recommendations = recs
-                source_label = f"NVIDIA API (nvidia/llama-3.1-nemotron-70b-instruct | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
+                source_label = f"{provider_name} API ({target_model} | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
 
         if not recommendations:
             recommendations = cls.generate_dynamic_recommendations(
