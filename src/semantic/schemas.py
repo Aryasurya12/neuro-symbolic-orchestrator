@@ -185,6 +185,22 @@ class CloudOptimizationContract(BaseModel):
         description="Semantic and qualitative intent metadata",
     )
 
+    @field_validator("cloud_providers", mode="before")
+    @classmethod
+    def validate_cloud_providers(cls, v: Any) -> List[str]:
+        if v is None:
+            return ["AWS"]
+        if isinstance(v, str):
+            return [v]
+        return v
+
+    @field_validator("interpretation_outcome", mode="before")
+    @classmethod
+    def validate_interpretation_outcome(cls, v: Any) -> str:
+        if v is None:
+            return "ready"
+        return v
+
     @field_validator("latency_max_ms", mode="before")
     @classmethod
     def validate_latency(cls, v: Any) -> float:
