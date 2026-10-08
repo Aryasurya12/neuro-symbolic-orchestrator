@@ -1,0 +1,180 @@
+{
+  "run_id": "run_cdc20cea94fd",
+  "mode": 4,
+  "mode_name": "Mode 4: Neuro-Symbolic",
+  "original_query": "Deploy 8 vCPUs and 16GB RAM for under $300 on AWS",
+  "timestamp_utc": "2026-10-08T09:24:33.331824+00:00",
+  "requirement_source": "neural_contract",
+  "problem_type": "ILP_VM_Allocation",
+  "requirements": {
+    "problem_type": "ILP_VM_Allocation",
+    "cloud_providers": [
+      "AWS"
+    ],
+    "budget_max_usd": 300.0,
+    "service_count": 1,
+    "required_vcpus": 8,
+    "required_ram_gb": 16.0,
+    "latency_max_ms": 100.0,
+    "sla_availability_pct": 99.9,
+    "target_bandwidth_mbps": null,
+    "min_bandwidth_mbps": null,
+    "max_bandwidth_mbps": null,
+    "min_replicas": null,
+    "max_replicas": null,
+    "target_replicas": null,
+    "target_cpu_pct": null,
+    "max_cpu_pct": null,
+    "allowed_regions": null,
+    "primary_region": null,
+    "secondary_region": null,
+    "require_multi_region": null,
+    "require_multi_cloud": null,
+    "instance_count": null,
+    "min_instance_count": null,
+    "vcpus_per_instance": null,
+    "ram_gb_per_instance": null,
+    "interpretation_outcome": "ready",
+    "clarification_questions": [],
+    "unsupported_reasons": [],
+    "conflicting_reasons": [],
+    "extracted_spans": {
+      "required_vcpus": "8 vCPUs",
+      "required_ram_gb": "16GB RAM",
+      "budget_max_usd": "under $300",
+      "cloud_providers": "AWS",
+      "target_cpu_pct": null,
+      "latency_max_ms": null,
+      "sla_availability_pct": null
+    },
+    "metadata": {}
+  },
+  "execution_path": "Groq API (openai/gpt-oss-120b) -> Local Solver (SciPy_MILP_HiGHS) -> IndependentChecker -> Local Explainer Template",
+  "provider": "Groq",
+  "model": "openai/gpt-oss-120b",
+  "solver_name": "SciPy_MILP_HiGHS",
+  "solver_seed": null,
+  "original_response": {
+    "status": "OPTIMAL",
+    "solver": "SciPy_MILP_HiGHS",
+    "total_monthly_cost_usd": 121.48,
+    "allocated_vms": [
+      {
+        "instance_type": "t3.medium",
+        "provider": "AWS",
+        "count": 4,
+        "vcpus_per_vm": 2,
+        "ram_gb_per_vm": 4.0,
+        "monthly_cost": 121.48
+      }
+    ],
+    "total_vcpus": 8,
+    "total_ram_gb": 16.0,
+    "budget_max_usd": 300.0,
+    "budget_utilized_pct": 40.49,
+    "cost_savings_usd": 178.52,
+    "solve_time_ms": 14.287
+  },
+  "normalized_allocation": {
+    "status": "OPTIMAL",
+    "solver": "SciPy_MILP_HiGHS",
+    "total_monthly_cost_usd": 121.48,
+    "allocated_vms": [
+      {
+        "instance_type": "t3.medium",
+        "provider": "AWS",
+        "count": 4,
+        "vcpus_per_vm": 2,
+        "ram_gb_per_vm": 4.0,
+        "monthly_cost": 121.48
+      }
+    ],
+    "total_vcpus": 8,
+    "total_ram_gb": 16.0,
+    "budget_max_usd": 300.0,
+    "budget_utilized_pct": 40.49,
+    "cost_savings_usd": 178.52,
+    "solve_time_ms": 14.287
+  },
+  "claimed_cost_usd": 121.48,
+  "normalization_status": "SUCCESS",
+  "normalization_errors": [],
+  "extracted_evidence": [
+    {
+      "field_name": "required_vcpus",
+      "extracted_value": 8,
+      "unit": "N/A",
+      "text_span": "8 vCPUs",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "required_ram_gb",
+      "extracted_value": 16.0,
+      "unit": "N/A",
+      "text_span": "16GB RAM",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "budget_max_usd",
+      "extracted_value": 300.0,
+      "unit": "N/A",
+      "text_span": "under $300",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "cloud_providers",
+      "extracted_value": [
+        "AWS"
+      ],
+      "unit": "N/A",
+      "text_span": "AWS",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "target_cpu_pct",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "latency_max_ms",
+      "extracted_value": 100.0,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "sla_availability_pct",
+      "extracted_value": 99.9,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    }
+  ],
+  "feasibility": "PASS",
+  "optimality_status": "Provably Optimal (MILP branch-and-bound exact)",
+  "recomputed_cost_usd": 121.47,
+  "cost_delta_usd": 0.01,
+  "cost_error_pct": 0.01,
+  "budget_headroom_usd": 178.51999999999998,
+  "violations": [],
+  "audit_events": [],
+  "summary_status": "Feasible against checked constraints",
+  "checked_against_human_ground_truth": false,
+  "is_mock": false,
+  "timing_ms": {
+    "parsing_ms": 2932.57,
+    "solving_ms": 14.33,
+    "verification_ms": 1.01,
+    "explanation_ms": 1317.39,
+    "total_duration_ms": 4265.33
+  },
+  "explanation": {
+    "source": "LOCAL_TEMPLATE",
+    "status": "SUCCESS",
+    "text": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : ILP_VM_Allocation\n Optimization Engine  : SciPy_MILP_HiGHS\n Feasibility Status   : Feasible\n Verification Verdict : FEASIBLE & CERTIFIED\n Target Cloud(s)      : AWS\n Exchange Rate        : 1 USD = 85.00 INR\n----------------------------------------------------------------------------------\n FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)\n----------------------------------------------------------------------------------\n  - Monthly Budget Cap       : $300.00 USD (\u20b925,500.00 INR) / month\n  - Optimized Monthly Cost   : $121.48 USD (\u20b910,325.80 INR) / month\n  - Monthly Budget Headroom  : $178.52 USD (\u20b915,174.20 INR) / month (59.5% under budget cap)\n  - Budget Utilization Rate  :  40.49%\n----------------------------------------------------------------------------------\n COMPUTE & RESOURCE ALLOCATION BREAKDOWN\n----------------------------------------------------------------------------------\n  - Target Services Required : 1 service(s)\n  - Total Allocated Compute  : 8 vCPUs (Required: 8)\n  - Total Allocated Memory   : 16.0 GB RAM (Required: 16.0 GB)\n\n  Instance Placement Plan:\n   [1] AWS t3.medium x 4 instance(s) (2 vCPUs, 4.0GB) -> $121.48 USD (\u20b910,325.80 INR)/mo\n----------------------------------------------------------------------------------\n ACTIONABLE FINOPS RECOMMENDATIONS (Source: Groq API (openai/gpt-oss-120b | response_id: chatcmpl-d0f1914b-fb4e-461d-8ab8-12d4a87e4bc2 | 1.31s))\n----------------------------------------------------------------------------------\n  1. Purchase a 1?year Compute Savings Plan covering the 8 vCPU baseline to lock in ~30% lower rates versus on?demand t3.medium usage.\n  2. Evaluate converting two of the four t3.medium instances to Spot (or Spot Fleet) for workloads tolerant of interruption, targeting a 50% cost reduction on those nodes.\n  3. Implement tag?based cost allocation for each service and set CloudWatch budget alerts at 80% and 95% of the $300 cap to enforce proactive spend governance.\n  4. Configure an autoscaling policy that scales out only when CPU > 70% for >5?min and scales in when <30% for >10?min to eliminate idle capacity and keep utilization above 60%.\n==================================================================================",
+    "provider_response_id": null,
+    "elapsed_seconds": null
+  }
+}

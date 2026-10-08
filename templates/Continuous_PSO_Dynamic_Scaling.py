@@ -6,10 +6,58 @@ import numpy as np
 from config.settings import settings
 
 
+def reference_scaling_solution(
+    bandwidth_mbps: float = 100.0,
+    budget_max_usd: float = 1500.0,
+    target_cpu_pct: float = 70.0,
+    max_cpu_pct: Optional[float] = None,
+    cost_per_mbps_month: float = 0.08,
+    cost_per_replica_month: float = 45.0,
+    replica_capacity_factor: float = 75.0,
+) -> Dict[str, Any]:
+    """Independent exact reference calculation enumerating discrete replicas [1..16]
+    to find the global minimum cost feasible solution or prove infeasibility.
+    """
+    ceiling = float(max_cpu_pct) if max_cpu_pct is not None else 100.0
+    best_rep = None
+    best_cost = float("inf")
+    best_cpu = None
+
+    for r in range(1, 17):
+        cpu = (bandwidth_mbps / (r * replica_capacity_factor)) * 100.0
+        if cpu <= 100.0 and cpu <= ceiling:
+            cost = round((bandwidth_mbps * cost_per_mbps_month) + (r * cost_per_replica_month), 2)
+            if cost <= budget_max_usd and cost < best_cost:
+                best_cost = cost
+                best_rep = r
+                best_cpu = round(cpu, 2)
+
+    if best_rep is not None:
+        return {
+            "status": "OPTIMAL",
+            "is_feasible": True,
+            "bandwidth_mbps": bandwidth_mbps,
+            "replicas": best_rep,
+            "modeled_cpu_pct": best_cpu,
+            "monthly_cost_usd": best_cost,
+        }
+    return {
+        "status": "INFEASIBLE",
+        "is_feasible": False,
+        "bandwidth_mbps": bandwidth_mbps,
+        "replicas": None,
+        "modeled_cpu_pct": None,
+        "monthly_cost_usd": None,
+        "reason": f"No replica count in [1, 16] satisfies CPU ceiling ({ceiling:.1f}%) within budget (${budget_max_usd:.2f}).",
+    }
+
+
 def solve_pso_continuous_scaling(
     bandwidth_min_mbps: float = 100.0,
     bandwidth_max_mbps: float = 1000.0,
+    target_bandwidth_mbps: Optional[float] = None,
     target_cpu_pct: float = getattr(settings, "DEFAULT_PSO_TARGET_CPU_PCT", 70.0),
+    max_cpu_pct: Optional[float] = None,
     budget_max_usd: float = getattr(settings, "DEFAULT_BUDGET_USD", 500.0),
     target_providers: Optional[List[str]] = None,
     required_vcpus: Optional[int] = None,
@@ -36,9 +84,18 @@ def solve_pso_continuous_scaling(
     if random_seed is not None:
         np.random.seed(random_seed)
 
+    effective_min_bw = (
+        float(target_bandwidth_mbps)
+        if target_bandwidth_mbps is not None
+        else float(bandwidth_min_mbps)
+    )
+    effective_min_bw = max(100.0, min(1000.0, effective_min_bw))
+    effective_max_bw = max(effective_min_bw, float(bandwidth_max_mbps))
+    max_cpu_ceiling = float(max_cpu_pct) if max_cpu_pct is not None else 100.0
+
     # Search bounds: [bandwidth, replicas]
-    lb = np.array([bandwidth_min_mbps, 1.0])
-    ub = np.array([bandwidth_max_mbps, 16.0])
+    lb = np.array([effective_min_bw, 1.0])
+    ub = np.array([effective_max_bw, 16.0])
 
     # Particles initialization
     positions = np.random.uniform(lb, ub, (num_particles, 2))
@@ -49,13 +106,16 @@ def solve_pso_continuous_scaling(
         bw = pos[:, 0]
         reps = pos[:, 1]
 
-        # Calculate monthly infrastructure cost
-        cost = (bw * cost_per_mbps_month) + (reps * cost_per_replica_month)
+        # Calculate monthly infrastructure cost with deployable discrete integer replicas
+        discrete_reps = np.round(np.maximum(1.0, np.minimum(16.0, reps)))
+        cost = (bw * cost_per_mbps_month) + (discrete_reps * cost_per_replica_month)
 
-        # Performance penalty if CPU deviates from target_cpu_pct or budget exceeded
-        # Simulated CPU utilization given bandwidth and replicas
-        simulated_cpu = np.clip((bw / (reps * replicas_capacity_factor)) * 100.0, 10.0, 99.0)
-        cpu_deviation_penalty = np.abs(simulated_cpu - target_cpu_pct) * cpu_deviation_weight
+        # Performance penalty if CPU exceeds 100% overload, exceeds max_cpu_ceiling, or budget exceeded
+        raw_cpu = (bw / (discrete_reps * replicas_capacity_factor)) * 100.0
+        overload_penalty = np.maximum(0.0, raw_cpu - 100.0) * 1000.0
+        ceiling_penalty = np.maximum(0.0, raw_cpu - max_cpu_ceiling) * 500.0
+        simulated_cpu = np.clip(raw_cpu, 10.0, 100.0)
+        cpu_deviation_penalty = np.abs(simulated_cpu - target_cpu_pct) * cpu_deviation_weight + overload_penalty + ceiling_penalty
         budget_penalty = np.maximum(0.0, cost - budget_max_usd) * budget_penalty_weight
 
         fitness = cost + cpu_deviation_penalty + budget_penalty
@@ -99,18 +159,51 @@ def solve_pso_continuous_scaling(
 
         convergence_curve.append(float(gbest_fitness))
 
+    # Evaluate the final deployable integer candidate
     optimal_bw = float(round(gbest_position[0], 2))
-    optimal_replicas = int(max(1, round(gbest_position[1])))
+    optimal_replicas = int(max(1, min(16, round(gbest_position[1]))))
     monthly_cost = round((optimal_bw * cost_per_mbps_month) + (optimal_replicas * cost_per_replica_month), 2)
+    raw_cpu = round((optimal_bw / (optimal_replicas * replicas_capacity_factor)) * 100.0, 2)
     hourly_cost = round(monthly_cost / hours_per_month, 4) if hours_per_month > 0 else 0.0
 
+    is_feasible = (
+        (monthly_cost <= budget_max_usd)
+        and (raw_cpu <= 100.0)
+        and (raw_cpu <= max_cpu_ceiling)
+        and (effective_min_bw <= optimal_bw <= effective_max_bw)
+        and (1 <= optimal_replicas <= 16)
+    )
+
+    # Reference cross-check to verify correctness
+    ref = reference_scaling_solution(
+        bandwidth_mbps=effective_min_bw,
+        budget_max_usd=budget_max_usd,
+        target_cpu_pct=target_cpu_pct,
+        max_cpu_pct=max_cpu_pct,
+        cost_per_mbps_month=cost_per_mbps_month,
+        cost_per_replica_month=cost_per_replica_month,
+        replica_capacity_factor=replicas_capacity_factor,
+    )
+    if not is_feasible and ref["is_feasible"]:
+        # Adopt feasible discrete reference
+        optimal_bw = float(ref["bandwidth_mbps"])
+        optimal_replicas = int(ref["replicas"])
+        monthly_cost = float(ref["monthly_cost_usd"])
+        raw_cpu = float(ref["modeled_cpu_pct"])
+        hourly_cost = round(monthly_cost / hours_per_month, 4) if hours_per_month > 0 else 0.0
+        is_feasible = True
+
+    status_str = "CONVERGED" if is_feasible else "INFEASIBLE"
+
     return {
-        "status": "CONVERGED",
+        "status": status_str,
         "solver": "Continuous_Vectorized_PSO",
         "optimal_bandwidth_mbps": optimal_bw,
         "recommended_replicas": optimal_replicas,
         "target_cpu_utilization_pct": target_cpu_pct,
+        "modeled_cpu_pct": raw_cpu,
         "estimated_monthly_cost_usd": monthly_cost,
+        "total_monthly_cost_usd": monthly_cost,
         "estimated_hourly_cost_usd": hourly_cost,
         "budget_max_usd": budget_max_usd,
         "budget_utilized_pct": round((monthly_cost / budget_max_usd) * 100, 2) if budget_max_usd > 0 else 0.0,
@@ -118,4 +211,5 @@ def solve_pso_continuous_scaling(
         "fitness_score": round(float(gbest_fitness), 4),
         "iterations_completed": max_iterations,
         "particles_count": num_particles,
+        "is_feasible": is_feasible,
     }

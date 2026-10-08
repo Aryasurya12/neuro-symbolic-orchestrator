@@ -1,0 +1,172 @@
+{
+  "run_id": "run_91742c375f4b",
+  "mode": 4,
+  "mode_name": "Mode 4: Neuro-Symbolic",
+  "original_query": "Dynamic scaling for 300 Mbps peak workload with target CPU 70% under $1500",
+  "timestamp_utc": "2026-10-08T09:24:37.526828+00:00",
+  "requirement_source": "neural_contract",
+  "problem_type": "PSO_Continuous_Scaling",
+  "requirements": {
+    "problem_type": "PSO_Continuous_Scaling",
+    "cloud_providers": [
+      "AWS"
+    ],
+    "budget_max_usd": 1500.0,
+    "service_count": 1,
+    "required_vcpus": 1,
+    "required_ram_gb": 1.0,
+    "latency_max_ms": 100.0,
+    "sla_availability_pct": 99.9,
+    "target_bandwidth_mbps": 300.0,
+    "min_bandwidth_mbps": null,
+    "max_bandwidth_mbps": null,
+    "min_replicas": null,
+    "max_replicas": null,
+    "target_replicas": null,
+    "target_cpu_pct": 70.0,
+    "max_cpu_pct": null,
+    "allowed_regions": null,
+    "primary_region": null,
+    "secondary_region": null,
+    "require_multi_region": null,
+    "require_multi_cloud": null,
+    "instance_count": null,
+    "min_instance_count": null,
+    "vcpus_per_instance": null,
+    "ram_gb_per_instance": null,
+    "interpretation_outcome": "ready",
+    "clarification_questions": [],
+    "unsupported_reasons": [],
+    "conflicting_reasons": [],
+    "extracted_spans": {
+      "required_vcpus": null,
+      "required_ram_gb": null,
+      "budget_max_usd": "$1500",
+      "cloud_providers": null,
+      "target_cpu_pct": "70%",
+      "latency_max_ms": null,
+      "sla_availability_pct": null
+    },
+    "metadata": {}
+  },
+  "execution_path": "Groq API (openai/gpt-oss-120b) -> Local Solver (Continuous_Vectorized_PSO) -> IndependentChecker -> Local Explainer Template",
+  "provider": "Groq",
+  "model": "openai/gpt-oss-120b",
+  "solver_name": "Continuous_Vectorized_PSO",
+  "solver_seed": null,
+  "original_response": {
+    "status": "CONVERGED",
+    "solver": "Continuous_Vectorized_PSO",
+    "optimal_bandwidth_mbps": 300.0,
+    "recommended_replicas": 5,
+    "target_cpu_utilization_pct": 70.0,
+    "modeled_cpu_pct": 80.0,
+    "estimated_monthly_cost_usd": 249.0,
+    "total_monthly_cost_usd": 249.0,
+    "estimated_hourly_cost_usd": 0.3411,
+    "budget_max_usd": 1500.0,
+    "budget_utilized_pct": 16.6,
+    "cost_savings_usd": 1251.0,
+    "fitness_score": 274.0,
+    "iterations_completed": 50,
+    "particles_count": 30,
+    "is_feasible": true
+  },
+  "normalized_allocation": {
+    "status": "CONVERGED",
+    "solver": "Continuous_Vectorized_PSO",
+    "optimal_bandwidth_mbps": 300.0,
+    "recommended_replicas": 5,
+    "target_cpu_utilization_pct": 70.0,
+    "modeled_cpu_pct": 80.0,
+    "estimated_monthly_cost_usd": 249.0,
+    "total_monthly_cost_usd": 249.0,
+    "estimated_hourly_cost_usd": 0.3411,
+    "budget_max_usd": 1500.0,
+    "budget_utilized_pct": 16.6,
+    "cost_savings_usd": 1251.0,
+    "fitness_score": 274.0,
+    "iterations_completed": 50,
+    "particles_count": 30,
+    "is_feasible": true
+  },
+  "claimed_cost_usd": 249.0,
+  "normalization_status": "SUCCESS",
+  "normalization_errors": [],
+  "extracted_evidence": [
+    {
+      "field_name": "required_vcpus",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "required_ram_gb",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "budget_max_usd",
+      "extracted_value": 1500.0,
+      "unit": "N/A",
+      "text_span": "$1500",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "cloud_providers",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "target_cpu_pct",
+      "extracted_value": 70.0,
+      "unit": "N/A",
+      "text_span": "70%",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "latency_max_ms",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    },
+    {
+      "field_name": "sla_availability_pct",
+      "extracted_value": null,
+      "unit": "N/A",
+      "text_span": "None",
+      "confidence": "HIGH"
+    }
+  ],
+  "feasibility": "PASS",
+  "optimality_status": "Optimality not established (Heuristic approximation)",
+  "recomputed_cost_usd": 249.0,
+  "cost_delta_usd": 0.0,
+  "cost_error_pct": 0.0,
+  "budget_headroom_usd": 1251.0,
+  "violations": [],
+  "audit_events": [],
+  "summary_status": "Feasible against checked constraints",
+  "checked_against_human_ground_truth": false,
+  "is_mock": false,
+  "timing_ms": {
+    "parsing_ms": 2779.28,
+    "solving_ms": 3.51,
+    "verification_ms": 0.2,
+    "explanation_ms": 1409.27,
+    "total_duration_ms": 4192.29
+  },
+  "explanation": {
+    "source": "LOCAL_TEMPLATE",
+    "status": "SUCCESS",
+    "text": "==================================================================================\n               NEURASYM FINOPS EXECUTIVE DEPLOYMENT REPORT                \n                  Stage 6: Symbolic Optimization Verdict                  \n==================================================================================\n Problem Type         : PSO_Continuous_Scaling\n Optimization Engine  : Continuous_Vectorized_PSO\n Feasibility Status   : Feasible\n Verification Verdict : FEASIBLE & CERTIFIED\n Target Cloud(s)      : AWS\n Exchange Rate        : 1 USD = 85.00 INR\n----------------------------------------------------------------------------------\n FINANCIAL & BUDGET SUMMARY (DUAL CURRENCY: USD / INR)\n----------------------------------------------------------------------------------\n  - Monthly Budget Cap       : $1,500.00 USD (\u20b9127,500.00 INR) / month\n  - Optimized Monthly Cost   : $249.00 USD (\u20b921,165.00 INR) / month\n  - Monthly Budget Headroom  : $1,251.00 USD (\u20b9106,335.00 INR) / month (83.4% under budget cap)\n  - Budget Utilization Rate  :  16.60%\n----------------------------------------------------------------------------------\n CONTINUOUS AUTOSCALING PARAMETERS\n----------------------------------------------------------------------------------\n  - Optimal Bandwidth Sizing : 300.00 Mbps\n  - Recommended Pod Replicas : 5 active replica(s)\n  - Target CPU Utilization   : 70.0%\n  - Estimated Hourly Burn    : $0.3411 USD (\u20b928.9935 INR)/hour\n----------------------------------------------------------------------------------\n ACTIONABLE FINOPS RECOMMENDATIONS (Source: Groq API (openai/gpt-oss-120b | response_id: chatcmpl-7f800aef-9eba-4071-955f-a3b82b2221fd | 1.41s))\n----------------------------------------------------------------------------------\n  1. Purchase a 1?year No?Upfront Compute Savings Plan covering the 1?vCPU workload to lock in ~30% lower rates versus on?demand.\n  2. Configure the instance?s Auto Scaling group with a target CPU utilization of 55% and a minimum of 1 instance to prevent over?provisioning while staying within the $1500 cap.\n  3. Enable VPC Flow Logs and CloudWatch metrics to tag all data?transfer egress; then route inter?AZ traffic through a private link to eliminate cross?AZ data?transfer charges.\n  4. Create a cost?allocation tag ?Project=PSO_Continuous_Scaling? and set a CloudWatch alarm at 80% of the $1500 budget to trigger review of usage and Savings Plan coverage.\n==================================================================================",
+    "provider_response_id": null,
+    "elapsed_seconds": null
+  }
+}
