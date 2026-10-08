@@ -138,11 +138,16 @@ def execute_mode_1_raw_llm(
     raw_content = llm_res.get("content", "")
     finish_reason = llm_res.get("finish_reason", "unknown")
     status = llm_res.get("status", "unknown")
+    attempts = llm_res.get("attempts", [])
 
     print("\n  [Stage 1.2: " + ("Mock LLM Fixture]" if mock_llm else "Live LLM Response]"))
     print(f"    Status        : {status.upper()}")
     print(f"    Finish Reason : {finish_reason}")
     print(f"    Latency       : {elapsed_llm_ms:.1f} ms ({elapsed_llm_ms/1000.0:.2f}s)")
+    if attempts:
+        print(f"    Attempts Made : {len(attempts)}")
+        for att in attempts:
+            print(f"      - Attempt {att.get('attempt')}: max_tokens={att.get('max_tokens')}, finish_reason={att.get('finish_reason')}, status={att.get('status')}")
     print("    Raw Generation Content:")
     print("    " + "-" * 78)
     for line in raw_content.split("\n"):
@@ -162,6 +167,7 @@ def execute_mode_1_raw_llm(
         raw_text=raw_content,
         problem_type=prob_type,
         contract_data=contract.model_dump() if contract else None,
+        finish_reason=finish_reason,
     )
     elapsed_norm_ms = (time.perf_counter() - t_norm) * 1000.0
 
@@ -186,10 +192,12 @@ def execute_mode_1_raw_llm(
         feas_pass, check = trace_stage_5_independent_verification(
             contract, candidate_dict, silent=False, stage_header="  --- Mode 1 Parameter-Wise Independent Verification ---"
         )
+        opt_verdict_stat = OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.UNVERIFIED.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.UNVERIFIED
     else:
+        opt_verdict_stat = OptimalityStatus.TRUNCATION_FAILURE if norm_status == NormalizationStatus.TRUNCATION_FAILURE else OptimalityStatus.UNVERIFIED
         check = {
             "feasible_against_contract": False,
-            "optimality_verdict": OptimalityStatus.UNVERIFIED.value,
+            "optimality_verdict": opt_verdict_stat.value,
             "summary_status": f"Rejected ({norm_status.value})",
             "violations": norm_errors or ["Failed extraction/normalization check"],
             "parameter_checks": [],
@@ -218,7 +226,7 @@ def execute_mode_1_raw_llm(
         normalization_errors=norm_errors,
         extracted_evidence=evidence,
         feasibility=FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL,
-        optimality_status=OptimalityStatus.UNVERIFIED,
+        optimality_status=opt_verdict_stat,
         recomputed_cost_usd=check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd"),
         cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
         cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),
@@ -287,11 +295,16 @@ def execute_mode_2_schema_llm(
     parsed_json = llm_res.get("parsed_json", {})
     finish_reason = llm_res.get("finish_reason", "unknown")
     status = llm_res.get("status", "unknown")
+    attempts = llm_res.get("attempts", [])
 
     print("\n  [Stage 2.2: " + ("Mock Structured Fixture]" if mock_llm else "Live Structured Response]"))
     print(f"    Status        : {status.upper()}")
     print(f"    Finish Reason : {finish_reason}")
     print(f"    Latency       : {elapsed_llm_ms:.1f} ms ({elapsed_llm_ms/1000.0:.2f}s)")
+    if attempts:
+        print(f"    Attempts Made : {len(attempts)}")
+        for att in attempts:
+            print(f"      - Attempt {att.get('attempt')}: max_tokens={att.get('max_tokens')}, finish_reason={att.get('finish_reason')}, status={att.get('status')}")
     print("    Emitted JSON Object:")
     print("    " + "-" * 78)
     if parsed_json:
@@ -313,6 +326,7 @@ def execute_mode_2_schema_llm(
         raw_json_or_text=parsed_json or raw_content,
         requested_problem_type=prob_type,
         contract_data=contract.model_dump() if contract else None,
+        finish_reason=finish_reason,
     )
     elapsed_norm_ms = (time.perf_counter() - t_norm) * 1000.0
 
@@ -335,10 +349,12 @@ def execute_mode_2_schema_llm(
         feas_pass, check = trace_stage_5_independent_verification(
             contract, candidate_dict, silent=False, stage_header="  --- Mode 2 Parameter-Wise Independent Verification ---"
         )
+        opt_verdict_stat = OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.UNVERIFIED.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.UNVERIFIED
     else:
+        opt_verdict_stat = OptimalityStatus.TRUNCATION_FAILURE if norm_status == NormalizationStatus.TRUNCATION_FAILURE else OptimalityStatus.UNVERIFIED
         check = {
             "feasible_against_contract": False,
-            "optimality_verdict": OptimalityStatus.UNVERIFIED.value,
+            "optimality_verdict": opt_verdict_stat.value,
             "summary_status": f"Rejected ({norm_status.value})",
             "violations": norm_errors or ["Failed schema/task validation"],
             "parameter_checks": [],
@@ -367,7 +383,7 @@ def execute_mode_2_schema_llm(
         normalization_errors=norm_errors,
         extracted_evidence=evidence,
         feasibility=FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL,
-        optimality_status=OptimalityStatus.UNVERIFIED,
+        optimality_status=opt_verdict_stat,
         recomputed_cost_usd=check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd"),
         cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
         cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),
@@ -521,6 +537,7 @@ def execute_mode_4_neuro_symbolic(
             "NEEDS_CLARIFICATION": NormalizationStatus.CLARIFICATION_REQUIRED,
             "UNSUPPORTED": NormalizationStatus.TASK_INCOMPATIBLE,
             "CONFLICTING_REQUIREMENTS": NormalizationStatus.NORMALIZATION_FAILURE,
+            "TRUNCATION_FAILURE": NormalizationStatus.TRUNCATION_FAILURE,
             "MISSING_CREDENTIALS": NormalizationStatus.API_FAILURE,
             "TIMEOUT": NormalizationStatus.API_FAILURE,
             "NETWORK_ERROR": NormalizationStatus.API_FAILURE,
@@ -529,22 +546,31 @@ def execute_mode_4_neuro_symbolic(
         }
         norm_stat = status_norm_map.get(nvd_res.status, NormalizationStatus.NORMALIZATION_FAILURE)
         
-        # Determine feasibility: infrastructure errors leave feasibility as NOT_EVALUATED
-        if nvd_res.status in ["MISSING_CREDENTIALS", "TIMEOUT", "NETWORK_ERROR", "INFRASTRUCTURE_ERROR", "API_FAILURE"]:
-            feas = FeasibilityStatus.NOT_EVALUATED
-            summary_stat = f"Neural Interpretation: {nvd_res.status}"
-        elif nvd_res.status == "NEEDS_CLARIFICATION":
+        # Determine feasibility and specific outcome status
+        if nvd_res.status == "NEEDS_CLARIFICATION":
             feas = FeasibilityStatus.NOT_EVALUATED
             summary_stat = "Clarification required"
+            opt_stat = OptimalityStatus.CLARIFICATION_REQUIRED
         elif nvd_res.status == "UNSUPPORTED":
             feas = FeasibilityStatus.NOT_EVALUABLE
             summary_stat = "Unsupported workload domain"
+            opt_stat = OptimalityStatus.UNSUPPORTED
         elif nvd_res.status == "CONFLICTING_REQUIREMENTS":
             feas = FeasibilityStatus.FAIL
             summary_stat = "Conflicting requirements"
+            opt_stat = OptimalityStatus.CONFLICTING
+        elif nvd_res.status == "TRUNCATION_FAILURE":
+            feas = FeasibilityStatus.NOT_EVALUATED
+            summary_stat = "Provider truncation failure (finish_reason='length')"
+            opt_stat = OptimalityStatus.TRUNCATION_FAILURE
+        elif nvd_res.status in ["MISSING_CREDENTIALS", "TIMEOUT", "NETWORK_ERROR", "INFRASTRUCTURE_ERROR", "API_FAILURE"]:
+            feas = FeasibilityStatus.NOT_EVALUATED
+            summary_stat = f"Neural Interpretation: {nvd_res.status}"
+            opt_stat = OptimalityStatus.INFRASTRUCTURE_FAILURE
         else:
             feas = FeasibilityStatus.FAIL
             summary_stat = f"Neural Interpretation: {nvd_res.status}"
+            opt_stat = OptimalityStatus.INFEASIBLE
 
         violations = (
             nvd_res.clarification_questions
@@ -571,7 +597,7 @@ def execute_mode_4_neuro_symbolic(
             normalization_errors=violations,
             extracted_evidence=nvd_res.extracted_evidence,
             feasibility=feas,
-            optimality_status=OptimalityStatus.UNVERIFIED,
+            optimality_status=opt_stat,
             violations=violations,
             summary_status=summary_stat,
             failed_stage=1,
@@ -611,7 +637,7 @@ def execute_mode_4_neuro_symbolic(
     verification_ms = (time.perf_counter() - t_verif) * 1000.0
 
     # Stage 4.5: Natural Language Explanation (Separately Counted & Sourced)
-    print("\n  [Stage 4.5: Natural Language Executive Report Generation via " + ("Local Explainer Template]" if (mock_llm or not enable_explanation) else "NVIDIA API]"))
+    print("\n  [Stage 4.5: Natural Language Executive Report Generation via " + ("Local Explainer Template]" if (mock_llm or not enable_explanation) else f"{nvd_res.provider} API]"))
     t_exp = time.perf_counter()
     if mock_llm or not enable_explanation:
         exp_text = FinOpsExplainer.generate_report(contract, solver_res, check_result=check, enable_llm_explainer=False)
@@ -637,6 +663,12 @@ def execute_mode_4_neuro_symbolic(
     total_cost = solver_res.get("total_monthly_cost_usd", solver_res.get("estimated_monthly_cost_usd", 0.0))
     recomp_cost = check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd")
 
+    if not s5_ok:
+        opt_verdict_stat = OptimalityStatus.INFEASIBLE
+    else:
+        raw_opt = check.get("optimality_verdict", OptimalityStatus.INFEASIBLE.value)
+        opt_verdict_stat = OptimalityStatus(raw_opt) if raw_opt in [e.value for e in OptimalityStatus] else OptimalityStatus.HEURISTIC_FEASIBLE
+
     record = CanonicalExecutionRecord(
         mode=4,
         mode_name="Mode 4: Neuro-Symbolic",
@@ -654,7 +686,7 @@ def execute_mode_4_neuro_symbolic(
         normalization_status=NormalizationStatus.SUCCESS,
         extracted_evidence=nvd_res.extracted_evidence,
         feasibility=FeasibilityStatus.PASS if s5_ok else FeasibilityStatus.FAIL,
-        optimality_status=OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.INFEASIBLE.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.HEURISTIC_FEASIBLE,
+        optimality_status=opt_verdict_stat,
         recomputed_cost_usd=float(recomp_cost) if recomp_cost is not None else None,
         cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
         cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),

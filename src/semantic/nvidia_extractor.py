@@ -1,6 +1,6 @@
 """SEM-NVIDIA: Dedicated Genuine Neural Requirement Interpreter for Mode 4.
 
-Invokes the NVIDIA API (nvidia/llama-3.1-nemotron-70b-instruct) directly on raw user queries
+Invokes the configured Neural API (e.g. Groq llama-3.3-70b-versatile or OpenAI/NVIDIA endpoint) directly on raw user queries
 to interpret requirements and construct formal CloudOptimizationContracts without prior local
 SCOPE/CARM archetype matching.
 """
@@ -76,7 +76,7 @@ class NVIDIAExtractionResult:
 
 class NVIDIAExtractor:
     """Translates unstructured natural language cloud infrastructure queries into structured
-    CloudOptimizationContracts using genuine NVIDIA LLM inference.
+    CloudOptimizationContracts using genuine Neural LLM inference (e.g. Groq).
     """
 
     SYSTEM_PROMPT = (
@@ -463,12 +463,52 @@ class NVIDIAExtractor:
                 {"role": "user", "content": f"Extract structured optimization contract from query:\n\"{active_query}\""},
             ]
 
-            response = client.chat.completions.create(
-                model=target_model,
-                messages=messages,
-                temperature=0.0,
-                max_tokens=4096,
-            )
+            def _call_extraction(attempt_num: int, tok_limit: int):
+                try:
+                    return client.chat.completions.create(
+                        model=target_model,
+                        messages=messages,
+                        temperature=0.0,
+                        max_tokens=tok_limit,
+                        extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                    )
+                except Exception:
+                    try:
+                        return client.chat.completions.create(
+                            model=target_model,
+                            messages=messages,
+                            temperature=0.0,
+                            max_tokens=tok_limit,
+                            reasoning_effort="low",
+                        )
+                    except Exception:
+                        return client.chat.completions.create(
+                            model=target_model,
+                            messages=messages,
+                            temperature=0.0,
+                            max_tokens=tok_limit,
+                        )
+
+            # Attempt 1
+            response = _call_extraction(1, 4096)
+            choice = response.choices[0] if response and response.choices else None
+            finish_reason = getattr(choice, "finish_reason", "unknown") if choice else "empty"
+            raw_content = (choice.message.content or "").strip() if choice and choice.message else ""
+
+            # Attempt 2 retry on truncation
+            if finish_reason == "length" or (not raw_content and finish_reason in ["length", "unknown"]):
+                retry_resp = _call_extraction(2, 8192)
+                retry_choice = retry_resp.choices[0] if retry_resp and retry_resp.choices else None
+                retry_finish = getattr(retry_choice, "finish_reason", "unknown") if retry_choice else "empty"
+                retry_content = (retry_choice.message.content or "").strip() if retry_choice and retry_choice.message else ""
+                if retry_content:
+                    response = retry_resp
+                    choice = retry_choice
+                    finish_reason = retry_finish
+                    raw_content = retry_content
+                else:
+                    finish_reason = retry_finish
+
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
             if not response or not response.choices:
@@ -481,12 +521,44 @@ class NVIDIAExtractor:
                     elapsed_ms=elapsed_ms,
                 )
 
-            choice = response.choices[0]
-            raw_content = (choice.message.content or "").strip()
             resp_id = getattr(response, "id", None)
+
+            if not raw_content:
+                if finish_reason == "length":
+                    return NVIDIAExtractionResult(
+                        status="TRUNCATION_FAILURE",
+                        outcome="truncation_failure",
+                        raw_response="",
+                        error_message=f"Provider/config truncation failure: {provider_name} model exceeded token budget before answering (finish_reason='length').",
+                        model=target_model,
+                        provider=provider_name,
+                        elapsed_ms=elapsed_ms,
+                        response_id=resp_id,
+                    )
+                return NVIDIAExtractionResult(
+                    status="EMPTY_RESPONSE",
+                    outcome="infrastructure_failure",
+                    raw_response="",
+                    error_message=f"Empty response received from {provider_name} API",
+                    model=target_model,
+                    provider=provider_name,
+                    elapsed_ms=elapsed_ms,
+                    response_id=resp_id,
+                )
 
             parsed_dict, parse_err = cls._clean_and_parse_json(raw_content)
             if parse_err or not parsed_dict:
+                if finish_reason == "length":
+                    return NVIDIAExtractionResult(
+                        status="TRUNCATION_FAILURE",
+                        outcome="truncation_failure",
+                        raw_response=raw_content,
+                        error_message=f"Provider/config truncation failure: JSON output truncated mid-stream (finish_reason='length').",
+                        model=target_model,
+                        provider=provider_name,
+                        elapsed_ms=elapsed_ms,
+                        response_id=resp_id,
+                    )
                 return NVIDIAExtractionResult(
                     status="MALFORMED_JSON",
                     outcome="infrastructure_failure",

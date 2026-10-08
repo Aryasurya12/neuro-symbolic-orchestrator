@@ -115,3 +115,38 @@ def test_independent_checker_cost_mismatch_semantics():
     pricing_check = next((c for c in check["parameter_checks"] if c["check_id"] == "CHK_VM_PRICING"), None)
     assert pricing_check is not None
     assert pricing_check["status"] == CheckStatus.FAIL.value
+
+
+def test_truncation_failure_mode1_normalizer():
+    """Verify that empty/truncated responses with finish_reason='length' produce TRUNCATION_FAILURE."""
+    status, cost, decision, errors, evidence = OutputNormalizer.normalize_mode1_prose(
+        raw_text="",
+        problem_type="ILP_VM_Allocation",
+        contract_data={"problem_type": "ILP_VM_Allocation", "budget_max_usd": 300.0},
+        finish_reason="length",
+    )
+    assert status == NormalizationStatus.TRUNCATION_FAILURE
+    assert any("Provider/config truncation failure" in err for err in errors)
+
+
+def test_truncation_failure_mode2_normalizer():
+    """Verify that Mode 2 normalizer classifies finish_reason='length' as TRUNCATION_FAILURE."""
+    status, cost, decision, errors, evidence = OutputNormalizer.normalize_mode2_json(
+        raw_json_or_text="",
+        requested_problem_type="ILP_VM_Allocation",
+        contract_data={"problem_type": "ILP_VM_Allocation", "budget_max_usd": 300.0},
+        finish_reason="length",
+    )
+    assert status == NormalizationStatus.TRUNCATION_FAILURE
+    assert any("Provider/config truncation failure" in err for err in errors)
+
+
+def test_optimality_status_verdict_distinctions():
+    """Verify OptimalityStatus supports specific non-optimal verdicts."""
+    from src.verifiers.canonical_record import OptimalityStatus
+    assert OptimalityStatus.TRUNCATION_FAILURE == OptimalityStatus("Provider Truncation (Max Tokens)")
+    assert OptimalityStatus.CLARIFICATION_REQUIRED == OptimalityStatus("Clarification Required")
+    assert OptimalityStatus.UNSUPPORTED == OptimalityStatus("Unsupported Workload")
+    assert OptimalityStatus.CONFLICTING == OptimalityStatus("Conflicting Requirements")
+    assert OptimalityStatus.INFRASTRUCTURE_FAILURE == OptimalityStatus("Infrastructure / API Failure")
+    assert OptimalityStatus.INFEASIBLE == OptimalityStatus("Infeasible")

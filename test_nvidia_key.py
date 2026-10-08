@@ -7,32 +7,28 @@ import time
 import urllib.error
 import urllib.request
 
-MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"  # same model the comparative script uses
-URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+def load_config():
+    from dotenv import load_dotenv
+    load_dotenv()
+    key = os.environ.get("NVIDIA_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    base_url = os.environ.get("NVIDIA_BASE_URL") or os.environ.get("OPENROUTER_BASE_URL", "https://integrate.api.nvidia.com/v1")
+    model = os.environ.get("NVIDIA_MODEL") or os.environ.get("OPENROUTER_MODEL", "nvidia/llama-3.1-nemotron-70b-instruct")
+    
+    url = base_url.rstrip("/") + "/chat/completions"
+    source = "environment / .env"
+    return key, url, model, source
 
 
-def load_key():
-    key = os.environ.get("NVIDIA_API_KEY")
-    if key:
-        return key, "environment variable"
-    if os.path.exists(".env"):
-        with open(".env", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith("NVIDIA_API_KEY"):
-                    return line.split("=", 1)[1].strip().strip('"').strip("'"), ".env file"
-    return None, None
-
-
-key, source = load_key()
+key, URL, MODEL, source = load_config()
 if not key:
-    print("FAIL: NVIDIA_API_KEY not found in environment or .env")
-    print('Fix: add a line  NVIDIA_API_KEY=nvapi-xxxxxxxx  to .env (no spaces, no quotes needed)')
+    print("FAIL: NVIDIA_API_KEY / OPENROUTER_API_KEY not found in environment or .env")
+    print('Fix: add NVIDIA_API_KEY to .env')
     raise SystemExit(1)
 
 print(f"Key found via {source}: {key[:8]}...{key[-4:]} (length {len(key)})")
-if not key.startswith("nvapi-"):
-    print("WARNING: NVIDIA keys normally start with 'nvapi-'. Check for a copy/paste error.")
+print(f"Target URL: {URL}")
+print(f"Target Model: {MODEL}")
+
 
 body = json.dumps({
     "model": MODEL,

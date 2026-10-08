@@ -45,8 +45,9 @@ except ImportError:
     sys.exit(1)
 
 
-MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
-API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+MODEL = os.getenv("GROQ_MODEL", os.getenv("OPENROUTER_MODEL", "llama-3.3-70b-versatile"))
+API_KEY = os.getenv("GROQ_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 
 # The exact query and stated budget from the transcript under investigation.
 TEST_QUERY = (
@@ -71,9 +72,9 @@ class DiagnosticResult:
 
 def _get_client() -> OpenAI:
     if not API_KEY:
-        print("ERROR: OPENROUTER_API_KEY is not set in the environment.")
+        print("ERROR: GROQ_API_KEY (or OPENROUTER_API_KEY) is not set in the environment.")
         sys.exit(1)
-    return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=API_KEY, timeout=60.0)
+    return OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=60.0)
 
 
 def _inspect_message_object(message: Any) -> tuple[bool, Optional[str]]:

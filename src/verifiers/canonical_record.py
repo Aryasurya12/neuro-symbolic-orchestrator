@@ -4,7 +4,7 @@ Provides a unified, auditable schema for single-run results across all 4 modes:
 - Mode 1: Raw LLM (Groq API)
 - Mode 2: Schema-Constrained LLM (Groq API)
 - Mode 3: Pure Symbolic Pipeline (Local OR Solvers + IndependentChecker)
-- Mode 4: Neuro-Symbolic Pipeline (Local OR Solvers + IndependentChecker + NVIDIA Stage 6 Explainer)
+- Mode 4: Neuro-Symbolic Pipeline (Local OR Solvers + IndependentChecker + Groq Stage 6 Explainer)
 
 Ensures that the CLI, Comparative Runner, Terminal Stage Trace, and Streamlit Dashboard
 render the EXACT same record and verdicts without recalculating or re-solving.
@@ -34,6 +34,11 @@ class OptimalityStatus(str, Enum):
     HEURISTIC_FEASIBLE = "Optimality not established (Heuristic approximation)"
     INFEASIBLE = "Infeasible"
     UNVERIFIED = "Unverified (Prose / Schema Drift)"
+    CLARIFICATION_REQUIRED = "Clarification Required"
+    UNSUPPORTED = "Unsupported Workload"
+    CONFLICTING = "Conflicting Requirements"
+    INFRASTRUCTURE_FAILURE = "Infrastructure / API Failure"
+    TRUNCATION_FAILURE = "Provider Truncation (Max Tokens)"
 
 
 class NormalizationStatus(str, Enum):
@@ -47,6 +52,7 @@ class NormalizationStatus(str, Enum):
     API_FAILURE = "API_FAILURE"
     CLARIFICATION_REQUIRED = "CLARIFICATION_REQUIRED"
     AMBIGUOUS = "AMBIGUOUS"
+    TRUNCATION_FAILURE = "TRUNCATION_FAILURE"
 
 
 class ExplanationSource(str, Enum):

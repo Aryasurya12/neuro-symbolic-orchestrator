@@ -48,8 +48,18 @@ class OutputNormalizer:
         raw_text: str,
         problem_type: str = "ILP_VM_Allocation",
         contract_data: Optional[Dict[str, Any]] = None,
+        finish_reason: Optional[str] = None,
     ) -> Tuple[NormalizationStatus, Optional[float], Any, List[str], List[ExtractedEvidence]]:
         """Extracts monthly cost and structured decision vector from Mode 1 prose with scope awareness."""
+        if finish_reason == "length" and (not raw_text or not raw_text.strip()):
+            return (
+                NormalizationStatus.TRUNCATION_FAILURE,
+                None,
+                None,
+                ["Provider/config truncation failure: model exceeded completion token budget (finish_reason='length')."],
+                [],
+            )
+
         if not raw_text or not raw_text.strip():
             return (
                 NormalizationStatus.MALFORMED_OUTPUT,
@@ -577,15 +587,33 @@ class OutputNormalizer:
         raw_json_or_text: Any,
         requested_problem_type: str = "ILP_VM_Allocation",
         contract_data: Optional[Dict[str, Any]] = None,
+        finish_reason: Optional[str] = None,
     ) -> Tuple[NormalizationStatus, Optional[float], Any, List[str], List[ExtractedEvidence]]:
         """Parses and validates Mode 2 structured JSON against the requested problem task."""
         errors: List[str] = []
         evidence_list: List[ExtractedEvidence] = []
 
+        if finish_reason == "length" and (not raw_json_or_text or (isinstance(raw_json_or_text, str) and not raw_json_or_text.strip())):
+            return (
+                NormalizationStatus.TRUNCATION_FAILURE,
+                None,
+                None,
+                ["Provider/config truncation failure: model exceeded completion token budget (finish_reason='length')."],
+                [],
+            )
+
         if isinstance(raw_json_or_text, str):
             first_b = raw_json_or_text.find("{")
             last_b = raw_json_or_text.rfind("}")
             if first_b == -1 or last_b == -1:
+                if finish_reason == "length":
+                    return (
+                        NormalizationStatus.TRUNCATION_FAILURE,
+                        None,
+                        None,
+                        ["Provider/config truncation failure: JSON output truncated mid-stream (finish_reason='length')."],
+                        [],
+                    )
                 return (
                     NormalizationStatus.MALFORMED_OUTPUT,
                     None,

@@ -250,7 +250,7 @@ class FinOpsExplainer:
         solver_result: Dict[str, Any],
         timeout_seconds: Optional[float] = None,
     ) -> Tuple[Optional[List[str]], Optional[str], Optional[float], ExplanationSource]:
-        """Invokes NVIDIA API to generate dynamic, AI-reasoned FinOps advice."""
+        """Invokes Groq API to generate dynamic, AI-reasoned FinOps advice."""
         load_dotenv()
         provider_name, api_key, base_url, target_model, default_timeout = settings.get_mode4_provider_config()
         if not api_key:
@@ -308,15 +308,34 @@ class FinOpsExplainer:
                 timeout=effective_timeout,
                 max_retries=0,
             )
-            resp = client.chat.completions.create(
-                model=target_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.2,
-                max_tokens=max_tokens,
-            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            try:
+                resp = client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=max_tokens,
+                    extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                )
+            except Exception:
+                try:
+                    resp = client.chat.completions.create(
+                        model=target_model,
+                        messages=messages,
+                        temperature=0.2,
+                        max_tokens=max_tokens,
+                        reasoning_effort="low",
+                    )
+                except Exception:
+                    resp = client.chat.completions.create(
+                        model=target_model,
+                        messages=messages,
+                        temperature=0.2,
+                        max_tokens=max_tokens,
+                    )
             elapsed_s = round(time.perf_counter() - t0, 2)
             if not resp or not resp.choices:
                 return None, None, elapsed_s, ExplanationSource.UNAVAILABLE

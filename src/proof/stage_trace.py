@@ -495,7 +495,7 @@ def run_llm_mode_trace(
 def run_mode4_pipeline_trace(
     query_text: str, yes_flag: bool = False, silent: bool = False, offline: bool = False
 ) -> CanonicalExecutionRecord:
-    """Runs a single query through the Mode 4 Neuro-Symbolic Pipeline with NVIDIA Neural Requirement Interpretation."""
+    """Runs a single query through the Mode 4 Neuro-Symbolic Pipeline with Groq/Neural Requirement Interpretation."""
     def log(msg: str) -> None:
         if not silent:
             print(msg)
@@ -539,6 +539,7 @@ def run_mode4_pipeline_trace(
             "NEEDS_CLARIFICATION": NormalizationStatus.CLARIFICATION_REQUIRED,
             "UNSUPPORTED": NormalizationStatus.TASK_INCOMPATIBLE,
             "CONFLICTING_REQUIREMENTS": NormalizationStatus.NORMALIZATION_FAILURE,
+            "TRUNCATION_FAILURE": NormalizationStatus.TRUNCATION_FAILURE,
             "MISSING_CREDENTIALS": NormalizationStatus.API_FAILURE,
             "TIMEOUT": NormalizationStatus.API_FAILURE,
             "NETWORK_ERROR": NormalizationStatus.API_FAILURE,
@@ -546,9 +547,20 @@ def run_mode4_pipeline_trace(
             "SCHEMA_ERROR": NormalizationStatus.MALFORMED_OUTPUT,
         }
         norm_stat = status_norm_map.get(nvd_res.status, NormalizationStatus.NORMALIZATION_FAILURE)
+
+        status_opt_map = {
+            "NEEDS_CLARIFICATION": OptimalityStatus.CLARIFICATION_REQUIRED,
+            "UNSUPPORTED": OptimalityStatus.UNSUPPORTED,
+            "CONFLICTING_REQUIREMENTS": OptimalityStatus.CONFLICTING,
+            "TRUNCATION_FAILURE": OptimalityStatus.TRUNCATION_FAILURE,
+            "MISSING_CREDENTIALS": OptimalityStatus.INFRASTRUCTURE_FAILURE,
+            "TIMEOUT": OptimalityStatus.INFRASTRUCTURE_FAILURE,
+            "NETWORK_ERROR": OptimalityStatus.INFRASTRUCTURE_FAILURE,
+        }
+        opt_stat = status_opt_map.get(nvd_res.status, OptimalityStatus.UNVERIFIED)
         
         # Determine feasibility: infrastructure errors leave feasibility as NOT_EVALUATED
-        if nvd_res.status in ["MISSING_CREDENTIALS", "TIMEOUT", "NETWORK_ERROR", "INFRASTRUCTURE_ERROR", "API_FAILURE"]:
+        if nvd_res.status in ["MISSING_CREDENTIALS", "TIMEOUT", "NETWORK_ERROR", "INFRASTRUCTURE_ERROR", "API_FAILURE", "TRUNCATION_FAILURE"]:
             feas = FeasibilityStatus.NOT_EVALUATED
             summary_stat = f"Neural Interpretation: {nvd_res.status}"
         elif nvd_res.status == "NEEDS_CLARIFICATION":
@@ -589,7 +601,7 @@ def run_mode4_pipeline_trace(
             normalization_errors=violations,
             extracted_evidence=nvd_res.extracted_evidence,
             feasibility=feas,
-            optimality_status=OptimalityStatus.UNVERIFIED,
+            optimality_status=opt_stat,
             violations=violations,
             summary_status=summary_stat,
             failed_stage=1,
@@ -629,7 +641,9 @@ def run_mode4_pipeline_trace(
             problem_type=contract.problem_type,
             requirements=contract.model_dump(),
             normalization_status=NormalizationStatus.SOLVER_INFEASIBLE,
-            summary_status=s4_err or "Solver failed",
+            optimality_status=OptimalityStatus.INFEASIBLE,
+            feasibility=FeasibilityStatus.FAIL,
+            summary_status=s4_err or "Solver failed / Infeasible",
             failed_stage=4,
             parsing_ms=elapsed_nvd_ms,
             solving_ms=solving_ms,

@@ -160,42 +160,98 @@ def execute_dashboard_llm_request(
                 {"role": "user", "content": f"Optimize allocation for: \"{query}\". Respond in JSON."},
             ]
 
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.0 if mode_num == 2 else 0.2,
-            max_tokens=max_tokens,
-        )
+        # Attempt execution helper with reasoning effort setting
+        def _invoke_llm_attempt(attempt_num: int, tok_limit: int) -> Tuple[Any, Optional[str], str, Optional[Dict[str, Any]]]:
+            # Try setting low reasoning effort if supported by provider/model
+            try:
+                r = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.0 if mode_num == 2 else 0.2,
+                    max_tokens=tok_limit,
+                    extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                )
+            except Exception:
+                try:
+                    r = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0.0 if mode_num == 2 else 0.2,
+                        max_tokens=tok_limit,
+                        reasoning_effort="low",
+                    )
+                except Exception:
+                    r = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0.0 if mode_num == 2 else 0.2,
+                        max_tokens=tok_limit,
+                    )
+            ch = r.choices[0] if r.choices else None
+            f_reason = getattr(ch, "finish_reason", "unknown") if ch else "empty"
+            c_text = (ch.message.content or "").strip() if ch and ch.message else ""
+            u_dict = {
+                "prompt_tokens": r.usage.prompt_tokens,
+                "completion_tokens": r.usage.completion_tokens,
+                "total_tokens": r.usage.total_tokens,
+            } if hasattr(r, "usage") and r.usage else None
+            return r, f_reason, c_text, u_dict
+
+        attempts: List[Dict[str, Any]] = []
+        initial_max_tokens = max_tokens
+        retry_max_tokens = max(8192, max_tokens * 2)
+
+        # Attempt 1
+        resp, finish_reason, raw_content, usage_info = _invoke_llm_attempt(1, initial_max_tokens)
+        attempts.append({
+            "attempt": 1,
+            "max_tokens": initial_max_tokens,
+            "finish_reason": finish_reason,
+            "content_len": len(raw_content),
+            "status": "TRUNCATED" if finish_reason == "length" else ("EMPTY" if not raw_content else "OK"),
+        })
+
+        # Retry once if truncated on Attempt 1
+        if finish_reason == "length" or (not raw_content and finish_reason in ["length", "unknown"]):
+            resp_retry, retry_finish, retry_content, retry_usage = _invoke_llm_attempt(2, retry_max_tokens)
+            attempts.append({
+                "attempt": 2,
+                "max_tokens": retry_max_tokens,
+                "finish_reason": retry_finish,
+                "content_len": len(retry_content),
+                "status": "TRUNCATED" if retry_finish == "length" else ("EMPTY" if not retry_content else "OK"),
+            })
+            if retry_content:
+                resp = resp_retry
+                finish_reason = retry_finish
+                raw_content = retry_content
+                if retry_usage:
+                    usage_info = retry_usage
+            else:
+                finish_reason = retry_finish
+
         elapsed_s = time.perf_counter() - t0
         run_record["elapsed_seconds"] = round(elapsed_s, 2)
         run_record["elapsed_ms"] = round(elapsed_s * 1000.0, 1)
-
-        choice = resp.choices[0] if resp.choices else None
-        if not choice:
-            run_record["status"] = "empty_response"
-            run_record["error_message"] = "Provider returned no choices."
-            return run_record
-
-        finish_reason = getattr(choice, "finish_reason", "unknown")
+        run_record["attempts"] = attempts
         run_record["finish_reason"] = finish_reason
-        raw_content = (choice.message.content or "").strip()
         run_record["content"] = raw_content
-        run_record["response_id"] = getattr(resp, "id", None)
-        if hasattr(resp, "usage") and resp.usage:
-            run_record["usage"] = {
-                "prompt_tokens": resp.usage.prompt_tokens,
-                "completion_tokens": resp.usage.completion_tokens,
-                "total_tokens": resp.usage.total_tokens,
-            }
+        run_record["response_id"] = getattr(resp, "id", None) if resp else None
+        if usage_info:
+            run_record["usage"] = usage_info
 
         if not raw_content:
-            run_record["status"] = "empty_response"
-            run_record["error_message"] = "Model returned empty content."
+            if finish_reason == "length":
+                run_record["status"] = "truncation_failure"
+                run_record["error_message"] = "Provider/config truncation failure: reasoning model exceeded completion token budget (finish_reason='length')."
+            else:
+                run_record["status"] = "empty_response"
+                run_record["error_message"] = "Model returned empty content."
             return run_record
 
         if finish_reason == "length":
             run_record["status"] = "truncated"
-            run_record["error_message"] = "Generation reached max token limit and was truncated."
+            run_record["error_message"] = "Generation reached max token limit and was truncated (finish_reason='length')."
 
         # Compute ground truth catalog cost if possible
         budget = float(getattr(contract, "budget_max_usd", 500.0)) if contract else 500.0
@@ -226,7 +282,7 @@ def execute_dashboard_llm_request(
                     run_record["error_usd"] = err_usd
                     run_record["error_pct"] = err_pct
                     run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
-                run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
+                run_record["status"] = "success" if run_record.get("status") not in ["truncated", "truncation_failure"] else run_record["status"]
             else:
                 run_record["status"] = "unparseable_prose"
                 run_record["error_message"] = "No dollar amount ($XX.XX) found in natural language response."
@@ -246,7 +302,7 @@ def execute_dashboard_llm_request(
                         run_record["error_usd"] = err_usd
                         run_record["error_pct"] = err_pct
                         run_record["overflow_usd"] = round(max(0.0, (catalog_cost_lookup or rep_cost) - budget), 2)
-                    run_record["status"] = "success" if run_record.get("status") != "truncated" else "truncated"
+                    run_record["status"] = "success" if run_record.get("status") not in ["truncated", "truncation_failure"] else run_record["status"]
                 else:
                     run_record["status"] = "invalid_schema"
                     run_record["error_message"] = "Response does not contain valid JSON brackets."

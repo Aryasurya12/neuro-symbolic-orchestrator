@@ -1,12 +1,13 @@
-"""Standalone OpenRouter LLM Connection Verification Script for Neurasym.
+"""Standalone LLM Connection Verification Script for Neurasym.
 
-Performs exactly one isolated inference request against the configured OpenRouter model
+Performs exactly one isolated inference request against the configured Groq model
 using the project's centralized settings (config.settings).
 Does NOT import or trigger the dashboard, solvers, orchestrator, explainer, or benchmarks.
 """
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -37,23 +38,32 @@ def run_connection_test(
     timeout_seconds: float = 360.0,
     max_tokens: int = 4096,
 ) -> dict:
-    """Executes a single, non-streaming test inference request to OpenRouter."""
-    api_key = settings.OPENROUTER_API_KEY
+    """Executes a single, non-streaming test inference request to Groq API (or configured provider)."""
+    api_key = (
+        os.getenv("GROQ_API_KEY")
+        or getattr(settings, "GROQ_API_KEY", "")
+        or os.getenv("OPENROUTER_API_KEY")
+        or getattr(settings, "OPENROUTER_API_KEY", "")
+    )
     if not api_key:
         return {
             "auth_success": False,
             "request_success": False,
             "marker_success": False,
             "error_type": "ConfigurationError",
-            "error_message": "OPENROUTER_API_KEY is missing or empty in configuration / .env.",
+            "error_message": "GROQ_API_KEY is missing or empty in configuration / .env.",
         }
 
-    target_model = model or settings.OPENROUTER_MODEL
+    base_url = (
+        os.getenv("GROQ_BASE_URL")
+        or getattr(settings, "GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+    )
+    target_model = model or os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
     prompt = "Reply with exactly: NEURASYM_CONNECTION_OK"
     expected_marker = "NEURASYM_CONNECTION_OK"
 
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url=base_url,
         api_key=api_key,
         timeout=timeout_seconds,
         max_retries=0,
@@ -184,9 +194,9 @@ def main():
     args = parser.parse_args()
 
     print("====================================================================")
-    print("🔌 Neurasym: Single-Request OpenRouter LLM Connection Verification")
+    print("🔌 Neurasym: Single-Request Groq LLM Connection Verification")
     print("====================================================================")
-    print(f"Target Model:    {args.model or settings.OPENROUTER_MODEL}")
+    print(f"Target Model:    {args.model or getattr(settings, 'GROQ_MODEL', 'llama-3.3-70b-versatile')}")
     print(f"Request Timeout: {args.timeout}s | Max Retries: 0 | Max Tokens: {args.max_tokens}")
     print("Executing 1 non-streaming test request... (please wait)")
     print("--------------------------------------------------------------------")
