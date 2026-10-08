@@ -44,6 +44,7 @@ class OptimalityStatus(str, Enum):
 class NormalizationStatus(str, Enum):
     SUCCESS = "SUCCESS"
     NORMALIZATION_FAILURE = "NORMALIZATION_FAILURE"
+    UNPARSEABLE = "UNPARSEABLE"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     MALFORMED_OUTPUT = "MALFORMED_OUTPUT"
     TASK_INCOMPATIBLE = "TASK_INCOMPATIBLE"
@@ -279,7 +280,7 @@ class CanonicalExecutionRecord:
             "recomputed_cost": recomputed,
             "cost_error": cost_err,
             "feasibility": self.feasibility.value if isinstance(self.feasibility, FeasibilityStatus) else str(self.feasibility),
-            "task_outcome": self.task_outcome or ("SUCCESS" if self.feasibility == FeasibilityStatus.PASS else "FAILURE"),
+            "task_outcome": self.task_outcome or ("NOT_GRADED" if not self.expected_outcome or self.expected_outcome in ["NOT_GRADED", "—"] else ("SUCCESS" if self.feasibility == FeasibilityStatus.PASS else "FAILURE")),
             "optimality_status": self.optimality_status.value if isinstance(self.optimality_status, OptimalityStatus) else str(self.optimality_status),
             "verdict": self.summary_status,
             "is_mock": self.is_mock,

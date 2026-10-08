@@ -70,6 +70,18 @@ class TruthTableEngine:
                 evaluation_reason="Run record is missing or pending evaluation.",
             )
 
+        if not expected_outcome or expected_outcome.strip().upper() in ["NOT_GRADED", "NONE", "UNGRADED", "CUSTOM_QUERY", "CUSTOM", "—", "N/A"]:
+            return TaskEvaluationResult(
+                task_pass=None,
+                is_feasibility_pass=(record.feasibility == FeasibilityStatus.PASS),
+                is_reasoning_failure=False,
+                is_provider_failure=False,
+                is_normalization_failure=False,
+                is_task_outcome_appropriate=False,
+                failure_category="NONE",
+                evaluation_reason="Query has no manifest entry (NOT_GRADED; excluded from pass-rate calculations).",
+            )
+
         exp_clean = expected_outcome.strip().upper()
         norm_stat = record.normalization_status
         feas_stat = record.feasibility
@@ -85,6 +97,19 @@ class TruthTableEngine:
                 is_task_outcome_appropriate=False,
                 failure_category="PROVIDER_ERROR" if norm_stat == NormalizationStatus.API_FAILURE else "NORMALIZATION_ERROR",
                 evaluation_reason=f"Provider/Execution failed: {norm_stat.value} ({'; '.join(record.normalization_errors or ['Unknown provider failure'])})",
+            )
+
+        # Check for unparseable prose responses (not a reasoning error / wrong answer)
+        if norm_stat in [NormalizationStatus.UNPARSEABLE, NormalizationStatus.NORMALIZATION_FAILURE, NormalizationStatus.AMBIGUOUS]:
+            return TaskEvaluationResult(
+                task_pass=0,
+                is_feasibility_pass=False,
+                is_reasoning_failure=False,
+                is_provider_failure=False,
+                is_normalization_failure=True,
+                is_task_outcome_appropriate=False,
+                failure_category="UNPARSEABLE",
+                evaluation_reason=f"Mode 1 prose could not be mapped to a checkable plan ({norm_stat.value}; unparseable prose, not counted as reasoning error).",
             )
 
         # Expected: FEASIBLE
@@ -258,12 +283,16 @@ class TruthTableEngine:
             else:
                 incomplete_count += 1
 
-        # Mode success totals
+        # Mode success totals (graded queries only)
         mode_success_counts = {1: 0, 2: 0, 3: 0, 4: 0}
+        mode_graded_counts = {1: 0, 2: 0, 3: 0, 4: 0}
         for qp in query_patterns:
             for m in [1, 2, 3, 4]:
-                if qp.get(f"mode{m}_pass") == 1:
-                    mode_success_counts[m] += 1
+                pass_val = qp.get(f"mode{m}_pass")
+                if pass_val is not None:
+                    mode_graded_counts[m] += 1
+                    if pass_val == 1:
+                        mode_success_counts[m] += 1
 
         return {
             "total_queries_evaluated": total_queries,
@@ -271,8 +300,9 @@ class TruthTableEngine:
             "incomplete_evaluations": incomplete_count,
             "pattern_counts": pattern_counts,
             "mode_success_counts": mode_success_counts,
+            "mode_graded_counts": mode_graded_counts,
             "mode_success_rates": {
-                f"mode_{m}": round((mode_success_counts[m] / max(1, total_queries)) * 100.0, 2)
+                f"mode_{m}": round((mode_success_counts[m] / max(1, mode_graded_counts[m])) * 100.0, 2) if mode_graded_counts[m] > 0 else 0.0
                 for m in [1, 2, 3, 4]
             },
         }

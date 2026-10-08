@@ -193,18 +193,36 @@ def execute_mode_1_raw_llm(
             contract, candidate_dict, silent=False, stage_header="  --- Mode 1 Parameter-Wise Independent Verification ---"
         )
         opt_verdict_stat = OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.UNVERIFIED.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.UNVERIFIED
+        feas_status_final = FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL
+        summary_status_final = "VALID_PLAN (Feasible against checked constraints)" if feas_pass else f"INVALID_PLAN (Violations: {', '.join(check.get('violations', []))})"
+    elif norm_status in [NormalizationStatus.TASK_INCOMPATIBLE, NormalizationStatus.SOLVER_INFEASIBLE]:
+        opt_verdict_stat = OptimalityStatus.UNSUPPORTED if norm_status == NormalizationStatus.TASK_INCOMPATIBLE else OptimalityStatus.INFEASIBLE
+        check = {
+            "feasible_against_contract": False,
+            "optimality_verdict": opt_verdict_stat.value,
+            "summary_status": f"REFUSAL_OR_UNSUPPORTED ({norm_status.value})",
+            "violations": norm_errors or ["Model stated workload is unsupported/infeasible"],
+            "parameter_checks": [],
+        }
+        feas_pass = False
+        feas_status_final = FeasibilityStatus.NOT_EVALUABLE
+        summary_status_final = f"REFUSAL_OR_UNSUPPORTED ({norm_status.value})"
+        print(f"    * Constraint Feasibility   : NOT_EVALUABLE (Refusal/Unsupported)")
+        print(f"    * FINAL VERDICT            : Refusal / Unsupported ({norm_status.value})")
     else:
         opt_verdict_stat = OptimalityStatus.TRUNCATION_FAILURE if norm_status == NormalizationStatus.TRUNCATION_FAILURE else OptimalityStatus.UNVERIFIED
         check = {
             "feasible_against_contract": False,
             "optimality_verdict": opt_verdict_stat.value,
-            "summary_status": f"Rejected ({norm_status.value})",
+            "summary_status": f"UNPARSEABLE ({norm_status.value})",
             "violations": norm_errors or ["Failed extraction/normalization check"],
             "parameter_checks": [],
         }
         feas_pass = False
-        print(f"    * Constraint Feasibility   : FAIL")
-        print(f"    * FINAL VERDICT            : Rejected ({norm_status.value})")
+        feas_status_final = FeasibilityStatus.NOT_EVALUABLE
+        summary_status_final = f"UNPARSEABLE ({norm_status.value})"
+        print(f"    * Constraint Feasibility   : NOT_EVALUABLE (No checkable plan)")
+        print(f"    * FINAL VERDICT            : UNPARSEABLE ({norm_status.value})")
 
     elapsed_verif_ms = (time.perf_counter() - t_verif) * 1000.0
     total_ms = (time.perf_counter() - t_start) * 1000.0
@@ -225,14 +243,14 @@ def execute_mode_1_raw_llm(
         normalization_status=norm_status,
         normalization_errors=norm_errors,
         extracted_evidence=evidence,
-        feasibility=FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL,
+        feasibility=feas_status_final,
         optimality_status=opt_verdict_stat,
         recomputed_cost_usd=check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd"),
         cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
         cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),
         violations=check.get("violations", []),
         audit_events=_extract_audit_events(check.get("parameter_checks", [])),
-        summary_status=check.get("summary_status", "Rejected"),
+        summary_status=summary_status_final,
         parsing_ms=elapsed_llm_ms,
         solving_ms=elapsed_norm_ms,
         verification_ms=elapsed_verif_ms,
@@ -439,15 +457,21 @@ def find_manifest_entry(query_input: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def evaluate_task_outcome(record: CanonicalExecutionRecord, expected_outcome: str) -> str:
-    """Evaluates task outcome (SUCCESS vs FAILURE) against the human-written manifest expected outcome."""
+def evaluate_task_outcome(record: CanonicalExecutionRecord, expected_outcome: Optional[str]) -> str:
+    """Evaluates task outcome (SUCCESS vs FAILURE vs NOT_GRADED) against the human-written manifest expected outcome."""
+    if not expected_outcome or expected_outcome.strip().upper() in ["NOT_GRADED", "NONE", "UNGRADED", "CUSTOM_QUERY", "CUSTOM", "—", "N/A"]:
+        return "NOT_GRADED"
     try:
         from src.benchmarks.truth_table import TruthTableEngine
         eval_res = TruthTableEngine.evaluate_mode_task_success(record, expected_outcome=expected_outcome)
+        if eval_res.task_pass is None:
+            return "NOT_GRADED"
         return "SUCCESS" if eval_res.task_pass == 1 else "FAILURE"
     except Exception:
         exp_clean = (expected_outcome or "FEASIBLE").strip().upper()
-        if exp_clean == "FEASIBLE":
+        if exp_clean in ["NOT_GRADED", "NONE", "UNGRADED", "—"]:
+            return "NOT_GRADED"
+        elif exp_clean == "FEASIBLE":
             return "SUCCESS" if record.feasibility == FeasibilityStatus.PASS else "FAILURE"
         elif exp_clean == "CLARIFICATION_REQUIRED":
             is_clar = (
@@ -868,7 +892,7 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
         claim_s = f"${r.claimed_cost_usd:,.2f}" if r.claimed_cost_usd is not None else "—"
         recomp_s = f"${r.recomputed_cost_usd:,.2f}" if r.recomputed_cost_usd is not None else "—"
         feas_s = f"[{r.feasibility.value}]"
-        task_s = f"[{r.task_outcome or ('SUCCESS' if r.feasibility == FeasibilityStatus.PASS else 'FAILURE')}]"
+        task_s = f"[{r.task_outcome or ('NOT_GRADED' if not r.expected_outcome or r.expected_outcome in ['NOT_GRADED', '—'] else ('SUCCESS' if r.feasibility == FeasibilityStatus.PASS else 'FAILURE'))}]"
         proof_s = r.optimality_status.value[:w_proof]
         lat_s = f"{r.total_duration_ms:.1f}ms" if r.total_duration_ms < 1000 else f"{r.total_duration_ms/1000.0:.2f}s"
 
@@ -905,7 +929,15 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
             print(f"    -> Pipeline Divergence: Mode 3 evaluated [{m3.feasibility.value}], Mode 4 evaluated [{m4.feasibility.value}] due to distinct interpretation/solver paths.")
 
     if m1:
-        print(f"  • Mode 1 (Raw LLM) Normalization   : {m1.normalization_status.value} (Task [{m1.task_outcome}], Claimed: ${m1.claimed_cost_usd or 0.0:.2f})")
+        if m1.normalization_status in [NormalizationStatus.TASK_INCOMPATIBLE, NormalizationStatus.SOLVER_INFEASIBLE]:
+            m1_plan_cat = "REFUSAL_OR_UNSUPPORTED"
+        elif m1.feasibility == FeasibilityStatus.PASS:
+            m1_plan_cat = "VALID_PLAN"
+        elif m1.normalization_status in [NormalizationStatus.UNPARSEABLE, NormalizationStatus.NORMALIZATION_FAILURE, NormalizationStatus.AMBIGUOUS, NormalizationStatus.MALFORMED_OUTPUT] or m1.feasibility == FeasibilityStatus.NOT_EVALUABLE:
+            m1_plan_cat = "UNPARSEABLE (Not counted as wrong answer)"
+        else:
+            m1_plan_cat = "INVALID_PLAN"
+        print(f"  • Mode 1 (Raw LLM) Classification  : {m1_plan_cat} (Status: {m1.normalization_status.value}, Task: [{m1.task_outcome}], Claimed: ${m1.claimed_cost_usd or 0.0:.2f})")
     if m2:
         print(f"  • Mode 2 (Schema LLM) Normalization: {m2.normalization_status.value} (Task [{m2.task_outcome}], Claimed: ${m2.claimed_cost_usd or 0.0:.2f})")
 
@@ -923,7 +955,10 @@ def print_manifest_grading_and_mismatch_report(
     print_banner("MANIFEST GROUND-TRUTH GRADING & INTERPRETATION-MISMATCH REPORT", char="=")
     if not manifest_entry:
         print("  [Manifest Reference: Query not explicitly found in development_query_manifest.json]")
-        print("  Evaluating ad-hoc against parsed contract specification.")
+        print("  Task Outcome: NOT_GRADED (Ad-hoc query excluded from manifest pass-rate grading)\n")
+        print("  ALL-MODE AUDIT SUMMARY:")
+        for r in records:
+            print(f"    • {r.mode_name:<26} -> Task Outcome: [NOT_GRADED] | Allocation Feasibility: [{r.feasibility.value}] | Status: {r.summary_status}")
         print("=" * 88 + "\n")
         return
 
@@ -1118,7 +1153,7 @@ def main() -> None:
         query_text = query_input
 
     query_id = manifest_entry.get("query_id") if manifest_entry else None
-    expected_outcome = manifest_entry.get("expected_outcome", "FEASIBLE") if manifest_entry else "FEASIBLE"
+    expected_outcome = manifest_entry.get("expected_outcome") if manifest_entry else None
 
     print_banner(
         "NEURASYM NEURO-SYMBOLIC 4-WAY COMPARATIVE BENCHMARK",
@@ -1157,7 +1192,7 @@ def main() -> None:
     # Attach task outcomes and manifest provenance to all records
     for r in records:
         r.query_id = query_id
-        r.expected_outcome = expected_outcome
+        r.expected_outcome = expected_outcome or "NOT_GRADED"
         r.task_outcome = evaluate_task_outcome(r, expected_outcome)
 
     # Print comparative summary table
