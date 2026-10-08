@@ -175,7 +175,7 @@ class CloudOptimizationContract(BaseModel):
         default_factory=list,
         description="Explanation when requirements contradict each other",
     )
-    extracted_spans: Dict[str, str] = Field(
+    extracted_spans: Dict[str, Optional[str]] = Field(
         default_factory=dict,
         description="Exact source text substrings justifying extracted fields",
     )
@@ -184,6 +184,48 @@ class CloudOptimizationContract(BaseModel):
         default_factory=dict,
         description="Semantic and qualitative intent metadata",
     )
+
+    @field_validator("latency_max_ms", mode="before")
+    @classmethod
+    def validate_latency(cls, v: Any) -> float:
+        if v is None:
+            return 100.0
+        return float(v)
+
+    @field_validator("sla_availability_pct", mode="before")
+    @classmethod
+    def validate_sla(cls, v: Any) -> float:
+        if v is None:
+            return 99.9
+        return float(v)
+
+    @field_validator("service_count", mode="before")
+    @classmethod
+    def validate_service_count(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
+
+    @field_validator("required_vcpus", mode="before")
+    @classmethod
+    def validate_vcpus(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
+
+    @field_validator("required_ram_gb", mode="before")
+    @classmethod
+    def validate_ram(cls, v: Any) -> float:
+        if v is None:
+            return 1.0
+        return float(v)
+
+    @field_validator("extracted_spans", mode="before")
+    @classmethod
+    def clean_extracted_spans(cls, v: Any) -> Dict[str, Optional[str]]:
+        if isinstance(v, dict):
+            return {str(k): (str(val) if val is not None else None) for k, val in v.items()}
+        return {}
 
     @field_validator("budget_max_usd")
     @classmethod
