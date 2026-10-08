@@ -43,6 +43,58 @@ class OutputNormalizer:
     HOURS_PER_MONTH: float = 730.0
 
     @classmethod
+    def _filter_monthly_dollar_candidates(
+        cls,
+        raw_text: str,
+        contract_data: Optional[Dict[str, Any]] = None,
+        extracted_hourly_cost: Optional[float] = None,
+    ) -> List[Tuple[float, str]]:
+        """Filters dollar amounts in prose, strictly excluding unit rates, budget caps, arithmetic factors, and refusal figures."""
+        matches = list(re.finditer(r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)", raw_text))
+        valid_candidates = []
+        budget_cap = float(contract_data.get("budget_max_usd", -999.0)) if contract_data and contract_data.get("budget_max_usd") is not None else -999.0
+
+        for m in matches:
+            val_str = m.group(1).replace(",", "")
+            try:
+                val = float(val_str)
+            except ValueError:
+                continue
+
+            start_ctx = max(0, m.start() - 35)
+            end_ctx = min(len(raw_text), m.end() + 35)
+            imm_prefix = raw_text[start_ctx:m.start()].lower()
+            imm_suffix = raw_text[m.end():end_ctx].lower()
+
+            # 1. Exclude if equal to hourly cost or explicitly marked hourly
+            if extracted_hourly_cost is not None and abs(val - extracted_hourly_cost) < 0.001:
+                continue
+            if re.search(r"^\s*(?:/\s*(?:hr|hour|h\b)|\bper\s+(?:hr|hour|h\b)|\bhourly\b)", imm_suffix):
+                continue
+            if re.search(r"(?:hourly\s+rate|hourly\s+cost|per\s+hour|per\s+hr|at)\s*[:=]?\s*$", imm_prefix):
+                continue
+
+            # 2. Exclude unit rates (per mbps, per replica, per instance, per vcpu, per gb, /mo per, base replica fee)
+            if re.search(r"^\s*(?:/\s*(?:mbps|replica|rep|instance|core|gb|unit|node)|\bper\s+(?:mbps|replica|rep|instance|core|gb|unit|node))", imm_suffix):
+                continue
+            if re.search(r"(?:base\s+replica\s+fee|unit\s+price|price\s+per\s+mbps)\s*[:=]?\s*$", imm_prefix):
+                continue
+
+            # 3. Exclude budget caps: "budget of $X", "budget $X", "under $X", "limit of $X", "cap of $X", "for under $X"
+            if re.search(r"(?:budget|budget\s+cap|budget\s+of|under|limit\s+of|limit\s+is|spend\s+of|within\s+(?:the|your)?|max\s+budget)\s*(?:of|is|:|=|under|capped\s+at)?\s*$", imm_prefix):
+                continue
+            if abs(val - budget_cap) < 0.01 and re.search(r"(?:budget|under|limit|cap|ceiling)", imm_prefix + " " + imm_suffix):
+                continue
+
+            # 4. Exclude arithmetic operators / formulas: e.g. "4 * $121.47" or "(105.0 * $0.08)"
+            if re.search(r"[\*\+]\s*$", imm_prefix) or re.search(r"^\s*[\*\+]", imm_suffix):
+                continue
+
+            valid_candidates.append((val, m.group(0)))
+
+        return valid_candidates
+
+    @classmethod
     def normalize_mode1_prose(
         cls,
         raw_text: str,
@@ -71,6 +123,51 @@ class OutputNormalizer:
 
         errors: List[str] = []
         evidence_list: List[ExtractedEvidence] = []
+        lower_text = raw_text.lower()
+
+        # 0. Check for explicit refusal or infeasibility statement from the LLM
+        unsupported_phrases = [
+            "no gpu skus",
+            "no gpu instances",
+            "gpu instances are not supported",
+            "does not offer gpu",
+            "cannot compute a deployment that satisfies",
+            "do not have access to gpu",
+            "hardware not supported",
+            "unsupported workload",
+        ]
+        if any(p in lower_text for p in unsupported_phrases):
+            return (
+                NormalizationStatus.TASK_INCOMPATIBLE,
+                None,
+                None,
+                ["Model explicitly reported workload is unsupported/refused in this environment."],
+                evidence_list,
+            )
+
+        infeasible_phrases = [
+            "cannot be satisfied",
+            "is infeasible",
+            "are infeasible",
+            "mutually exclusive",
+            "cannot provide a feasible deployment",
+            "exceeds the budget",
+            "exceeds your budget",
+            "exceed your budget",
+            "exceed the budget",
+            "budget is too low",
+            "no combination of available",
+            "impossible under",
+            "impossible to satisfy",
+        ]
+        if any(p in lower_text for p in infeasible_phrases):
+            return (
+                NormalizationStatus.SOLVER_INFEASIBLE,
+                None,
+                None,
+                ["Model explicitly stated the requested workload is infeasible within constraints."],
+                evidence_list,
+            )
 
         # 1. Extract Hourly Rate if explicitly stated
         hourly_match = re.search(r"\$\s*(\d+(?:\.\d+)?)\s*(?:/\s*hour|/\s*hr|\bper\s+hour|\bhourly)", raw_text, re.IGNORECASE)
@@ -90,10 +187,10 @@ class OutputNormalizer:
         # Look for Grand / Overall total
         grand_total_patterns = [
             r"(?:grand\s+total|overall\s+total|overall\s+deployment\s+total|total\s+deployment\s+total|deployment\s+total|across\s+all\s+components|combined\s+monthly\s+cost|total\s+spend|total\s+monthly\s+spend)[^\S\r\n]*(?:is|:|=)?[^\S\r\n]*(?:[^\n$]*?)\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
-            r"(?:total\s+cost|monthly\s+cost|total\s+monthly\s+cost)[^\S\r\n]*(?:of|is|:|=|of\s+approximately)?[^\S\r\n]*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:/\s*month|/\s*mo|\bper\s+month|\bmonthly)",
+            r"(?:total\s+(?:estimated\s+)?(?:monthly\s+)?cost|estimated\s+total\s+(?:monthly\s+)?cost|monthly\s+cost|total\s+monthly\s+cost)[^\S\r\n]*(?:of|is|:|=|of\s+approximately)?[^\S\r\n]*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:/\s*month|/\s*mo|\bper\s+month|\bmonthly)?",
             r"\|\s*\*\*Total(?:\s+monthly\s+cost)?\*\*\s*\|[^\n|]*?\*\*(?:Grand\s+total\s*=\s*)?\$\s*(\d+(?:,\d+)*(?:\.\d+)?)[^\n|]*?\*\*",
             r"\|\s*\*\*Total\*\*\s*\|\s*\*\*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)\*\*",
-            r"\btotal\s+cost\s*:\s*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+            r"\btotal\s+(?:estimated\s+)?cost\s*:\s*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
         ]
         grand_total: Optional[float] = None
         grand_total_span: Optional[str] = None
@@ -207,20 +304,19 @@ class OutputNormalizer:
                     )
                 )
             else:
-                all_dollars = [float(x.replace(",", "")) for x in re.findall(r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)", raw_text)]
-                monthly_cand = [d for d in all_dollars if extracted_hourly_cost is None or abs(d - extracted_hourly_cost) > 0.001]
-                if len(monthly_cand) == 1:
-                    extracted_monthly_cost = monthly_cand[0]
+                valid_cands = cls._filter_monthly_dollar_candidates(raw_text, contract_data, extracted_hourly_cost)
+                if len(valid_cands) == 1:
+                    extracted_monthly_cost = valid_cands[0][0]
                     evidence_list.append(
                         ExtractedEvidence(
                             field_name="total_monthly_cost_usd",
-                            extracted_value=monthly_cand[0],
+                            extracted_value=valid_cands[0][0],
                             unit="USD/month",
-                            text_span=f"${monthly_cand[0]:.2f}",
+                            text_span=valid_cands[0][1],
                             confidence="HIGH",
                         )
                     )
-                elif len(monthly_cand) > 1:
+                elif len(valid_cands) > 1:
                     cost_ambiguous = True
                     errors.append("Multiple ambiguous dollar figures in prose without explicit scaling subtotal.")
 
@@ -282,20 +378,19 @@ class OutputNormalizer:
                     )
                 )
             else:
-                all_dollars = [float(x.replace(",", "")) for x in re.findall(r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)", raw_text)]
-                monthly_cand = [d for d in all_dollars if extracted_hourly_cost is None or abs(d - extracted_hourly_cost) > 0.001]
-                if len(monthly_cand) == 1:
-                    extracted_monthly_cost = monthly_cand[0]
+                valid_cands = cls._filter_monthly_dollar_candidates(raw_text, contract_data, extracted_hourly_cost)
+                if len(valid_cands) == 1:
+                    extracted_monthly_cost = valid_cands[0][0]
                     evidence_list.append(
                         ExtractedEvidence(
                             field_name="total_monthly_cost_usd",
-                            extracted_value=monthly_cand[0],
+                            extracted_value=valid_cands[0][0],
                             unit="USD/month",
-                            text_span=f"${monthly_cand[0]:.2f}",
+                            text_span=valid_cands[0][1],
                             confidence="HIGH",
                         )
                     )
-                elif len(monthly_cand) > 1:
+                elif len(valid_cands) > 1:
                     cost_ambiguous = True
                     errors.append("Multiple ambiguous dollar figures in prose without explicit VM subtotal.")
 
@@ -356,20 +451,19 @@ class OutputNormalizer:
                     )
                 )
             else:
-                all_dollars = [float(x.replace(",", "")) for x in re.findall(r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)", raw_text)]
-                monthly_cand = [d for d in all_dollars if extracted_hourly_cost is None or abs(d - extracted_hourly_cost) > 0.001]
-                if len(monthly_cand) == 1:
-                    extracted_monthly_cost = monthly_cand[0]
+                valid_cands = cls._filter_monthly_dollar_candidates(raw_text, contract_data, extracted_hourly_cost)
+                if len(valid_cands) == 1:
+                    extracted_monthly_cost = valid_cands[0][0]
                     evidence_list.append(
                         ExtractedEvidence(
                             field_name="total_monthly_cost_usd",
-                            extracted_value=monthly_cand[0],
+                            extracted_value=valid_cands[0][0],
                             unit="USD/month",
-                            text_span=f"${monthly_cand[0]:.2f}",
+                            text_span=valid_cands[0][1],
                             confidence="HIGH",
                         )
                     )
-                elif len(monthly_cand) > 1:
+                elif len(valid_cands) > 1:
                     cost_ambiguous = True
                     errors.append("Multiple ambiguous dollar figures in prose without explicit DR subtotal.")
 
@@ -414,11 +508,16 @@ class OutputNormalizer:
                     r"(\d+)\s*(?:x|\*|instances?|nodes?|vms?)\s*(?:of\s*)?" + re.escape(sku_name),
                     re.escape(sku_name) + r"\s*(?:x|\*|:\s*|\(quantity:\s*|\(count:\s*)(\d+)",
                     r"deploy\s+(\d+)\s+" + re.escape(sku_name),
+                    r"provision\s+(\d+)\s+" + re.escape(sku_name),
                 ]
                 sku_found = False
                 for q_pat in qty_patterns:
                     qm = re.search(q_pat, raw_text, re.IGNORECASE)
                     if qm:
+                        match_start = max(0, qm.start() - 60)
+                        match_ctx = raw_text[match_start:qm.end()].lower()
+                        if "would need" in match_ctx or "exceed" in match_ctx or "instead of" in match_ctx or "alternative" in match_ctx or "option" in match_ctx:
+                            continue
                         qty = int(qm.group(1) if qm.group(1).isdigit() else qm.group(2))
                         if qty > 0:
                             allocated_vms.append({
@@ -441,34 +540,6 @@ class OutputNormalizer:
                             )
                             sku_found = True
                             break
-
-                if not sku_found:
-                    mention_pat = r"\b" + re.escape(sku_name) + r"\b"
-                    if re.search(mention_pat, raw_text, re.IGNORECASE):
-                        context_match = re.search(
-                            r"(?:consider|alternative|such as|option|instead of|or)\s+[^.\n]*" + re.escape(sku_name),
-                            raw_text,
-                            re.IGNORECASE,
-                        )
-                        if not context_match:
-                            allocated_vms.append({
-                                "sku": sku_name,
-                                "instance_type": sku_name,
-                                "count": 1,
-                                "provider": sdata["provider"],
-                                "vcpus": sdata["vcpus"],
-                                "ram_gb": sdata["ram_gb"],
-                                "monthly_cost": round(sdata["hourly_cost_usd"] * cls.HOURS_PER_MONTH, 2),
-                            })
-                            evidence_list.append(
-                                ExtractedEvidence(
-                                    field_name=f"allocated_vm_{sku_name}",
-                                    extracted_value=1,
-                                    unit="instances (inferred)",
-                                    text_span=sku_name,
-                                    confidence="NEEDS_REVIEW",
-                                )
-                            )
 
             has_any_sku_mention = any(re.search(r"\b" + re.escape(sku_name) + r"\b", raw_text, re.IGNORECASE) for sku_name in cls.KNOWN_SKUS)
             if cost_ambiguous:

@@ -464,7 +464,6 @@ class SCOPEParser:
             try:
                 val = float(cpu_max_match.group(1))
                 params["max_cpu_pct"] = val
-                params["target_cpu_pct"] = val
             except ValueError:
                 pass
 
@@ -473,7 +472,7 @@ class SCOPEParser:
             text,
             re.IGNORECASE,
         )
-        if cpu_target_match and "target_cpu_pct" not in params:
+        if cpu_target_match:
             try:
                 params["target_cpu_pct"] = float(cpu_target_match.group(1))
             except ValueError:
@@ -486,6 +485,8 @@ class SCOPEParser:
                 if "gbps" in bw_match.group(0).lower():
                     val = val * 1000.0
                 params["bandwidth_mbps"] = val
+                params["target_bandwidth_mbps"] = val
+                params["min_bandwidth_mbps"] = val
             except ValueError:
                 pass
 
@@ -548,6 +549,22 @@ class SCOPEParser:
             provenance["cloud_providers"] = "[EXPLICIT]"
         else:
             provenance["cloud_providers"] = "[DEFAULT: Baseline Fallback]"
+
+        # 8. Bandwidth & Scaling Provenance
+        if "target_bandwidth_mbps" in params or "bandwidth_mbps" in params:
+            provenance["target_bandwidth_mbps"] = "[EXPLICIT]"
+        else:
+            provenance["target_bandwidth_mbps"] = "[UNPARSED: Defaulted]"
+
+        if "target_cpu_pct" in params:
+            provenance["target_cpu_pct"] = "[EXPLICIT]"
+        else:
+            provenance["target_cpu_pct"] = "[UNPARSED: Defaulted]"
+
+        if "max_cpu_pct" in params:
+            provenance["max_cpu_pct"] = "[EXPLICIT]"
+        else:
+            provenance["max_cpu_pct"] = "[UNPARSED: Unconstrained]"
 
         metadata["field_provenance"] = provenance
         params["metadata"] = metadata
@@ -615,6 +632,14 @@ class SCOPEParser:
             required_ram_gb=params.get("required_ram_gb", 1.0),
             latency_max_ms=params.get("latency_max_ms", 100.0),
             sla_availability_pct=params.get("sla_availability_pct", 99.9),
+            target_bandwidth_mbps=params.get("target_bandwidth_mbps") or params.get("bandwidth_mbps"),
+            min_bandwidth_mbps=params.get("min_bandwidth_mbps") or params.get("bandwidth_mbps"),
+            max_bandwidth_mbps=params.get("max_bandwidth_mbps"),
+            target_cpu_pct=params.get("target_cpu_pct"),
+            max_cpu_pct=params.get("max_cpu_pct"),
+            primary_region=params.get("primary_region"),
+            secondary_region=params.get("secondary_region"),
+            allowed_regions=params.get("allowed_regions"),
             metadata=params.get("metadata", {}),
         )
 

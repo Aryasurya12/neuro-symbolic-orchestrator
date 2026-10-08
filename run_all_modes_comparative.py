@@ -401,9 +401,82 @@ def execute_mode_2_schema_llm(
     return record
 
 
+def find_manifest_entry(query_input: str) -> Optional[Dict[str, Any]]:
+    """Looks up human-written query specifications from development_query_manifest.json."""
+    manifest_path = "data/development_query_manifest.json"
+    if not os.path.exists(manifest_path):
+        return None
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+    except Exception:
+        return None
+
+    cleaned = query_input.strip()
+    # 1. Number or Q-ID match (e.g. "2" -> Q02, "5" -> Q05, "Q02", "Q05_VM_INCOMPLETE_BUDGET")
+    if re.match(r"^\d+$", cleaned):
+        idx = int(cleaned)
+        target_prefix = f"Q{idx:02d}_"
+        for item in manifest_data:
+            if item.get("query_id", "").startswith(target_prefix):
+                return item
+
+    for item in manifest_data:
+        if item.get("query_id", "").lower() == cleaned.lower():
+            return item
+
+    # 2. Exact match on query_text
+    for item in manifest_data:
+        if item.get("query_text", "").strip().lower() == cleaned.lower():
+            return item
+
+    # 3. Substring match
+    for item in manifest_data:
+        q_text = item.get("query_text", "").strip().lower()
+        if q_text in cleaned.lower() or cleaned.lower() in q_text:
+            return item
+
+    return None
+
+
+def evaluate_task_outcome(record: CanonicalExecutionRecord, expected_outcome: str) -> str:
+    """Evaluates task outcome (SUCCESS vs FAILURE) against the human-written manifest expected outcome."""
+    try:
+        from src.benchmarks.truth_table import TruthTableEngine
+        eval_res = TruthTableEngine.evaluate_mode_task_success(record, expected_outcome=expected_outcome)
+        return "SUCCESS" if eval_res.task_pass == 1 else "FAILURE"
+    except Exception:
+        exp_clean = (expected_outcome or "FEASIBLE").strip().upper()
+        if exp_clean == "FEASIBLE":
+            return "SUCCESS" if record.feasibility == FeasibilityStatus.PASS else "FAILURE"
+        elif exp_clean == "CLARIFICATION_REQUIRED":
+            is_clar = (
+                record.normalization_status == NormalizationStatus.CLARIFICATION_REQUIRED
+                or record.optimality_status == OptimalityStatus.CLARIFICATION_REQUIRED
+                or "clarification" in (record.summary_status or "").lower()
+            )
+            return "SUCCESS" if is_clar else "FAILURE"
+        elif exp_clean == "UNSUPPORTED":
+            is_unsup = (
+                record.normalization_status == NormalizationStatus.TASK_INCOMPATIBLE
+                or record.optimality_status == OptimalityStatus.UNSUPPORTED
+                or "unsupported" in (record.summary_status or "").lower()
+                or "parser_failed" in (record.summary_status or "").lower()
+            )
+            return "SUCCESS" if is_unsup else "FAILURE"
+        elif exp_clean == "INFEASIBLE":
+            is_infeas = (
+                record.normalization_status in [NormalizationStatus.SOLVER_INFEASIBLE, NormalizationStatus.PROVEN_INFEASIBLE]
+                or record.optimality_status in [OptimalityStatus.INFEASIBLE, OptimalityStatus.CONFLICTING]
+                or "infeasible" in (record.summary_status or "").lower()
+            )
+            return "SUCCESS" if is_infeas else "FAILURE"
+        return "SUCCESS" if record.feasibility == FeasibilityStatus.PASS else "FAILURE"
+
+
 def execute_mode_3_symbolic(
     query_text: str,
-) -> Tuple[CanonicalExecutionRecord, CloudOptimizationContract, Dict[str, Any]]:
+) -> Tuple[CanonicalExecutionRecord, Optional[CloudOptimizationContract], Optional[Dict[str, Any]]]:
     """MODE 3: Pure Symbolic Pipeline (100% Offline & Deterministic)."""
     print_banner(
         "MODE 3: PURE SYMBOLIC PIPELINE",
@@ -418,20 +491,59 @@ def execute_mode_3_symbolic(
     t0 = time.perf_counter()
     s1_ok, params, s1_err = trace_stage_1_parsing(parser, query_text)
     p1_ms = (time.perf_counter() - t0) * 1000.0
+    if not s1_ok or params is None:
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        rec = CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            normalization_status=NormalizationStatus.TASK_INCOMPATIBLE,
+            optimality_status=OptimalityStatus.UNSUPPORTED,
+            feasibility=FeasibilityStatus.NOT_EVALUABLE,
+            summary_status=f"STAGE 1 (PARSER_FAILED): {s1_err or 'Lexical parsing failed'}",
+            failed_stage=1,
+            total_duration_ms=total_ms,
+        )
+        return rec, None, None
 
     # Stage 2: Archetype Matching
     t0 = time.perf_counter()
     s2_ok, archetype, s2_err = trace_stage_2_archetype_matching(matcher, query_text, parser)
     p2_ms = (time.perf_counter() - t0) * 1000.0
-    if not archetype:
-        archetype = "ILP_VM_Allocation"
+    if not s2_ok or archetype is None:
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        rec = CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            normalization_status=NormalizationStatus.TASK_INCOMPATIBLE,
+            optimality_status=OptimalityStatus.UNSUPPORTED,
+            feasibility=FeasibilityStatus.NOT_EVALUABLE,
+            summary_status=f"STAGE 1 (PARSER_FAILED): {s2_err or 'Unsupported archetype'}",
+            failed_stage=1,
+            total_duration_ms=total_ms,
+        )
+        return rec, None, None
 
     # Stage 3: Contract Validation
     t0 = time.perf_counter()
     s3_ok, contract, s3_err = trace_stage_3_contract_validation(archetype, params or {})
     p3_ms = (time.perf_counter() - t0) * 1000.0
-    if not contract:
-        contract = CloudOptimizationContract(problem_type="ILP_VM_Allocation")
+    if not s3_ok or contract is None:
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        rec = CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            problem_type=archetype,
+            normalization_status=NormalizationStatus.MALFORMED_OUTPUT,
+            optimality_status=OptimalityStatus.INFEASIBLE,
+            feasibility=FeasibilityStatus.FAIL,
+            summary_status=s3_err or "Contract validation failed",
+            failed_stage=3,
+            total_duration_ms=total_ms,
+        )
+        return rec, None, None
 
     parsing_total_ms = p1_ms + p2_ms + p3_ms
 
@@ -439,8 +551,24 @@ def execute_mode_3_symbolic(
     t0 = time.perf_counter()
     s4_ok, solver_res, s4_err = trace_stage_4_solver_execution(contract, mode=3)
     solving_ms = (time.perf_counter() - t0) * 1000.0
-    if not solver_res:
-        solver_res = {"status": "infeasible", "solver": "Fallback_Local"}
+    if not s4_ok or solver_res is None:
+        total_ms = (time.perf_counter() - t_start) * 1000.0
+        rec = CanonicalExecutionRecord(
+            mode=3,
+            mode_name="Mode 3: Pure Symbolic",
+            original_query=query_text,
+            problem_type=contract.problem_type,
+            requirements=contract.model_dump(),
+            normalization_status=NormalizationStatus.SOLVER_INFEASIBLE,
+            optimality_status=OptimalityStatus.INFEASIBLE,
+            feasibility=FeasibilityStatus.FAIL,
+            summary_status=s4_err or "Solver failed / Infeasible",
+            failed_stage=4,
+            parsing_ms=parsing_total_ms,
+            solving_ms=solving_ms,
+            total_duration_ms=total_ms,
+        )
+        return rec, contract, None
 
     # Stage 5: Independent Verification
     t0 = time.perf_counter()
@@ -709,23 +837,24 @@ def execute_mode_4_neuro_symbolic(
 def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
     print_banner("FOUR-WAY PARADIGM COMPARATIVE BENCHMARK SUMMARY", char="=")
 
-    w_mode = 24
-    w_exec = 36
-    w_norm = 18
-    w_cost = 14
-    w_recomp = 14
-    w_feas = 12
-    w_proof = 34
-    w_lat = 10
+    w_mode = 20
+    w_exec = 32
+    w_norm = 16
+    w_cost = 13
+    w_recomp = 13
+    w_feas = 15
+    w_task = 14
+    w_proof = 28
+    w_lat = 9
 
     sep = (
         f"+{'-'*(w_mode+2)}+{'-'*(w_exec+2)}+{'-'*(w_norm+2)}+{'-'*(w_cost+2)}+"
-        f"{'-'*(w_recomp+2)}+{'-'*(w_feas+2)}+{'-'*(w_proof+2)}+{'-'*(w_lat+2)}+"
+        f"{'-'*(w_recomp+2)}+{'-'*(w_feas+2)}+{'-'*(w_task+2)}+{'-'*(w_proof+2)}+{'-'*(w_lat+2)}+"
     )
     header = (
         f"| {'Execution Mode':<{w_mode}} | {'Execution Path':<{w_exec}} | {'Normalization':<{w_norm}} | "
-        f"{'Claimed Cost':<{w_cost}} | {'Recomputed':<{w_recomp}} | {'Feasibility':<{w_feas}} | "
-        f"{'Optimality / Verdict':<{w_proof}} | {'Latency':<{w_lat}} |"
+        f"{'Claimed Cost':<{w_cost}} | {'Recomputed':<{w_recomp}} | {'Alloc Feas.':<{w_feas}} | "
+        f"{'Task Outcome':<{w_task}} | {'Optimality / Verdict':<{w_proof}} | {'Latency':<{w_lat}} |"
     )
 
     print(sep)
@@ -739,13 +868,14 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
         claim_s = f"${r.claimed_cost_usd:,.2f}" if r.claimed_cost_usd is not None else "—"
         recomp_s = f"${r.recomputed_cost_usd:,.2f}" if r.recomputed_cost_usd is not None else "—"
         feas_s = f"[{r.feasibility.value}]"
+        task_s = f"[{r.task_outcome or ('SUCCESS' if r.feasibility == FeasibilityStatus.PASS else 'FAILURE')}]"
         proof_s = r.optimality_status.value[:w_proof]
         lat_s = f"{r.total_duration_ms:.1f}ms" if r.total_duration_ms < 1000 else f"{r.total_duration_ms/1000.0:.2f}s"
 
         row = (
             f"| {mode_s:<{w_mode}} | {exec_s:<{w_exec}} | {norm_s:<{w_norm}} | "
             f"{claim_s:<{w_cost}} | {recomp_s:<{w_recomp}} | {feas_s:<{w_feas}} | "
-            f"{proof_s:<{w_proof}} | {lat_s:<{w_lat}} |"
+            f"{task_s:<{w_task}} | {proof_s:<{w_proof}} | {lat_s:<{w_lat}} |"
         )
         print(row)
 
@@ -765,8 +895,8 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
         same_feasibility = (m3.feasibility == m4.feasibility)
         same_cost = (m3.recomputed_cost_usd == m4.recomputed_cost_usd)
         print(f"  • Mode 3 vs Mode 4 Independent Execution:")
-        print(f"    - Mode 3 Pure Symbolic Verdict   : [{m3.feasibility.value}] ({m3.summary_status}) | Recomputed Cost: ${m3.recomputed_cost_usd or 0.0:,.2f}")
-        print(f"    - Mode 4 Neuro-Symbolic Verdict  : [{m4.feasibility.value}] ({m4.summary_status}) | Recomputed Cost: ${m4.recomputed_cost_usd or 0.0:,.2f}")
+        print(f"    - Mode 3 Pure Symbolic Verdict   : Alloc [{m3.feasibility.value}] | Task [{m3.task_outcome}] | Cost: ${m3.recomputed_cost_usd or 0.0:,.2f}")
+        print(f"    - Mode 4 Neuro-Symbolic Verdict  : Alloc [{m4.feasibility.value}] | Task [{m4.task_outcome}] | Cost: ${m4.recomputed_cost_usd or 0.0:,.2f}")
         if same_feasibility and same_cost:
             print("    -> Aligned: Both pipelines converged on identical feasibility and allocation cost.")
         elif same_feasibility:
@@ -775,11 +905,113 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
             print(f"    -> Pipeline Divergence: Mode 3 evaluated [{m3.feasibility.value}], Mode 4 evaluated [{m4.feasibility.value}] due to distinct interpretation/solver paths.")
 
     if m1:
-        print(f"  • Mode 1 (Raw LLM) Normalization   : {m1.normalization_status.value} (Claimed: ${m1.claimed_cost_usd or 0.0:.2f})")
+        print(f"  • Mode 1 (Raw LLM) Normalization   : {m1.normalization_status.value} (Task [{m1.task_outcome}], Claimed: ${m1.claimed_cost_usd or 0.0:.2f})")
     if m2:
-        print(f"  • Mode 2 (Schema LLM) Normalization: {m2.normalization_status.value} (Claimed: ${m2.claimed_cost_usd or 0.0:.2f})")
+        print(f"  • Mode 2 (Schema LLM) Normalization: {m2.normalization_status.value} (Task [{m2.task_outcome}], Claimed: ${m2.claimed_cost_usd or 0.0:.2f})")
 
-    print("\n  Requirement Provenance Note: Checked against parsed contract from query input.")
+    print("\n  Requirement Provenance Note: Evaluated against human manifest specification and independent checker.")
+    print("=" * 88 + "\n")
+
+
+def print_manifest_grading_and_mismatch_report(
+    manifest_entry: Optional[Dict[str, Any]],
+    records: List[CanonicalExecutionRecord],
+    m3_contract: Optional[CloudOptimizationContract],
+    m4_contract: Optional[CloudOptimizationContract],
+) -> None:
+    """Grades every mode against the human-written manifest and prints a detailed Mode 3 vs Mode 4 Mismatch Report."""
+    print_banner("MANIFEST GROUND-TRUTH GRADING & INTERPRETATION-MISMATCH REPORT", char="=")
+    if not manifest_entry:
+        print("  [Manifest Reference: Query not explicitly found in development_query_manifest.json]")
+        print("  Evaluating ad-hoc against parsed contract specification.")
+        print("=" * 88 + "\n")
+        return
+
+    q_id = manifest_entry.get("query_id", "CUSTOM_QUERY")
+    q_cat = manifest_entry.get("category", "N/A")
+    exp_outcome = manifest_entry.get("expected_outcome", "FEASIBLE")
+    intended_arch = manifest_entry.get("intended_archetype", "N/A")
+
+    print(f"  • Query ID          : {q_id}")
+    print(f"  • Scenario Family   : {manifest_entry.get('scenario_family_id', 'N/A')}")
+    print(f"  • Linguistic Class  : {q_cat}")
+    print(f"  • Expected Outcome  : {exp_outcome}")
+    print(f"  • Intended Archetype: {intended_arch}")
+    print("-" * 88)
+
+    w_field = 24
+    w_exp = 18
+    w_m3 = 20
+    w_m4 = 20
+    w_match = 16
+
+    sep = f"+{'-'*(w_field+2)}+{'-'*(w_exp+2)}+{'-'*(w_m3+2)}+{'-'*(w_m4+2)}+{'-'*(w_match+2)}+"
+    header = (
+        f"| {'Requirement Field':<{w_field}} | {'Manifest Expected':<{w_exp}} | "
+        f"{'Mode 3 (Symbolic)':<{w_m3}} | {'Mode 4 (Neural)':<{w_m4}} | {'Interpretation':<{w_match}} |"
+    )
+
+    print(sep)
+    print(header)
+    print(sep)
+
+    fields_to_compare = [
+        ("Problem Archetype", "intended_archetype", lambda c: c.problem_type if c else "UNSUPPORTED"),
+        ("Cloud Providers", "cloud_providers", lambda c: str(c.cloud_providers) if c and c.cloud_providers else "['AWS']"),
+        ("Budget Max (USD)", "budget_max_usd", lambda c: f"${c.budget_max_usd:,.2f}" if c and c.budget_max_usd is not None else "—"),
+        ("Required vCPUs", "required_vcpus", lambda c: str(c.required_vcpus) if c and c.required_vcpus is not None else "—"),
+        ("Required RAM (GB)", "required_ram_gb", lambda c: f"{c.required_ram_gb:.1f}" if c and c.required_ram_gb is not None else "—"),
+        ("Target Bandwidth", "target_bandwidth_mbps", lambda c: f"{c.target_bandwidth_mbps:.1f} Mbps" if c and c.target_bandwidth_mbps is not None else "—"),
+        ("Target CPU (%)", "target_cpu_pct", lambda c: f"{c.target_cpu_pct:.1f}%" if c and c.target_cpu_pct is not None else "—"),
+        ("Max CPU Ceiling", "max_cpu_pct", lambda c: f"{c.max_cpu_pct:.1f}%" if c and c.max_cpu_pct is not None else "[UNPARSED]"),
+        ("Latency Max (ms)", "latency_max_ms", lambda c: f"{c.latency_max_ms:.1f} ms" if c and c.latency_max_ms is not None else "—"),
+        ("SLA Availability", "sla_availability_pct", lambda c: f"{c.sla_availability_pct:.2f}%" if c and c.sla_availability_pct is not None else "—"),
+    ]
+
+    for label, manifest_key, contract_extractor in fields_to_compare:
+        exp_val = manifest_entry.get(manifest_key)
+        if manifest_key == "budget_max_usd" and exp_val is not None:
+            exp_str = f"${float(exp_val):,.2f}"
+        elif manifest_key == "required_ram_gb" and exp_val is not None:
+            exp_str = f"{float(exp_val):.1f}"
+        elif manifest_key == "target_bandwidth_mbps" and exp_val is not None:
+            exp_str = f"{float(exp_val):.1f} Mbps"
+        elif manifest_key in ["target_cpu_pct", "max_cpu_pct"] and exp_val is not None:
+            exp_str = f"{float(exp_val):.1f}%"
+        elif manifest_key == "latency_max_ms" and exp_val is not None:
+            exp_str = f"{float(exp_val):.1f} ms"
+        elif manifest_key == "sla_availability_pct" and exp_val is not None:
+            exp_str = f"{float(exp_val):.2f}%"
+        elif exp_val is None:
+            exp_str = "—"
+        else:
+            exp_str = str(exp_val)
+
+        m3_str = contract_extractor(m3_contract)[:w_m3]
+        m4_str = contract_extractor(m4_contract)[:w_m4]
+
+        # Agreement classification
+        if m3_str == m4_str:
+            agree_str = "MATCH (Both)"
+        elif m4_str in [exp_str, exp_str.replace(" ", "")]:
+            agree_str = "Mode 4 Match"
+        elif m3_str in [exp_str, exp_str.replace(" ", "")]:
+            agree_str = "Mode 3 Match"
+        else:
+            agree_str = "Divergent"
+
+        print(
+            f"| {label:<{w_field}} | {exp_str:<{w_exp}} | {m3_str:<{w_m3}} | "
+            f"{m4_str:<{w_m4}} | {agree_str:<{w_match}} |"
+        )
+
+    print(sep)
+
+    print("\n  ALL-MODE TASK GRADING AGAINST GROUND TRUTH:")
+    for r in records:
+        outc_color = "[SUCCESS]" if r.task_outcome == "SUCCESS" else "[FAILURE]"
+        print(f"    • {r.mode_name:<26} -> Task Outcome: {outc_color:<9} | Allocation Feasibility: [{r.feasibility.value}] | Status: {r.summary_status}")
+
     print("=" * 88 + "\n")
 
 
@@ -802,6 +1034,8 @@ def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecor
     csv_headers = [
         "timestamp",
         "query",
+        "query_id",
+        "expected_outcome",
         "mode",
         "mode_name",
         "execution_path",
@@ -810,6 +1044,7 @@ def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecor
         "recomputed_cost",
         "cost_error",
         "feasibility",
+        "task_outcome",
         "optimality_status",
         "verdict",
         "is_mock",
@@ -872,26 +1107,36 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    query_text = args.query.strip()
+    query_input = args.query.strip()
     is_mock = args.mock_llm
+
+    # Match against manifest
+    manifest_entry = find_manifest_entry(query_input)
+    if manifest_entry and ("Q" in query_input or re.match(r"^\d+$", query_input)):
+        query_text = manifest_entry.get("query_text", query_input)
+    else:
+        query_text = query_input
+
+    query_id = manifest_entry.get("query_id") if manifest_entry else None
+    expected_outcome = manifest_entry.get("expected_outcome", "FEASIBLE") if manifest_entry else "FEASIBLE"
 
     print_banner(
         "NEURASYM NEURO-SYMBOLIC 4-WAY COMPARATIVE BENCHMARK",
-        f"Query: \"{query_text}\"" + (" [OFFLINE MOCK MODE]" if is_mock else ""),
+        f"Query: \"{query_text}\"" + (f" [ID: {query_id}]" if query_id else "") + (" [OFFLINE MOCK MODE]" if is_mock else ""),
         char="#",
     )
 
     records: List[CanonicalExecutionRecord] = []
 
     # 1. Mode 3 first to obtain contract & solver result
-    m3_rec, contract, solver_res = execute_mode_3_symbolic(query_text)
+    m3_rec, m3_contract, solver_res = execute_mode_3_symbolic(query_text)
 
     # 2. Mode 1
-    m1_rec = execute_mode_1_raw_llm(query_text, contract, mock_llm=is_mock)
+    m1_rec = execute_mode_1_raw_llm(query_text, m3_contract, mock_llm=is_mock)
     records.append(m1_rec)
 
     # 3. Mode 2
-    m2_rec = execute_mode_2_schema_llm(query_text, contract, mock_llm=is_mock)
+    m2_rec = execute_mode_2_schema_llm(query_text, m3_contract, mock_llm=is_mock)
     records.append(m2_rec)
 
     # Add Mode 3
@@ -901,8 +1146,25 @@ def main() -> None:
     m4_rec = execute_mode_4_neuro_symbolic(query_text, mock_llm=is_mock)
     records.append(m4_rec)
 
-    # Print comparative table
+    # Extract m4 contract if present
+    m4_contract = None
+    if m4_rec.requirements and isinstance(m4_rec.requirements, dict):
+        try:
+            m4_contract = CloudOptimizationContract(**m4_rec.requirements)
+        except Exception:
+            m4_contract = None
+
+    # Attach task outcomes and manifest provenance to all records
+    for r in records:
+        r.query_id = query_id
+        r.expected_outcome = expected_outcome
+        r.task_outcome = evaluate_task_outcome(r, expected_outcome)
+
+    # Print comparative summary table
     print_comparison_table(records)
+
+    # Print Manifest Grading & Interpretation-Mismatch Report
+    print_manifest_grading_and_mismatch_report(manifest_entry, records, m3_contract, m4_contract)
 
     # Log to files
     log_canonical_records(query_text, records)
@@ -913,6 +1175,8 @@ def main() -> None:
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump({
                 "query": query_text,
+                "query_id": query_id,
+                "expected_outcome": expected_outcome,
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
                 "records": [r.to_dict() for r in records],
             }, f, indent=2)

@@ -168,6 +168,11 @@ class CanonicalExecutionRecord:
     summary_status: str = "Unverified"
     checked_against_human_ground_truth: bool = False
 
+    # Manifest & Outcome Evaluation
+    task_outcome: Optional[str] = None
+    expected_outcome: Optional[str] = None
+    query_id: Optional[str] = None
+
     # Timing Breakdown (ms)
     parsing_ms: float = 0.0
     solving_ms: float = 0.0
@@ -212,6 +217,9 @@ class CanonicalExecutionRecord:
             "mode": self.mode,
             "mode_name": self.mode_name,
             "original_query": self.original_query,
+            "query_id": self.query_id,
+            "expected_outcome": self.expected_outcome,
+            "task_outcome": self.task_outcome,
             "timestamp_utc": self.timestamp_utc,
             "requirement_source": self.requirement_source,
             "problem_type": self.problem_type,
@@ -263,12 +271,15 @@ class CanonicalExecutionRecord:
         return {
             "mode": f"Mode {self.mode}",
             "mode_name": self.mode_name,
+            "query_id": self.query_id or "—",
+            "expected_outcome": self.expected_outcome or "—",
             "execution_path": self.execution_path,
             "normalization_status": self.normalization_status.value if isinstance(self.normalization_status, NormalizationStatus) else str(self.normalization_status),
             "claimed_cost": claimed,
             "recomputed_cost": recomputed,
             "cost_error": cost_err,
             "feasibility": self.feasibility.value if isinstance(self.feasibility, FeasibilityStatus) else str(self.feasibility),
+            "task_outcome": self.task_outcome or ("SUCCESS" if self.feasibility == FeasibilityStatus.PASS else "FAILURE"),
             "optimality_status": self.optimality_status.value if isinstance(self.optimality_status, OptimalityStatus) else str(self.optimality_status),
             "verdict": self.summary_status,
             "is_mock": self.is_mock,
