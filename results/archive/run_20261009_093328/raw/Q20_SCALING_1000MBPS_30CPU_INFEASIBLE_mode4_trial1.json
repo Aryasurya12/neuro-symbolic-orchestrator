@@ -1,0 +1,18 @@
+{
+  "status": "INFEASIBLE",
+  "solver": "Continuous_Vectorized_PSO",
+  "optimal_bandwidth_mbps": 1000.0,
+  "recommended_replicas": 16,
+  "target_cpu_utilization_pct": 70.0,
+  "modeled_cpu_pct": 83.33,
+  "estimated_monthly_cost_usd": 800.0,
+  "total_monthly_cost_usd": 800.0,
+  "estimated_hourly_cost_usd": 1.0959,
+  "budget_max_usd": 200.0,
+  "budget_utilized_pct": 400.0,
+  "cost_savings_usd": 0.0,
+  "fitness_score": 57500.0,
+  "iterations_completed": 50,
+  "particles_count": 30,
+  "is_feasible": false
+}

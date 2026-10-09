@@ -1,0 +1,43 @@
+**Provider & Regions (Disaster‑Recovery pair)**  
+- **AWS – us‑east‑1** (base $120 /mo)  
+- **GCP – us‑central1** (base $115 /mo)  
+
+Latency us‑east‑1 ↔ us‑central1 = **32 ms**  < 50 ms  
+Combined SLA = 1‑(0.0005 × 0.0005) = **99.999975 %**  ≥ 99.99 %
+
+**DR link cost**  
+`$120 + $115 + (32 ms × $0.25) = $243.00 / month`
+
+---
+
+### Compute (one primary VM in each region)
+
+| Region | SKU | vCPU / RAM | Cost / mo |
+|--------|-----|------------|-----------|
+| AWS us‑east‑1 | **t3.large** (2 vCPU, 8 GB) | $60.74 |
+| GCP us‑central1 | **e2‑standard‑4** (4 vCPU, 16 GB) | $97.82 |
+
+**Compute total:** **$158.56 / month**
+
+---
+
+### Continuous Dynamic Scaling (shared service)
+
+- **Bandwidth:** **500 Mbps** → $500 × $0.08 = **$40.00**
+- **Worker Replicas:** **3** → 3 × $45 = **$135.00**
+
+**Scaling cost:** **$175.00 / month**  
+(Each replica handles 75 Mbps → 3 replicas cover 225 Mbps; the remaining 275 Mbps is provisioned as head‑room.)
+
+---
+
+### Overall Monthly Cost
+
+| Item | Cost |
+|------|------|
+| Disaster‑Recovery link | $243.00 |
+| Compute (2 VMs) | $158.56 |
+| Dynamic scaling (bandwidth + replicas) | $175.00 |
+| **Total** | **$576.56** |
+
+**Result:** The plan stays under the **$600** budget, meets the **≥ 99.99 %** SLA, and keeps **latency < 50 ms** between the AWS and GCP sites.

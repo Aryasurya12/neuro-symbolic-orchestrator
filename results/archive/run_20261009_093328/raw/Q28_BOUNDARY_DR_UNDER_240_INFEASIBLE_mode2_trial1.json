@@ -1,0 +1,11 @@
+{
+  "task_type": "Z3_Graph_Disaster_Recovery",
+  "outcome": "infeasible",
+  "reason": "All AWS-GCP region pairs meeting the required latency <=50ms have combined monthly cost exceeding the $240 budget (e.g., us-east-1 & us-central1 cost $243, us-west-2 & us-central1 cost $255.5). Therefore the constraints cannot be satisfied.",
+  "primary_region": null,
+  "secondary_region": null,
+  "total_monthly_cost_usd": null,
+  "allocated_vms": [],
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null
+}

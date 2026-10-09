@@ -1,0 +1,5 @@
+{
+  "task_type": "needs_clarification",
+  "outcome": "needs_clarification",
+  "reason": "The request asks for migration planning and duration estimation, which is outside the supported optimization tasks (VM allocation, disaster recovery, or continuous scaling). Please provide specific requirements such as required compute resources, region preferences, or scaling parameters."
+}

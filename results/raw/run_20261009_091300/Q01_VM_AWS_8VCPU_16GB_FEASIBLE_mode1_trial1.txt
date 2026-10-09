@@ -1,0 +1,1 @@
+To deploy your workload requiring 8 vCPUs and 16GB RAM on AWS, we recommend 2x t3.xlarge instances. The estimated total monthly cost is $300.21/month with 730 hours of continuous run time.

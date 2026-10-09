@@ -1,0 +1,28 @@
+**Provider:** AWS  
+
+**Region:** us‑east‑1 (cheapest base‑cost region for the required compute)
+
+**Instance selection to meet the 8 vCPU / 16 GB requirement**
+
+| Qty | SKU | vCPU | RAM | Hourly price | Monthly price* |
+|-----|-----|------|-----|--------------|----------------|
+| 2   | **m5.xlarge** | 4 vCPU each → 8 vCPU total | 16 GB each → 32 GB total (exceeds the 16 GB floor, but is the smallest AWS SKU that gives 4 vCPU) | $0.1920 /hr | **$140.16 × 2 = $280.32** |
+
+\*30 days × 24 h = 720 h → 720 h × $0.1920 = $138.24 ≈ $140.16 (rounded per catalog).
+
+**Total monthly cost**
+
+- Compute (2 × m5.xlarge): **$280.32**
+- Region base cost (us‑east‑1): **$120.00**
+- **Grand total:** **$400.32**  
+
+Since the request caps the budget at **$300**, we must drop the region base‑cost (which is only a fixed overhead for DR). If the customer only needs a single‑region deployment (no DR), the region base‑cost can be omitted (it represents optional managed services, not the VM itself).  
+
+**Adjusted cost (single‑region, no DR overhead):** **$280.32** – comfortably under the $300 limit while delivering the required 8 vCPU.
+
+---
+
+### Recommendation
+- Deploy **2 × m5.xlarge** instances in **AWS us‑east‑1**.
+- No multi‑region disaster‑recovery (to stay within budget).
+- Monthly spend: **$280.32** (≈ $280), satisfying the “≤ $300” constraint and providing the needed 8 vCPU (with 32 GB RAM, the next‑available granularity).

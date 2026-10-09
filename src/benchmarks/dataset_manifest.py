@@ -42,6 +42,10 @@ class ManifestQueryItem:
     annotation_source: str = "AI_DRAFT/DEVELOPMENT"
     approval_status: str = "UNAPPROVED"
     is_approved: bool = False
+    previously_run_in_development: bool = False
+    expected_optimal_cost_usd: Optional[float] = None
+    optimum_source: Optional[str] = None
+    key_notes: str = ""
     notes: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -709,3 +713,226 @@ class ManifestManager:
             f.write(md_content)
 
         return package
+
+    @classmethod
+    def load_manifest(cls, manifest_path: str) -> Any:
+        """Loads manifest file from disk as parsed JSON (dict or list)."""
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    @classmethod
+    def load_manifest_queries(cls, manifest_path: str) -> List[Dict[str, Any]]:
+        """Loads and returns the list of query dictionaries from manifest JSON."""
+        data = cls.load_manifest(manifest_path)
+        if isinstance(data, dict) and "queries" in data:
+            return data["queries"]
+        elif isinstance(data, list):
+            return data
+        else:
+            raise ValueError(f"Invalid manifest format at '{manifest_path}': Expected list or dict with 'queries' key.")
+
+    @classmethod
+    def validate_manifest_file(cls, manifest_path: str) -> Tuple[bool, List[str], Dict[str, Any]]:
+        """Validates a query manifest against schema, approval safety, and cost completeness.
+        
+        Checks:
+        1. File exists and parses valid JSON.
+        2. Schema integrity: all required metadata fields present with valid types.
+        3. Approval safety: 100% UNAPPROVED (approval_status='UNAPPROVED', is_approved=False).
+        4. Optimal cost completeness: Every FEASIBLE query has numeric expected_optimal_cost_usd and valid optimum_source.
+        5. Problem archetypes and expected outcomes are valid enumerated constants.
+        """
+        import os
+        if not os.path.exists(manifest_path):
+            return False, [f"Manifest file not found at '{manifest_path}'"], {}
+
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            return False, [f"JSON parse error in '{manifest_path}': {str(e)}"], {}
+
+        if isinstance(data, dict):
+            queries = data.get("queries", [])
+            header_meta = {k: v for k, v in data.items() if k != "queries"}
+        elif isinstance(data, list):
+            queries = data
+            header_meta = {}
+        else:
+            return False, [f"Root of manifest must be JSON array or object with 'queries' key, got {type(data).__name__}"], {}
+
+        if not queries:
+            return False, ["Manifest contains 0 queries (empty manifest)."], {}
+
+        valid_outcomes = {
+            "FEASIBLE",
+            "INFEASIBLE",
+            "CLARIFICATION_REQUIRED",
+            "CONFLICTING_REQUIREMENTS",
+            "UNSUPPORTED",
+        }
+        valid_archetypes = {
+            "ILP_VM_Allocation",
+            "Z3_Graph_Disaster_Recovery",
+            "PSO_Continuous_Scaling",
+            "NONE",
+        }
+        valid_categories = {
+            "FORMAL_ENGLISH",
+            "COLLOQUIAL_HINGLISH",
+            "MISSING_OR_AMBIGUOUS",
+            "CONFLICTING_CONSTRAINTS",
+            "UNSUPPORTED_TASKS",
+        }
+        valid_optimum_sources = {"INDEPENDENT_SEARCH", "FORMULA", None}
+
+        errors: List[str] = []
+        stats: Dict[str, Any] = {
+            "total_queries": len(queries),
+            "outcomes": {},
+            "archetypes": {},
+            "categories": {},
+            "previously_seen_count": 0,
+            "approved_count": 0,
+            "feasible_with_cost_count": 0,
+        }
+
+        for idx, q in enumerate(queries, 1):
+            q_id = q.get("query_id", f"Query #{idx}")
+
+            # 1. Safety Invariant: NEVER allow approved status in draft manifest
+            if q.get("is_approved") is True or q.get("approval_status") == "APPROVED":
+                stats["approved_count"] += 1
+                errors.append(f"[{q_id}] SAFETY VIOLATION: Marked as APPROVED or is_approved=True. All draft entries must be UNAPPROVED.")
+
+            # 2. Required string fields
+            for str_field in ["query_id", "scenario_family_id", "query_text", "category", "intended_archetype", "expected_outcome"]:
+                val = q.get(str_field)
+                if not val or not isinstance(val, str) or not val.strip():
+                    errors.append(f"[{q_id}] Missing or empty required field '{str_field}'.")
+
+            # 3. Enumeration checks
+            outcome = q.get("expected_outcome")
+            if outcome not in valid_outcomes:
+                errors.append(f"[{q_id}] Invalid expected_outcome '{outcome}'. Must be one of: {sorted(valid_outcomes)}")
+            else:
+                stats["outcomes"][outcome] = stats["outcomes"].get(outcome, 0) + 1
+
+            archetype = q.get("intended_archetype")
+            if archetype not in valid_archetypes:
+                errors.append(f"[{q_id}] Invalid intended_archetype '{archetype}'. Must be one of: {sorted(valid_archetypes)}")
+            else:
+                stats["archetypes"][archetype] = stats["archetypes"].get(archetype, 0) + 1
+
+            category = q.get("category")
+            if category not in valid_categories:
+                errors.append(f"[{q_id}] Invalid category '{category}'. Must be one of: {sorted(valid_categories)}")
+            else:
+                stats["categories"][category] = stats["categories"].get(category, 0) + 1
+
+            # 4. Previously run in development boolean
+            seen_dev = q.get("previously_run_in_development")
+            if not isinstance(seen_dev, bool):
+                errors.append(f"[{q_id}] 'previously_run_in_development' must be boolean (true/false), got {type(seen_dev).__name__}")
+            elif seen_dev:
+                stats["previously_seen_count"] += 1
+
+            # 5. FEASIBLE Query Completeness Check
+            opt_cost = q.get("expected_optimal_cost_usd")
+            opt_src = q.get("optimum_source")
+
+            if outcome == "FEASIBLE":
+                if opt_cost is None:
+                    errors.append(f"[{q_id}] FEASIBLE query is missing 'expected_optimal_cost_usd'.")
+                elif not isinstance(opt_cost, (int, float)) or opt_cost <= 0:
+                    errors.append(f"[{q_id}] FEASIBLE query has invalid expected_optimal_cost_usd: {opt_cost}")
+                else:
+                    stats["feasible_with_cost_count"] += 1
+
+                if opt_src not in {"INDEPENDENT_SEARCH", "FORMULA"}:
+                    errors.append(f"[{q_id}] FEASIBLE query requires optimum_source 'INDEPENDENT_SEARCH' or 'FORMULA', got '{opt_src}'.")
+            else:
+                if opt_src is not None and opt_src not in valid_optimum_sources:
+                    errors.append(f"[{q_id}] Non-FEASIBLE query has invalid optimum_source: '{opt_src}'")
+
+            # 6. Key notes check
+            key_notes = q.get("key_notes") or q.get("notes")
+            if not key_notes or not isinstance(key_notes, str) or not key_notes.strip():
+                errors.append(f"[{q_id}] Missing descriptive 'key_notes'.")
+
+        is_valid = (len(errors) == 0)
+        return is_valid, errors, stats
+
+
+def main():
+    """CLI runner for dataset manifest management and validation."""
+    import argparse
+    import sys
+
+    # Windows UTF-8 stdout safety
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+    parser = argparse.ArgumentParser(description="Neurasym Benchmark Dataset Manifest CLI & Validator")
+    parser.add_argument(
+        "--validate",
+        type=str,
+        help="Path to query manifest JSON file to validate against schema and safety invariants",
+    )
+    parser.add_argument(
+        "--export-spec",
+        action="store_true",
+        help="Exports sanitized specification package for dataset authoring",
+    )
+
+    args = parser.parse_args()
+
+    if args.validate:
+        manifest_path = args.validate
+        print("=" * 88)
+        print(" NEURASYM DATASET MANIFEST SCHEMA & SAFETY VALIDATOR ".center(88, "="))
+        print("=" * 88)
+        print(f"  Target File : {manifest_path}")
+        print("=" * 88 + "\n")
+
+        is_valid, errors, stats = ManifestManager.validate_manifest_file(manifest_path)
+
+        if not is_valid:
+            print("[FAIL] Manifest validation FAILED with errors:\n")
+            for err in errors:
+                print(f"  [ERROR] {err}")
+            print(f"\nTotal Errors: {len(errors)}")
+            sys.exit(1)
+        else:
+            print("[PASS] MANIFEST VALIDATION SUCCESSFUL - ALL INVARIANTS SATISFIED\n")
+            print("Summary Metrics:")
+            print(f"  - Total Queries          : {stats.get('total_queries', 0)}")
+            print(f"  - Unapproved Status Check: PASS (100% UNAPPROVED, 0 approved records)")
+            print(f"  - Previously Run in Dev  : {stats.get('previously_seen_count', 0)}")
+            print(f"  - Feasible with Cost     : {stats.get('feasible_with_cost_count', 0)}")
+            print("\nOutcome Breakdown:")
+            for outcome, count in sorted(stats.get("outcomes", {}).items()):
+                print(f"    * {outcome:<26}: {count}")
+            print("\nArchetype Breakdown:")
+            for archetype, count in sorted(stats.get("archetypes", {}).items()):
+                print(f"    * {archetype:<26}: {count}")
+            print("\nCategory Breakdown:")
+            for cat, count in sorted(stats.get("categories", {}).items()):
+                print(f"    * {cat:<26}: {count}")
+            print("\n" + "=" * 88)
+            sys.exit(0)
+
+    elif args.export_spec:
+        print("Exporting sanitized specification package...")
+        pkg = ManifestManager.export_sanitized_specification_package()
+        print("Done.")
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
+

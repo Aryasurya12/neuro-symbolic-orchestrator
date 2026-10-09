@@ -1,0 +1,21 @@
+{
+  "status": "OPTIMAL",
+  "solver": "SciPy_MILP_HiGHS",
+  "total_monthly_cost_usd": 97.82,
+  "allocated_vms": [
+    {
+      "instance_type": "e2-standard-4",
+      "provider": "GCP",
+      "count": 1,
+      "vcpus_per_vm": 4,
+      "ram_gb_per_vm": 16.0,
+      "monthly_cost": 97.82
+    }
+  ],
+  "total_vcpus": 4,
+  "total_ram_gb": 16.0,
+  "budget_max_usd": 150.0,
+  "budget_utilized_pct": 65.21,
+  "cost_savings_usd": 52.18,
+  "solve_time_ms": 2.933
+}

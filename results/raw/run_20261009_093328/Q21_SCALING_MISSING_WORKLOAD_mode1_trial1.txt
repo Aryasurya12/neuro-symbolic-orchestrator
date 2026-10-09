@@ -1,0 +1,26 @@
+**Recommended deployment**
+
+| Component | Choice | Qty | Monthly cost (USD) |
+|-----------|--------|-----|--------------------|
+| **Compute – VM** | AWS t3.medium (2 vCPU, 4 GB) | 1 instance in **us‑east‑1**, 1 instance in **eastus** (Azure) | 2 × $30.37 = **$60.74** |
+| **Disaster‑recovery pair** | **us‑east‑1 ↔ eastus** (lowest latency) | – | Base $120 + $125 + (12 ms × $0.25) = **$248.00** |
+| **Dynamic scaling – bandwidth** | 420 Mbps (within allowed 100‑1000 Mbps) | – | 420 Mbps × $0.08 = **$33.60** |
+| **Dynamic scaling – worker replicas** | 8 replicas (each 75 Mbps) | 8 | 8 × $45 = **$360.00** |
+| **Subtotal** | | | **$702.34** |
+
+**CPU utilisation check**
+
+\[
+\text{CPU %} = \frac{\text{Bandwidth}}{\text{Replicas} \times 75}\times100
+= \frac{420}{8 \times 75}\times100 = 70\%
+\]
+
+The plan meets the target CPU utilisation of **≈ 70 %**.
+
+**Overall SLA (DR pair)**  
+
+\[
+\text{SLA}=1-\bigl(1-0.9995\bigr)^2 = 99.999975\%
+\]
+
+**Total monthly cost:** **$702.34**, comfortably under the $1500 budget.

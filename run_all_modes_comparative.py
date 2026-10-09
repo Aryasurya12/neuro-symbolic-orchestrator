@@ -64,6 +64,11 @@ from src.verifiers.canonical_record import (
     OptimalityStatus,
 )
 from src.verifiers.independent_checker import IndependentChecker
+from src.reporting.explain_verdict import (
+    explain_run,
+    format_plain_english_box,
+    format_plain_english_summary,
+)
 
 
 def _extract_audit_events(parameter_checks: List[Dict[str, Any]]) -> List[AuditEvent]:
@@ -106,10 +111,218 @@ def print_banner(title: str, subtitle: Optional[str] = None, char: str = "=") ->
     print(char * width + "\n")
 
 
+def extract_stated_parameters_from_prose(
+    raw_text: str,
+    normalized_allocation: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Extracts explicit constraint figures and stated parameters directly from Mode 1 prose.
+    
+    Never reuses Mode 3's parsed contract or defaults.
+    If a parameter is not stated in the prose, it is omitted or set to None ('not stated').
+    """
+    if not raw_text:
+        return {}
+
+    # Normalise Unicode hyphens and dashes to standard ASCII '-'
+    cleaned_text = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d]", "-", raw_text)
+    cleaned_text = re.sub(r"[\u00a0\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000]", " ", cleaned_text)
+    
+    stated: Dict[str, Any] = {}
+
+    # 1. Stated Budget (e.g. "budget $100", "under $100", "budget of $100", "within $100")
+    b_match = re.search(
+        r"(?:budget|budget\s+cap|budget\s+of|under|limit\s+of|limit\s+is|spend\s+of|within\s+(?:the|your)?|max\s+budget)\s*(?:of|is|:|=|under|capped\s+at)?\s*\$\s*(\d+(?:,\d+)*(?:\.\d+)?)",
+        cleaned_text,
+        re.IGNORECASE,
+    )
+    if not b_match:
+        b_match = re.search(r"\$\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:budget|cap|ceiling|limit|max)", cleaned_text, re.IGNORECASE)
+    if b_match:
+        try:
+            stated["budget_max_usd"] = float(b_match.group(1).replace(",", ""))
+        except (ValueError, TypeError):
+            pass
+
+    # 2. Stated vCPUs (e.g. "8 vCPUs", "8 cores", or sum of allocated VMs)
+    vcpu_match = re.search(r"(\d+)\s*(?:vcpus?|cores?|virtual\s+cpus?|vcpu\b)", cleaned_text, re.IGNORECASE)
+    if vcpu_match:
+        try:
+            stated["required_vcpus"] = int(vcpu_match.group(1))
+        except (ValueError, TypeError):
+            pass
+    elif normalized_allocation and isinstance(normalized_allocation, dict):
+        vms = normalized_allocation.get("allocated_vms", [])
+        if vms and isinstance(vms, list):
+            tot_vcpu = sum(v.get("vcpus", 0) * v.get("count", 1) for v in vms if isinstance(v, dict))
+            if tot_vcpu > 0:
+                stated["required_vcpus"] = tot_vcpu
+
+    # 3. Stated RAM (e.g. "16 GB RAM", "16GB", or sum of allocated VMs)
+    ram_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)\s*(?:of\s*)?(?:ram|memory)", cleaned_text, re.IGNORECASE)
+    if not ram_match:
+        ram_match = re.search(r"(?:ram|memory)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)\s*(?:gb|gigabytes?)", cleaned_text, re.IGNORECASE)
+    if ram_match:
+        try:
+            stated["required_ram_gb"] = float(ram_match.group(1))
+        except (ValueError, TypeError):
+            pass
+    elif normalized_allocation and isinstance(normalized_allocation, dict):
+        vms = normalized_allocation.get("allocated_vms", [])
+        if vms and isinstance(vms, list):
+            tot_ram = sum(v.get("ram_gb", 0.0) * v.get("count", 1) for v in vms if isinstance(v, dict))
+            if tot_ram > 0:
+                stated["required_ram_gb"] = float(tot_ram)
+
+    # 4. Stated Latency (e.g. "42ms", "50 ms latency")
+    lat_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:ms|milliseconds?)\s*(?:latency|round[\s-]*trip|delay|sync)?", cleaned_text, re.IGNORECASE)
+    if not lat_match:
+        lat_match = re.search(r"(?:latency|delay|sync\s+latency)\s*(?:of|under|below|<=|<|:)?\s*(\d+(?:\.\d+)?)\s*(?:ms|milliseconds?)", cleaned_text, re.IGNORECASE)
+    if lat_match:
+        try:
+            stated["latency_max_ms"] = float(lat_match.group(1))
+        except (ValueError, TypeError):
+            pass
+
+    # 5. Stated SLA (e.g. "99.99% SLA", "99.9% uptime")
+    sla_match = re.search(r"(\d{2}(?:\.\d+)?)\s*%\s*(?:sla|uptime|availability)", cleaned_text, re.IGNORECASE)
+    if not sla_match:
+        sla_match = re.search(r"(?:sla|uptime|availability)\s*(?:of|:)?\s*(\d{2}(?:\.\d+)?)\s*%", cleaned_text, re.IGNORECASE)
+    if sla_match:
+        try:
+            stated["sla_availability_pct"] = float(sla_match.group(1))
+        except (ValueError, TypeError):
+            pass
+
+    # 6. Stated Bandwidth (e.g. "100 Mbps", "100Mbps bandwidth")
+    bw_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:mbps|gbps)\s*(?:bandwidth|traffic|workload|throughput)?", cleaned_text, re.IGNORECASE)
+    if bw_match:
+        try:
+            stated["target_bandwidth_mbps"] = float(bw_match.group(1))
+        except (ValueError, TypeError):
+            pass
+
+    # 7. Stated Target/Max CPU (e.g. "70% target CPU", "CPU 70%")
+    cpu_match = re.search(r"(?:target\s+cpu|target\s+utilization|cpu\s+target|target\s+cpu\s+utilization|cpu)\s*(?:of|:)?\s*(\d+(?:\.\d+)?)\s*%", cleaned_text, re.IGNORECASE)
+    if cpu_match:
+        try:
+            stated["target_cpu_pct"] = float(cpu_match.group(1))
+        except (ValueError, TypeError):
+            pass
+
+    return stated
+
+
+def extract_stated_parameters_from_json(
+    parsed_json_or_text: Any,
+    raw_content: str = "",
+) -> Dict[str, Any]:
+    """Extracts explicit constraint figures and stated parameters directly from Mode 2 JSON and reason fields.
+    
+    Never reuses Mode 3's parsed contract or defaults.
+    If a parameter is not stated in the JSON, it is omitted or set to None ('not stated').
+    """
+    stated: Dict[str, Any] = {}
+    parsed: Dict[str, Any] = {}
+
+    if isinstance(parsed_json_or_text, dict):
+        parsed = parsed_json_or_text
+    elif isinstance(parsed_json_or_text, str):
+        try:
+            cleaned = re.sub(r"[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\ufe58\ufe63\uff0d]", "-", parsed_json_or_text)
+            f_b = cleaned.find("{")
+            l_b = cleaned.rfind("}")
+            if f_b != -1 and l_b != -1:
+                parsed = json.loads(cleaned[f_b : l_b + 1])
+        except Exception:
+            parsed = {}
+
+    # Extract from top-level JSON fields
+    # Budget
+    raw_b = parsed.get("budget_max_usd") or parsed.get("budget") or parsed.get("max_budget") or parsed.get("budget_usd")
+    if raw_b is not None:
+        try:
+            stated["budget_max_usd"] = float(raw_b)
+        except (ValueError, TypeError):
+            pass
+
+    # vCPUs
+    raw_vcpu = parsed.get("required_vcpus") or parsed.get("vcpus") or parsed.get("total_vcpus")
+    if raw_vcpu is not None:
+        try:
+            stated["required_vcpus"] = int(raw_vcpu)
+        except (ValueError, TypeError):
+            pass
+    elif "allocated_vms" in parsed and isinstance(parsed["allocated_vms"], list):
+        tot_vcpu = sum(v.get("vcpus", 0) * v.get("quantity", v.get("count", 1)) for v in parsed["allocated_vms"] if isinstance(v, dict))
+        if tot_vcpu > 0:
+            stated["required_vcpus"] = tot_vcpu
+
+    # RAM
+    raw_ram = parsed.get("required_ram_gb") or parsed.get("ram_gb") or parsed.get("total_ram_gb") or parsed.get("ram")
+    if raw_ram is not None:
+        try:
+            stated["required_ram_gb"] = float(raw_ram)
+        except (ValueError, TypeError):
+            pass
+    elif "allocated_vms" in parsed and isinstance(parsed["allocated_vms"], list):
+        tot_ram = sum(v.get("ram_gb", 0.0) * v.get("quantity", v.get("count", 1)) for v in parsed["allocated_vms"] if isinstance(v, dict))
+        if tot_ram > 0:
+            stated["required_ram_gb"] = float(tot_ram)
+
+    # SLA
+    raw_sla = parsed.get("sla_availability_pct") or parsed.get("achieved_sla_pct") or parsed.get("sla_pct") or parsed.get("sla") or parsed.get("uptime_pct")
+    if raw_sla is not None:
+        try:
+            stated["sla_availability_pct"] = float(raw_sla)
+        except (ValueError, TypeError):
+            pass
+
+    # Latency
+    raw_lat = parsed.get("latency_max_ms") or parsed.get("latency_ms") or parsed.get("achieved_latency_ms") or parsed.get("latency")
+    if raw_lat is not None:
+        try:
+            stated["latency_max_ms"] = float(raw_lat)
+        except (ValueError, TypeError):
+            pass
+
+    # Bandwidth
+    raw_bw = parsed.get("target_bandwidth_mbps") or parsed.get("bandwidth_mbps") or parsed.get("optimal_bandwidth_mbps") or parsed.get("bandwidth")
+    if raw_bw is not None:
+        try:
+            stated["target_bandwidth_mbps"] = float(raw_bw)
+        except (ValueError, TypeError):
+            pass
+
+    # Target CPU / Max CPU
+    raw_tcpu = parsed.get("target_cpu_pct") or parsed.get("target_cpu")
+    if raw_tcpu is not None:
+        try:
+            stated["target_cpu_pct"] = float(raw_tcpu)
+        except (ValueError, TypeError):
+            pass
+    raw_mcpu = parsed.get("max_cpu_pct") or parsed.get("max_cpu")
+    if raw_mcpu is not None:
+        try:
+            stated["max_cpu_pct"] = float(raw_mcpu)
+        except (ValueError, TypeError):
+            pass
+
+    # Check reason / explanation / notes fields in JSON if fields are missing
+    reason_str = str(parsed.get("reason", "") or parsed.get("explanation", "") or parsed.get("notes", "") or raw_content)
+    if reason_str:
+        prose_extracted = extract_stated_parameters_from_prose(reason_str)
+        for k, v in prose_extracted.items():
+            if k not in stated:
+                stated[k] = v
+
+    return stated
+
+
 def execute_mode_1_raw_llm(
     query_text: str,
     contract: Optional[CloudOptimizationContract],
     mock_llm: bool = False,
+    manifest_entry: Optional[Dict[str, Any]] = None,
 ) -> CanonicalExecutionRecord:
     """MODE 1: Raw Unconstrained LLM (Groq API)."""
     model_name = os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b")
@@ -171,6 +384,9 @@ def execute_mode_1_raw_llm(
     )
     elapsed_norm_ms = (time.perf_counter() - t_norm) * 1000.0
 
+    # Extract explicitly stated requirements from Mode 1 prose (never reuse Mode 3 contract)
+    stated_requirements_m1 = extract_stated_parameters_from_prose(raw_content, norm_decision)
+
     print(f"    Normalization Status : {norm_status.value}")
     if ext_cost is not None:
         print(f"    Extracted Cost Claim : ${ext_cost:,.2f} USD / month")
@@ -192,14 +408,32 @@ def execute_mode_1_raw_llm(
         feas_pass, check = trace_stage_5_independent_verification(
             contract, candidate_dict, silent=False, stage_header="  --- Mode 1 Parameter-Wise Independent Verification ---"
         )
-        opt_verdict_stat = OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.UNVERIFIED.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.UNVERIFIED
-        feas_status_final = FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL
-        summary_status_final = "VALID_PLAN (Feasible against checked constraints)" if feas_pass else f"INVALID_PLAN (Violations: {', '.join(check.get('violations', []))})"
+        if check.get("violations"):
+            feas_pass = False
+        if feas_pass:
+            key_opt = manifest_entry.get("expected_optimal_cost_usd") if manifest_entry else None
+            actual_c = check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd")
+            if key_opt is not None and actual_c is not None:
+                cost_diff = actual_c - key_opt
+                tol = max(0.50, 0.01 * key_opt)
+                if cost_diff > tol:
+                    pct_gap = (cost_diff / key_opt) * 100.0
+                    opt_verdict_stat = f"Not optimal (gap {pct_gap:.1f}%)"
+                else:
+                    opt_verdict_stat = OptimalityStatus.MATCHES_INDEPENDENT_OPTIMUM.value
+            else:
+                opt_verdict_stat = OptimalityStatus.MATCHES_INDEPENDENT_OPTIMUM.value
+            feas_status_final = FeasibilityStatus.PASS
+            summary_status_final = "VALID_PLAN (Feasible against checked constraints)"
+        else:
+            opt_verdict_stat = OptimalityStatus.UNVERIFIED.value
+            feas_status_final = FeasibilityStatus.FAIL
+            summary_status_final = f"INVALID_PLAN (Violations: {', '.join(check.get('violations', []))})"
     elif norm_status in [NormalizationStatus.TASK_INCOMPATIBLE, NormalizationStatus.SOLVER_INFEASIBLE]:
         opt_verdict_stat = OptimalityStatus.UNSUPPORTED if norm_status == NormalizationStatus.TASK_INCOMPATIBLE else OptimalityStatus.INFEASIBLE
         check = {
             "feasible_against_contract": False,
-            "optimality_verdict": opt_verdict_stat.value,
+            "optimality_verdict": opt_verdict_stat.value if isinstance(opt_verdict_stat, OptimalityStatus) else opt_verdict_stat,
             "summary_status": f"REFUSAL_OR_UNSUPPORTED ({norm_status.value})",
             "violations": norm_errors or ["Model stated workload is unsupported/infeasible"],
             "parameter_checks": [],
@@ -213,7 +447,7 @@ def execute_mode_1_raw_llm(
         opt_verdict_stat = OptimalityStatus.TRUNCATION_FAILURE if norm_status == NormalizationStatus.TRUNCATION_FAILURE else OptimalityStatus.UNVERIFIED
         check = {
             "feasible_against_contract": False,
-            "optimality_verdict": opt_verdict_stat.value,
+            "optimality_verdict": opt_verdict_stat.value if isinstance(opt_verdict_stat, OptimalityStatus) else opt_verdict_stat,
             "summary_status": f"UNPARSEABLE ({norm_status.value})",
             "violations": norm_errors or ["Failed extraction/normalization check"],
             "parameter_checks": [],
@@ -231,9 +465,9 @@ def execute_mode_1_raw_llm(
         mode=1,
         mode_name="Mode 1: Raw LLM",
         original_query=query_text,
-        requirement_source="parsed_contract",
+        requirement_source="mode1_prose_stated",
         problem_type=prob_type,
-        requirements=contract.model_dump() if contract else {},
+        requirements=stated_requirements_m1,
         execution_path=f"Groq API ({model_name}) -> OutputNormalizer (Prose Regex) -> IndependentChecker",
         provider="Groq",
         model=model_name,
@@ -259,6 +493,8 @@ def execute_mode_1_raw_llm(
         explanation_source=ExplanationSource.UNAVAILABLE,
         explanation_status="SKIPPED",
     )
+    verdict = explain_run(record, key=manifest_entry)
+    print("\n" + format_plain_english_box(verdict) + "\n")
     return record
 
 
@@ -266,6 +502,7 @@ def execute_mode_2_schema_llm(
     query_text: str,
     contract: Optional[CloudOptimizationContract],
     mock_llm: bool = False,
+    manifest_entry: Optional[Dict[str, Any]] = None,
 ) -> CanonicalExecutionRecord:
     """MODE 2: Schema-Constrained LLM (Groq API)."""
     model_name = os.getenv("GROQ_MODEL") or getattr(settings, "GROQ_MODEL", "openai/gpt-oss-120b")
@@ -348,6 +585,9 @@ def execute_mode_2_schema_llm(
     )
     elapsed_norm_ms = (time.perf_counter() - t_norm) * 1000.0
 
+    # Extract explicitly stated requirements from Mode 2 JSON (never reuse Mode 3 contract)
+    stated_requirements_m2 = extract_stated_parameters_from_json(parsed_json or raw_content, raw_content=raw_content)
+
     print(f"    Normalization Status : {norm_status.value}")
     if ext_cost is not None:
         print(f"    Extracted Cost Claim : ${ext_cost:,.2f} USD / month")
@@ -367,17 +607,39 @@ def execute_mode_2_schema_llm(
         feas_pass, check = trace_stage_5_independent_verification(
             contract, candidate_dict, silent=False, stage_header="  --- Mode 2 Parameter-Wise Independent Verification ---"
         )
-        opt_verdict_stat = OptimalityStatus(check.get("optimality_verdict", OptimalityStatus.UNVERIFIED.value)) if check.get("optimality_verdict") in [e.value for e in OptimalityStatus] else OptimalityStatus.UNVERIFIED
+        if check.get("violations"):
+            feas_pass = False
+        if feas_pass:
+            key_opt = manifest_entry.get("expected_optimal_cost_usd") if manifest_entry else None
+            actual_c = check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd")
+            if key_opt is not None and actual_c is not None:
+                cost_diff = actual_c - key_opt
+                tol = max(0.50, 0.01 * key_opt)
+                if cost_diff > tol:
+                    pct_gap = (cost_diff / key_opt) * 100.0
+                    opt_verdict_stat = f"Not optimal (gap {pct_gap:.1f}%)"
+                else:
+                    opt_verdict_stat = OptimalityStatus.MATCHES_INDEPENDENT_OPTIMUM.value
+            else:
+                opt_verdict_stat = OptimalityStatus.MATCHES_INDEPENDENT_OPTIMUM.value
+            feas_status_final = FeasibilityStatus.PASS
+            summary_status_final = "VALID_PLAN (Feasible against checked constraints)"
+        else:
+            opt_verdict_stat = OptimalityStatus.UNVERIFIED.value
+            feas_status_final = FeasibilityStatus.FAIL
+            summary_status_final = f"INVALID_PLAN (Violations: {', '.join(check.get('violations', []))})"
     else:
         opt_verdict_stat = OptimalityStatus.TRUNCATION_FAILURE if norm_status == NormalizationStatus.TRUNCATION_FAILURE else OptimalityStatus.UNVERIFIED
         check = {
             "feasible_against_contract": False,
-            "optimality_verdict": opt_verdict_stat.value,
+            "optimality_verdict": opt_verdict_stat.value if isinstance(opt_verdict_stat, OptimalityStatus) else opt_verdict_stat,
             "summary_status": f"Rejected ({norm_status.value})",
             "violations": norm_errors or ["Failed schema/task validation"],
             "parameter_checks": [],
         }
         feas_pass = False
+        feas_status_final = FeasibilityStatus.FAIL
+        summary_status_final = f"Rejected ({norm_status.value})"
         print(f"    * Constraint Feasibility   : FAIL")
         print(f"    * FINAL VERDICT            : Rejected ({norm_status.value})")
 
@@ -388,9 +650,9 @@ def execute_mode_2_schema_llm(
         mode=2,
         mode_name="Mode 2: Schema LLM",
         original_query=query_text,
-        requirement_source="parsed_contract",
+        requirement_source="mode2_json_stated",
         problem_type=prob_type,
-        requirements=contract.model_dump() if contract else {},
+        requirements=stated_requirements_m2,
         execution_path=f"Groq API ({model_name}) -> OutputNormalizer (JSON Schema) -> IndependentChecker",
         provider="Groq",
         model=model_name,
@@ -400,14 +662,14 @@ def execute_mode_2_schema_llm(
         normalization_status=norm_status,
         normalization_errors=norm_errors,
         extracted_evidence=evidence,
-        feasibility=FeasibilityStatus.PASS if feas_pass else FeasibilityStatus.FAIL,
+        feasibility=feas_status_final,
         optimality_status=opt_verdict_stat,
         recomputed_cost_usd=check.get("cost_accuracy", {}).get("calculated_catalog_cost_usd"),
         cost_delta_usd=check.get("cost_accuracy", {}).get("cost_delta_usd"),
         cost_error_pct=check.get("cost_accuracy", {}).get("cost_error_pct"),
         violations=check.get("violations", []),
         audit_events=_extract_audit_events(check.get("parameter_checks", [])),
-        summary_status=check.get("summary_status", "Rejected"),
+        summary_status=summary_status_final,
         parsing_ms=elapsed_llm_ms,
         solving_ms=elapsed_norm_ms,
         verification_ms=elapsed_verif_ms,
@@ -416,49 +678,65 @@ def execute_mode_2_schema_llm(
         explanation_source=ExplanationSource.UNAVAILABLE,
         explanation_status="SKIPPED",
     )
+    verdict = explain_run(record, key=manifest_entry)
+    print("\n" + format_plain_english_box(verdict) + "\n")
     return record
 
 
 def find_manifest_entry(query_input: str) -> Optional[Dict[str, Any]]:
-    """Looks up human-written query specifications from development_query_manifest.json."""
-    manifest_path = "data/development_query_manifest.json"
-    if not os.path.exists(manifest_path):
-        return None
-    try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest_data = json.load(f)
-    except Exception:
-        return None
-
+    """Looks up human-written query specifications from manifest files."""
+    manifest_paths = ["data/final_query_manifest.json", "data/development_query_manifest.json"]
     cleaned = query_input.strip()
-    # 1. Number or Q-ID match (e.g. "2" -> Q02, "5" -> Q05, "Q02", "Q05_VM_INCOMPLETE_BUDGET")
-    if re.match(r"^\d+$", cleaned):
-        idx = int(cleaned)
-        target_prefix = f"Q{idx:02d}_"
-        for item in manifest_data:
-            if item.get("query_id", "").startswith(target_prefix):
+
+    # Extract ID prefix like Q1, Q01, 1, 01, Q01_...
+    m_qid = re.match(r"^Q?(\d+)(?:_.*)?$", cleaned, re.IGNORECASE)
+    target_prefix = f"Q{int(m_qid.group(1)):02d}_" if m_qid else None
+
+    for manifest_path in manifest_paths:
+        if not os.path.exists(manifest_path):
+            continue
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+        except Exception:
+            continue
+
+        items = manifest_data.get("queries", []) if isinstance(manifest_data, dict) else manifest_data
+        if not isinstance(items, list):
+            continue
+
+        # 1. Number or Q-ID prefix match (e.g. "1" -> Q01_, "Q1" -> Q01_, "Q01", "Q01_VM_...")
+        if target_prefix:
+            for item in items:
+                if isinstance(item, dict) and item.get("query_id", "").upper().startswith(target_prefix):
+                    return item
+
+        # 2. Exact query_id match (case-insensitive)
+        for item in items:
+            if isinstance(item, dict) and item.get("query_id", "").lower() == cleaned.lower():
                 return item
 
-    for item in manifest_data:
-        if item.get("query_id", "").lower() == cleaned.lower():
-            return item
+        # 3. Exact query_text match
+        for item in items:
+            if isinstance(item, dict) and item.get("query_text", "").strip().lower() == cleaned.lower():
+                return item
 
-    # 2. Exact match on query_text
-    for item in manifest_data:
-        if item.get("query_text", "").strip().lower() == cleaned.lower():
-            return item
-
-    # 3. Substring match
-    for item in manifest_data:
-        q_text = item.get("query_text", "").strip().lower()
-        if q_text in cleaned.lower() or cleaned.lower() in q_text:
-            return item
+        # 4. Substring match
+        for item in items:
+            if isinstance(item, dict):
+                q_text = item.get("query_text", "").strip().lower()
+                if q_text and (q_text in cleaned.lower() or cleaned.lower() in q_text):
+                    return item
 
     return None
 
 
 def evaluate_task_outcome(record: CanonicalExecutionRecord, expected_outcome: Optional[str]) -> str:
-    """Evaluates task outcome (SUCCESS vs FAILURE vs NOT_GRADED) against the human-written manifest expected outcome."""
+    """Evaluates task outcome (SUCCESS vs FAILURE vs UNGRADED-UNPARSEABLE vs NOT_GRADED) against manifest."""
+    norm_s = record.normalization_status.value if isinstance(record.normalization_status, NormalizationStatus) else str(record.normalization_status)
+    if norm_s in ["UNPARSEABLE", "NORMALIZATION_FAILURE", "MALFORMED_OUTPUT", "AMBIGUOUS"]:
+        return "UNGRADED-UNPARSEABLE"
+
     if not expected_outcome or expected_outcome.strip().upper() in ["NOT_GRADED", "NONE", "UNGRADED", "CUSTOM_QUERY", "CUSTOM", "—", "N/A"]:
         return "NOT_GRADED"
     try:
@@ -500,6 +778,7 @@ def evaluate_task_outcome(record: CanonicalExecutionRecord, expected_outcome: Op
 
 def execute_mode_3_symbolic(
     query_text: str,
+    manifest_entry: Optional[Dict[str, Any]] = None,
 ) -> Tuple[CanonicalExecutionRecord, Optional[CloudOptimizationContract], Optional[Dict[str, Any]]]:
     """MODE 3: Pure Symbolic Pipeline (100% Offline & Deterministic)."""
     print_banner(
@@ -528,6 +807,8 @@ def execute_mode_3_symbolic(
             failed_stage=1,
             total_duration_ms=total_ms,
         )
+        verdict = explain_run(rec, key=manifest_entry)
+        print("\n" + format_plain_english_box(verdict) + "\n")
         return rec, None, None
 
     # Stage 2: Archetype Matching
@@ -547,6 +828,8 @@ def execute_mode_3_symbolic(
             failed_stage=1,
             total_duration_ms=total_ms,
         )
+        verdict = explain_run(rec, key=manifest_entry)
+        print("\n" + format_plain_english_box(verdict) + "\n")
         return rec, None, None
 
     # Stage 3: Contract Validation
@@ -567,6 +850,8 @@ def execute_mode_3_symbolic(
             failed_stage=3,
             total_duration_ms=total_ms,
         )
+        verdict = explain_run(rec, key=manifest_entry)
+        print("\n" + format_plain_english_box(verdict) + "\n")
         return rec, None, None
 
     parsing_total_ms = p1_ms + p2_ms + p3_ms
@@ -592,6 +877,8 @@ def execute_mode_3_symbolic(
             solving_ms=solving_ms,
             total_duration_ms=total_ms,
         )
+        verdict = explain_run(rec, key=manifest_entry)
+        print("\n" + format_plain_english_box(verdict) + "\n")
         return rec, contract, None
 
     # Stage 5: Independent Verification
@@ -638,6 +925,8 @@ def execute_mode_3_symbolic(
         explanation_source=ExplanationSource.UNAVAILABLE,
         explanation_status="SKIPPED",
     )
+    verdict = explain_run(record, key=manifest_entry)
+    print("\n" + format_plain_english_box(verdict) + "\n")
     return record, contract, solver_res
 
 
@@ -645,6 +934,7 @@ def execute_mode_4_neuro_symbolic(
     query_text: str,
     mock_llm: bool = False,
     enable_explanation: bool = True,
+    manifest_entry: Optional[Dict[str, Any]] = None,
 ) -> CanonicalExecutionRecord:
     """MODE 4: Full Neuro-Symbolic Pipeline (Neural Interpreter + Local Solvers + Explainer)."""
     provider_name, api_key, base_url, target_model, default_timeout = settings.get_mode4_provider_config()
@@ -732,7 +1022,7 @@ def execute_mode_4_neuro_symbolic(
         )
         total_ms = (time.perf_counter() - t_start) * 1000.0
 
-        return CanonicalExecutionRecord(
+        rec = CanonicalExecutionRecord(
             mode=4,
             mode_name="Mode 4: Neuro-Symbolic",
             original_query=query_text,
@@ -761,6 +1051,9 @@ def execute_mode_4_neuro_symbolic(
             explanation_source=ExplanationSource.UNAVAILABLE,
             explanation_status="SKIPPED",
         )
+        verdict = explain_run(rec, key=manifest_entry)
+        print("\n" + format_plain_english_box(verdict) + "\n")
+        return rec
 
     # Valid Contract
     contract = nvd_res.contract
@@ -789,9 +1082,11 @@ def execute_mode_4_neuro_symbolic(
     verification_ms = (time.perf_counter() - t_verif) * 1000.0
 
     # Stage 4.5: Natural Language Explanation (Separately Counted & Sourced)
-    print("\n  [Stage 4.5: Natural Language Executive Report Generation via " + ("Local Explainer Template]" if (mock_llm or not enable_explanation) else f"{nvd_res.provider} API]"))
     t_exp = time.perf_counter()
+    explainer_provider, _, _, explainer_model, _ = settings.get_mode4_provider_config()
     if mock_llm or not enable_explanation:
+        print("\n  [Stage 4.5: Natural Language Executive Report Generation via Local Explainer Template]")
+        print("    * Provider Event: Live explanation API call skipped (offline mock mode)")
         exp_text = FinOpsExplainer.generate_report(contract, solver_res, check_result=check, enable_llm_explainer=False)
         exp_source = ExplanationSource.LOCAL_TEMPLATE
         if not s5_ok:
@@ -802,13 +1097,33 @@ def execute_mode_4_neuro_symbolic(
         else:
             print(f"    * Executive FinOps Report Formulated ({len(exp_text.splitlines())} lines)")
     else:
-        exp_text, exp_source = trace_stage_6_explanation(
-            contract=contract,
-            solver_result=solver_res,
-            mode=4,
-            check_result=check,
-            silent=False,
-        )
+        try:
+            exp_text, exp_source = FinOpsExplainer.generate_report_with_source(
+                contract=contract,
+                solver_result=solver_res,
+                check_result=check,
+                enable_llm_explainer=True,
+                offline=False,
+            )
+            if exp_source == ExplanationSource.LIVE_PROVIDER:
+                print(f"\n  [Stage 4.5: Natural Language Executive Report Generation via Live Provider API ({explainer_provider})]")
+                print(f"    * Provider Event: Live explanation successfully formulated by {explainer_provider}")
+            else:
+                print("\n  [Stage 4.5: Natural Language Executive Report Generation via Local Explainer Template (Provider Fallback)]")
+                print("    * Provider Event: Live provider call unavailable or failed -> Fallback to Local Template logged")
+        except Exception as e_exp:
+            print("\n  [Stage 4.5: Natural Language Executive Report Generation via Local Explainer Template (Provider Fallback)]")
+            print(f"    * Provider Event: Live API call error ({e_exp}) -> Fallback to Local Template logged")
+            exp_text = FinOpsExplainer.generate_report(contract, solver_res, check_result=check, enable_llm_explainer=False)
+            exp_source = ExplanationSource.LOCAL_TEMPLATE
+
+        if not s5_ok:
+            print("  [DEPLOYMENT ADVICE SUPPRESSED: Mathematical verification detected constraint violation(s)]")
+            print("  This allocation CANNOT be safely deployed as-is.")
+            for v in check.get("violations", []):
+                print(f"    - Violation: {v}")
+        else:
+            print(f"    * Executive FinOps Report Formulated ({len(exp_text.splitlines())} lines)")
     explanation_ms = (time.perf_counter() - t_exp) * 1000.0
 
     total_ms = (time.perf_counter() - t_start) * 1000.0
@@ -828,7 +1143,7 @@ def execute_mode_4_neuro_symbolic(
         requirement_source="neural_contract",
         problem_type=contract.problem_type,
         requirements=contract.model_dump(),
-        execution_path=f"{nvd_res.provider} API ({nvd_res.model}) -> Local Solver ({solver_res.get('solver', 'Solver')}) -> IndependentChecker" + (f" -> {nvd_res.provider} Explainer" if exp_source == ExplanationSource.LIVE_PROVIDER else " -> Local Explainer Template"),
+        execution_path=f"{nvd_res.provider} API ({nvd_res.model}) -> Local Solver ({solver_res.get('solver', 'Solver')}) -> IndependentChecker" + (f" -> {explainer_provider} Explainer" if exp_source == ExplanationSource.LIVE_PROVIDER else " -> Local Explainer Template"),
         provider=nvd_res.provider,
         model=nvd_res.model,
         solver_name=solver_res.get("solver"),
@@ -855,10 +1170,16 @@ def execute_mode_4_neuro_symbolic(
         explanation_status="SUCCESS" if s5_ok else "SUPPRESSED_DUE_TO_VIOLATION",
         explanation_text=exp_text,
     )
+    verdict = explain_run(record, key=manifest_entry)
+    print("\n" + format_plain_english_box(verdict) + "\n")
     return record
 
 
-def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
+def print_comparison_table(
+    records: List[CanonicalExecutionRecord],
+    m3_contract: Optional[CloudOptimizationContract] = None,
+    m4_contract: Optional[CloudOptimizationContract] = None,
+) -> None:
     print_banner("FOUR-WAY PARADIGM COMPARATIVE BENCHMARK SUMMARY", char="=")
 
     w_mode = 20
@@ -867,8 +1188,8 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
     w_cost = 13
     w_recomp = 13
     w_feas = 15
-    w_task = 14
-    w_proof = 28
+    w_task = 22
+    w_proof = 36
     w_lat = 9
 
     sep = (
@@ -892,8 +1213,11 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
         claim_s = f"${r.claimed_cost_usd:,.2f}" if r.claimed_cost_usd is not None else "—"
         recomp_s = f"${r.recomputed_cost_usd:,.2f}" if r.recomputed_cost_usd is not None else "—"
         feas_s = f"[{r.feasibility.value}]"
-        task_s = f"[{r.task_outcome or ('NOT_GRADED' if not r.expected_outcome or r.expected_outcome in ['NOT_GRADED', '—'] else ('SUCCESS' if r.feasibility == FeasibilityStatus.PASS else 'FAILURE'))}]"
-        proof_s = r.optimality_status.value[:w_proof]
+        
+        task_out = r.task_outcome or ("NOT_GRADED" if not r.expected_outcome or r.expected_outcome in ["NOT_GRADED", "—"] else ("SUCCESS" if r.feasibility == FeasibilityStatus.PASS else "FAILURE"))
+        task_s = f"[{task_out}]"[:w_task]
+        raw_proof = r.optimality_status.value if hasattr(r.optimality_status, "value") else str(r.optimality_status)
+        proof_s = raw_proof[:w_proof]
         lat_s = f"{r.total_duration_ms:.1f}ms" if r.total_duration_ms < 1000 else f"{r.total_duration_ms/1000.0:.2f}s"
 
         row = (
@@ -918,13 +1242,65 @@ def print_comparison_table(records: List[CanonicalExecutionRecord]) -> None:
     if m3 and m4:
         same_feasibility = (m3.feasibility == m4.feasibility)
         same_cost = (m3.recomputed_cost_usd == m4.recomputed_cost_usd)
-        print(f"  • Mode 3 vs Mode 4 Independent Execution:")
-        print(f"    - Mode 3 Pure Symbolic Verdict   : Alloc [{m3.feasibility.value}] | Task [{m3.task_outcome}] | Cost: ${m3.recomputed_cost_usd or 0.0:,.2f}")
-        print(f"    - Mode 4 Neuro-Symbolic Verdict  : Alloc [{m4.feasibility.value}] | Task [{m4.task_outcome}] | Cost: ${m4.recomputed_cost_usd or 0.0:,.2f}")
-        if same_feasibility and same_cost:
-            print("    -> Aligned: Both pipelines converged on identical feasibility and allocation cost.")
-        elif same_feasibility:
-            print("    -> Equivalent Feasibility: Both pipelines found feasible solutions with independent allocations.")
+        
+        # Check interpretation differences between Mode 3 and Mode 4 contracts
+        interp_mismatches = []
+        if m3_contract and m4_contract:
+            if m3_contract.problem_type != m4_contract.problem_type:
+                interp_mismatches.append(f"problem type (Mode 3: {m3_contract.problem_type}, Mode 4: {m4_contract.problem_type})")
+            if sorted(m3_contract.cloud_providers or []) != sorted(m4_contract.cloud_providers or []):
+                interp_mismatches.append(f"providers (Mode 3: {m3_contract.cloud_providers}, Mode 4: {m4_contract.cloud_providers})")
+            if (m3_contract.budget_max_usd or 0.0) != (m4_contract.budget_max_usd or 0.0):
+                interp_mismatches.append(f"budget (Mode 3: ${m3_contract.budget_max_usd or 0:,.2f}, Mode 4: ${m4_contract.budget_max_usd or 0:,.2f})")
+            if m3_contract.required_vcpus != m4_contract.required_vcpus:
+                interp_mismatches.append(f"vCPUs (Mode 3: {m3_contract.required_vcpus}, Mode 4: {m4_contract.required_vcpus})")
+            if m3_contract.required_ram_gb != m4_contract.required_ram_gb:
+                interp_mismatches.append(f"RAM (Mode 3: {m3_contract.required_ram_gb}GB, Mode 4: {m4_contract.required_ram_gb}GB)")
+            if m3_contract.latency_max_ms != m4_contract.latency_max_ms:
+                interp_mismatches.append(f"latency (Mode 3: {m3_contract.latency_max_ms}ms, Mode 4: {m4_contract.latency_max_ms}ms)")
+            if m3_contract.sla_availability_pct != m4_contract.sla_availability_pct:
+                interp_mismatches.append(f"SLA (Mode 3: {m3_contract.sla_availability_pct}%, Mode 4: {m4_contract.sla_availability_pct}%)")
+            if m3_contract.target_bandwidth_mbps != m4_contract.target_bandwidth_mbps:
+                interp_mismatches.append(f"bandwidth (Mode 3: {m3_contract.target_bandwidth_mbps}Mbps, Mode 4: {m4_contract.target_bandwidth_mbps}Mbps)")
+            if m3_contract.target_cpu_pct != m4_contract.target_cpu_pct:
+                interp_mismatches.append(f"target CPU (Mode 3: {m3_contract.target_cpu_pct}%, Mode 4: {m4_contract.target_cpu_pct}%)")
+            if m3_contract.max_cpu_pct != m4_contract.max_cpu_pct:
+                interp_mismatches.append(f"max CPU (Mode 3: {m3_contract.max_cpu_pct}%, Mode 4: {m4_contract.max_cpu_pct}%)")
+            if m3_contract.primary_region != m4_contract.primary_region:
+                interp_mismatches.append(f"primary region (Mode 3: {m3_contract.primary_region}, Mode 4: {m4_contract.primary_region})")
+            if m3_contract.secondary_region != m4_contract.secondary_region:
+                interp_mismatches.append(f"secondary region (Mode 3: {m3_contract.secondary_region}, Mode 4: {m4_contract.secondary_region})")
+        elif m3_contract != m4_contract:
+            interp_mismatches.append("contract presence mismatch")
+
+        cost_m3_str = f"${m3.recomputed_cost_usd:,.2f}" if (m3.feasibility == FeasibilityStatus.PASS and m3.recomputed_cost_usd is not None) else "N/A"
+        cost_m4_str = f"${m4.recomputed_cost_usd:,.2f}" if (m4.feasibility == FeasibilityStatus.PASS and m4.recomputed_cost_usd is not None) else "N/A"
+        print("  • Mode 3 vs Mode 4 Independent Execution:")
+        print(f"    - Mode 3 Pure Symbolic Verdict   : Alloc [{m3.feasibility.value}] | Task [{m3.task_outcome}] | Cost: {cost_m3_str}")
+        print(f"    - Mode 4 Neuro-Symbolic Verdict  : Alloc [{m4.feasibility.value}] | Task [{m4.task_outcome}] | Cost: {cost_m4_str}")
+        
+        both_infeasible = (m3.feasibility in [FeasibilityStatus.FAIL, FeasibilityStatus.NOT_EVALUABLE] and m4.feasibility in [FeasibilityStatus.FAIL, FeasibilityStatus.NOT_EVALUABLE])
+        both_feasible = (m3.feasibility == FeasibilityStatus.PASS and m4.feasibility == FeasibilityStatus.PASS)
+
+        if both_infeasible:
+            if interp_mismatches:
+                m_summary = "; ".join(interp_mismatches)
+                print(f"    -> Both infeasible with Parameter Mismatches: Both pipelines determined the workload is infeasible, but extracted different parameters ({m_summary}).")
+            else:
+                print("    -> Both infeasible: Both pipelines parsed identical requirements and determined the workload is infeasible under the specified constraints.")
+        elif interp_mismatches and both_feasible and same_cost and (m3.recomputed_cost_usd or 0.0) > 0:
+            m_summary = "; ".join(interp_mismatches)
+            print(f"    -> Coincidental Cost Match with Interpretation Mismatch: Both pipelines produced ${m3.recomputed_cost_usd:,.2f} plans, but extracted different parameters ({m_summary}). The answer matched only because the same allocation is optimal under both limits.")
+        elif interp_mismatches and same_feasibility:
+            m_summary = "; ".join(interp_mismatches)
+            print(f"    -> Independent Feasible Plans with Parameter Mismatches: ({m_summary}).")
+        elif interp_mismatches:
+            m_summary = "; ".join(interp_mismatches)
+            print(f"    -> Pipeline Divergence with Parameter Mismatches: Mode 3 [{m3.feasibility.value}], Mode 4 [{m4.feasibility.value}] ({m_summary}).")
+        elif both_feasible and same_cost and not interp_mismatches:
+            print(f"    -> Fully Aligned: Both pipelines parsed identical requirements and converged on identical feasibility and allocation cost (${m3.recomputed_cost_usd or 0.0:,.2f}).")
+        elif both_feasible and not interp_mismatches:
+            print("    -> Equivalent Feasibility: Both pipelines parsed identical requirements and found feasible solutions with independent allocations.")
         else:
             print(f"    -> Pipeline Divergence: Mode 3 evaluated [{m3.feasibility.value}], Mode 4 evaluated [{m4.feasibility.value}] due to distinct interpretation/solver paths.")
 
@@ -954,24 +1330,25 @@ def print_manifest_grading_and_mismatch_report(
     """Grades every mode against the human-written manifest and prints a detailed Mode 3 vs Mode 4 Mismatch Report."""
     print_banner("MANIFEST GROUND-TRUTH GRADING & INTERPRETATION-MISMATCH REPORT", char="=")
     if not manifest_entry:
-        print("  [Manifest Reference: Query not explicitly found in development_query_manifest.json]")
+        print("  [Manifest Reference: Query not explicitly found in manifest files]")
         print("  Task Outcome: NOT_GRADED (Ad-hoc query excluded from manifest pass-rate grading)\n")
-        print("  ALL-MODE AUDIT SUMMARY:")
-        for r in records:
-            print(f"    • {r.mode_name:<26} -> Task Outcome: [NOT_GRADED] | Allocation Feasibility: [{r.feasibility.value}] | Status: {r.summary_status}")
-        print("=" * 88 + "\n")
+        print(format_plain_english_summary(records, key=None))
         return
 
     q_id = manifest_entry.get("query_id", "CUSTOM_QUERY")
     q_cat = manifest_entry.get("category", "N/A")
     exp_outcome = manifest_entry.get("expected_outcome", "FEASIBLE")
     intended_arch = manifest_entry.get("intended_archetype", "N/A")
+    exp_opt = manifest_entry.get("expected_optimal_cost_usd")
+    opt_src = manifest_entry.get("optimum_source", "N/A")
 
-    print(f"  • Query ID          : {q_id}")
-    print(f"  • Scenario Family   : {manifest_entry.get('scenario_family_id', 'N/A')}")
-    print(f"  • Linguistic Class  : {q_cat}")
-    print(f"  • Expected Outcome  : {exp_outcome}")
-    print(f"  • Intended Archetype: {intended_arch}")
+    print(f"  • Query ID              : {q_id}")
+    print(f"  • Scenario Family       : {manifest_entry.get('scenario_family_id', 'N/A')}")
+    print(f"  • Linguistic Class      : {q_cat}")
+    print(f"  • Expected Outcome      : {exp_outcome}")
+    print(f"  • Intended Archetype    : {intended_arch}")
+    if exp_opt is not None:
+        print(f"  • Expected Optimal Cost : ${float(exp_opt):,.2f} (Source: {opt_src})")
     print("-" * 88)
 
     w_field = 24
@@ -1042,12 +1419,16 @@ def print_manifest_grading_and_mismatch_report(
 
     print(sep)
 
-    print("\n  ALL-MODE TASK GRADING AGAINST GROUND TRUTH:")
-    for r in records:
-        outc_color = "[SUCCESS]" if r.task_outcome == "SUCCESS" else "[FAILURE]"
-        print(f"    • {r.mode_name:<26} -> Task Outcome: {outc_color:<9} | Allocation Feasibility: [{r.feasibility.value}] | Status: {r.summary_status}")
+    # Flag any mode whose verified cost differs from manifest optimum by > $0.01
+    if exp_opt is not None:
+        for r in records:
+            if r.recomputed_cost_usd is not None and r.feasibility == FeasibilityStatus.PASS:
+                diff = abs(r.recomputed_cost_usd - float(exp_opt))
+                if diff > 0.01:
+                    print(f"  ! NOTICE: {r.mode_name} recomputed cost (${r.recomputed_cost_usd:,.2f}) differs from manifest expected optimum (${float(exp_opt):,.2f} via {opt_src}) by ${diff:.2f} (> $0.01 threshold)")
 
-    print("=" * 88 + "\n")
+    print()
+    print(format_plain_english_summary(records, key=manifest_entry))
 
 
 def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecord]) -> None:
@@ -1080,6 +1461,8 @@ def log_canonical_records(query_text: str, records: List[CanonicalExecutionRecor
         "cost_error",
         "feasibility",
         "task_outcome",
+        "strict_task_success",
+        "lenient_task_success",
         "optimality_status",
         "verdict",
         "is_mock",
@@ -1155,6 +1538,12 @@ def main() -> None:
     query_id = manifest_entry.get("query_id") if manifest_entry else None
     expected_outcome = manifest_entry.get("expected_outcome") if manifest_entry else None
 
+    if is_mock:
+        print("\n" + "*" * 88)
+        print("*" + " MOCK DATA - OFFLINE BENCHMARK MODE ".center(86) + "*")
+        print("*" + " Zero live LLM API calls are made; using offline fixtures ".center(86) + "*")
+        print("*" * 88 + "\n")
+
     print_banner(
         "NEURASYM NEURO-SYMBOLIC 4-WAY COMPARATIVE BENCHMARK",
         f"Query: \"{query_text}\"" + (f" [ID: {query_id}]" if query_id else "") + (" [OFFLINE MOCK MODE]" if is_mock else ""),
@@ -1164,21 +1553,21 @@ def main() -> None:
     records: List[CanonicalExecutionRecord] = []
 
     # 1. Mode 3 first to obtain contract & solver result
-    m3_rec, m3_contract, solver_res = execute_mode_3_symbolic(query_text)
+    m3_rec, m3_contract, solver_res = execute_mode_3_symbolic(query_text, manifest_entry=manifest_entry)
 
     # 2. Mode 1
-    m1_rec = execute_mode_1_raw_llm(query_text, m3_contract, mock_llm=is_mock)
+    m1_rec = execute_mode_1_raw_llm(query_text, m3_contract, mock_llm=is_mock, manifest_entry=manifest_entry)
     records.append(m1_rec)
 
     # 3. Mode 2
-    m2_rec = execute_mode_2_schema_llm(query_text, m3_contract, mock_llm=is_mock)
+    m2_rec = execute_mode_2_schema_llm(query_text, m3_contract, mock_llm=is_mock, manifest_entry=manifest_entry)
     records.append(m2_rec)
 
     # Add Mode 3
     records.append(m3_rec)
 
     # 4. Mode 4 (Genuine Groq interpretation + solver dispatch)
-    m4_rec = execute_mode_4_neuro_symbolic(query_text, mock_llm=is_mock)
+    m4_rec = execute_mode_4_neuro_symbolic(query_text, mock_llm=is_mock, manifest_entry=manifest_entry)
     records.append(m4_rec)
 
     # Extract m4 contract if present
@@ -1194,9 +1583,10 @@ def main() -> None:
         r.query_id = query_id
         r.expected_outcome = expected_outcome or "NOT_GRADED"
         r.task_outcome = evaluate_task_outcome(r, expected_outcome)
+        r.is_mock = is_mock
 
     # Print comparative summary table
-    print_comparison_table(records)
+    print_comparison_table(records, m3_contract=m3_contract, m4_contract=m4_contract)
 
     # Print Manifest Grading & Interpretation-Mismatch Report
     print_manifest_grading_and_mismatch_report(manifest_entry, records, m3_contract, m4_contract)

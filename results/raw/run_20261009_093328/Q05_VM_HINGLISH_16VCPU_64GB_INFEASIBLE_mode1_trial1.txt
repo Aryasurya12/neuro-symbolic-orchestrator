@@ -1,0 +1,19 @@
+**Short answer:**  
+With the SKU list you provided, the cheapest way to get **≥ 16 vCPU and ≥ 64 GB RAM on AWS** is two *m5.2xlarge* instances (8 vCPU + 32 GB each). That configuration costs **$560.64 / month**, which is **$110 over the $450 / month budget**.  
+
+**Conclusion:**  
+At the current on‑demand pricing in the catalog, the required capacity cannot be met for $450 / month. You would need to either:
+
+1. **Raise the budget** to at least **$560 / month** (or add a discount such as a Reserved Instance/Savings Plan that isn’t listed here), **or**  
+2. **Reduce the resource requirements** (e.g., target 12 vCPU / 48 GB RAM) which can be satisfied for ≤ $450 / month, **or**  
+3. **Use a different cloud provider or mixed‑instance strategy** (e.g., combine Azure/GCP VMs) – but none of the listed Azure/GCP SKUs provide the needed 16 vCPU/64 GB at a lower total cost.
+
+**Recommendation (if budget can be increased):**  
+
+| Region | Instance Type | Qty | vCPU | RAM | Monthly Cost (on‑demand) |
+|--------|---------------|-----|------|-----|--------------------------|
+| us‑east‑1 (AWS) | m5.2xlarge | 2 | 16 | 64 GB | **$560.64** |
+
+No additional DR, bandwidth, or replica costs are needed for a single‑region deployment.  
+
+If the $450 limit is firm, you’ll have to compromise on either CPU, RAM, or move to a different pricing model (e.g., spot, reserved, or a different provider).

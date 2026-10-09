@@ -31,9 +31,10 @@ class FeasibilityStatus(str, Enum):
 class OptimalityStatus(str, Enum):
     PROVABLY_OPTIMAL = "Provably Optimal (MILP branch-and-bound exact)"
     EXHAUSTIVE_DISCRETE_MINIMUM = "Exact Discrete Minimum (Exhaustive Candidate Search)"
+    MATCHES_INDEPENDENT_OPTIMUM = "Matches independent optimum (not proven by this mode)"
     HEURISTIC_FEASIBLE = "Optimality not established (Heuristic approximation)"
     INFEASIBLE = "Infeasible"
-    UNVERIFIED = "Unverified (Prose / Schema Drift)"
+    UNVERIFIED = "Unverified (no optimality proof)"
     CLARIFICATION_REQUIRED = "Clarification Required"
     UNSUPPORTED = "Unsupported Workload"
     CONFLICTING = "Conflicting Requirements"
@@ -269,18 +270,35 @@ class CanonicalExecutionRecord:
         recomputed = f"${self.recomputed_cost_usd:,.2f}" if self.recomputed_cost_usd is not None else "—"
         cost_err = f"{self.cost_error_pct:.1f}%" if self.cost_error_pct is not None else "—"
         
+        norm_s = self.normalization_status.value if isinstance(self.normalization_status, NormalizationStatus) else str(self.normalization_status)
+        if norm_s in ["UNPARSEABLE", "NORMALIZATION_FAILURE", "MALFORMED_OUTPUT", "AMBIGUOUS"]:
+            task_outcome_val = "UNGRADED-UNPARSEABLE"
+        elif self.task_outcome:
+            task_outcome_val = self.task_outcome
+        elif not self.expected_outcome or self.expected_outcome in ["NOT_GRADED", "—"]:
+            task_outcome_val = "NOT_GRADED"
+        elif self.feasibility == FeasibilityStatus.PASS:
+            task_outcome_val = "SUCCESS"
+        else:
+            task_outcome_val = "FAILURE"
+
+        strict_succ = 1 if task_outcome_val == "SUCCESS" else 0
+        lenient_succ = "" if task_outcome_val == "UNGRADED-UNPARSEABLE" else (1 if task_outcome_val == "SUCCESS" else 0)
+
         return {
             "mode": f"Mode {self.mode}",
             "mode_name": self.mode_name,
             "query_id": self.query_id or "—",
             "expected_outcome": self.expected_outcome or "—",
             "execution_path": self.execution_path,
-            "normalization_status": self.normalization_status.value if isinstance(self.normalization_status, NormalizationStatus) else str(self.normalization_status),
+            "normalization_status": norm_s,
             "claimed_cost": claimed,
             "recomputed_cost": recomputed,
             "cost_error": cost_err,
             "feasibility": self.feasibility.value if isinstance(self.feasibility, FeasibilityStatus) else str(self.feasibility),
-            "task_outcome": self.task_outcome or ("NOT_GRADED" if not self.expected_outcome or self.expected_outcome in ["NOT_GRADED", "—"] else ("SUCCESS" if self.feasibility == FeasibilityStatus.PASS else "FAILURE")),
+            "task_outcome": task_outcome_val,
+            "strict_task_success": strict_succ,
+            "lenient_task_success": lenient_succ,
             "optimality_status": self.optimality_status.value if isinstance(self.optimality_status, OptimalityStatus) else str(self.optimality_status),
             "verdict": self.summary_status,
             "is_mock": self.is_mock,

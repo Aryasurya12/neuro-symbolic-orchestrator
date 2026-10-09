@@ -1,0 +1,30 @@
+**Cheapest AWS deployment < $200**
+
+| Component | Choice | Monthly cost |
+|-----------|--------|--------------|
+| Region (base cost) | **us‑east‑1** (AWS) | **$120.00** |
+| VM SKU | **t3.medium** (2 vCPU, 4 GB) | **$30.37** |
+| **Total** |  | **$150.37 / month** |
+
+*Why this works* – The t3.medium is the lowest‑priced instance in the catalog. Coupled with the cheapest AWS region (us‑east‑1), the combined monthly spend is well under the $200 ceiling while still providing a usable 2‑vCPU, 4‑GB server.
+
+---
+
+**Highest‑performance AWS deployment < $200**
+
+| Component | Choice | Monthly cost |
+|-----------|--------|--------------|
+| Region (base cost) | **us‑east‑1** (AWS) | **$120.00** |
+| VM SKU | **m5.large** (2 vCPU, 8 GB) | **$70.08** |
+| **Total** |  | **$190.08 / month** |
+
+*Why this works* – The m5.large is the most powerful instance you can afford when you add the mandatory region cost and stay under $200. It doubles the memory of the t3.medium and uses the more performant “M” family, giving better baseline CPU and I/O characteristics while still respecting the budget.
+
+---
+
+**Summary**
+
+- **Cheapest option:** t3.medium in **us‑east‑1** → **$150.37/mo**.  
+- **Highest‑performance under $200:** m5.large in **us‑east‑1** → **$190.08/mo**.  
+
+Both deployments meet the “under $200” constraint; pick the one that matches your cost vs. performance preference.

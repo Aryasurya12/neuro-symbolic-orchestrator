@@ -1,0 +1,16 @@
+**Result – the requested constraints cannot be satisfied with the catalog data**
+
+| Requirement | What the catalog forces | Why it fails |
+|-------------|------------------------|--------------|
+| **Provider mix** – one AWS region + one GCP region | The cheapest AWS region is **us‑east‑1** (base $120 / mo). The cheapest GCP region is **us‑central‑1** (base $115 / mo). | Minimum base‑region cost = $120 + $115 = **$235**. |
+| **Latency ≤ 50 ms** | The smallest inter‑region latency between any AWS region and GCP is **us‑east‑1 ↔ us‑central‑1 = 32 ms**. | Latency cost = 32 ms × $0.25 = **$8**. |
+| **Combined SLA ≥ 99.99 %** | All listed regions have SLA = 99.95 %. Combined SLA = 1 – ((1‑0.9995) × (1‑0.9995)) = **99.999975 %**, which meets the SLA requirement. |
+| **Budget ≤ $240 / month** | Total cost = base $120 + base $115 + latency $8 = **$243** **before** adding any compute (bandwidth, worker replicas, VM SKUs, etc.). | Even with **zero** compute the cost already exceeds the $240 ceiling, leaving no room for the required VM, bandwidth or replica charges. |
+
+Because the **minimum unavoidable cost** for an AWS + GCP disaster‑recovery pair that satisfies the latency (≤ 50 ms) and SLA (≥ 99.99 %) constraints is **$243 / month**, the budget of **$240 / month** cannot be met.
+
+**Recommendation:**  
+- Either increase the monthly budget to at least **$250** (to cover the $243 base cost plus the smallest viable compute package),  
+- Or relax one of the constraints (e.g., accept a slightly higher latency, a lower SLA, or use a single‑cloud DR approach).  
+
+With the current catalog and constraints, no feasible deployment exists.

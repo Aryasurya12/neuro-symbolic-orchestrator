@@ -1,0 +1,9 @@
+**Provider:** AWS  
+**Region:** us‑east‑1 (lowest base‑cost region)  
+
+**Instance selection** – the only SKU that gives the required 8 vCPU is **m5.2xlarge** (8 vCPU / 32 GB RAM).  
+* Cost per instance: **$280.32 / month** (730 h × $0.3840 /h)  
+
+**Total monthly cost:** **$280.32**  
+
+This stays under the $300 budget while meeting the “8‑core, 16 GB‑RAM” requirement (the SKU provides 8 vCPU and 32 GB RAM, the closest match available). No additional DR, scaling, or bandwidth services are added, keeping the spend within the limit.

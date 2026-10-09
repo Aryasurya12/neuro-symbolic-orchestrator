@@ -1,0 +1,11 @@
+{
+  "task_type": "PSO_Continuous_Scaling",
+  "outcome": "ready",
+  "reason": "",
+  "allocated_vms": [],
+  "primary_region": "",
+  "secondary_region": "",
+  "optimal_bandwidth_mbps": 300.0,
+  "recommended_replicas": 7,
+  "total_monthly_cost_usd": 339.0
+}

@@ -1,0 +1,39 @@
+**Provider & Regions (2‑cloud DR)**  
+- **AWS – us‑east‑1** (primary) – base cost **$120 / mo**  
+- **GCP – us‑central1** (secondary) – base cost **$115 / mo**  
+
+**Inter‑region DR cost**  
+- Latency = 32 ms → latency surcharge = 32 ms × $0.25 = $8.00  
+- **DR total = $120 + $115 + $8 = $243 / mo**  
+
+**Combined SLA**  
+- 1 – ((1‑0.9995) × (1‑0.9995)) = 0.99999975 → **99.999975 %**  
+
+**Compute (minimum viable)**  
+- **AWS t3.medium** (2 vCPU, 4 GB) in us‑east‑1 – $30.37 / mo  
+- **GCP e2‑standard‑4** (4 vCPU, 16 GB) in us‑central1 – $97.82 / mo  
+- **Compute total = $30.37 + $97.82 = $128.19 / mo**  
+
+**Continuous Dynamic Scaling (shared service)**  
+- Bandwidth = **100 Mbps** → $0.08 × 100 = $8.00 / mo  
+- Replicas = **2** (75 Mbps per replica → 150 Mbps capacity, > required) → $45 × 2 = $90.00 / mo  
+- **Scaling total = $8 + $90 = $98.00 / mo**  
+
+---
+
+### **Overall Monthly Cost**
+
+| Component | Cost (USD) |
+|-----------|------------|
+| Disaster‑Recovery link (AWS us‑east‑1 ↔ GCP us‑central1) | **$243.00** |
+| Compute (AWS t3.medium + GCP e2‑standard‑4) | **$128.19** |
+| Dynamic scaling (100 Mbps, 2 replicas) | **$98.00** |
+| **Total Monthly Cost** | **$469.19** |
+
+---
+
+**Recommendation (concise)**  
+- Deploy primary workloads on **AWS t3.medium** in **us‑east‑1**.  
+- Deploy DR replica on **GCP e2‑standard‑4** in **us‑central1**.  
+- Enable continuous dynamic scaling with **100 Mbps bandwidth** and **2 worker replicas**.  
+- **Total cost ≈ $469 / month** with a combined SLA of **99.999975 %**.

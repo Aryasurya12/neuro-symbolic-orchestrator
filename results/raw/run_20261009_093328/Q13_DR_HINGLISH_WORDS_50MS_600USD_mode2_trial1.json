@@ -1,0 +1,11 @@
+{
+  "task_type": "Z3_Graph_Disaster_Recovery",
+  "outcome": "infeasible",
+  "reason": "Requested combined SLA of 99.99% exceeds the maximum achievable SLA of 99.95% for the available regions. Additionally, the budget of $100 is insufficient to cover the minimum base costs for any AWS-GCP region pair plus latency cost.",
+  "primary_region": null,
+  "secondary_region": null,
+  "total_monthly_cost_usd": null,
+  "allocated_vms": [],
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null
+}

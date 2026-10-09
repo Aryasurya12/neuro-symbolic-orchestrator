@@ -1,0 +1,32 @@
+**Short answer:** With the current AWS SKU pricing you cannot get a *single* AWS deployment that provides **8 vCPUs + 16 GB RAM** for **≤ $121 / month**. The cheapest combination that meets the required compute‑memory envelope exceeds the budget.
+
+---
+
+### Why the budget is insufficient
+
+| SKU (AWS) | vCPUs | RAM | Monthly cost* |
+|-----------|------|-----|---------------|
+| t3.xlarge | 4 | 16 GB | **$121.47** |
+| c5.xlarge | 4 | 8 GB  | $124.10 |
+| m5.xlarge | 4 | 16 GB | $140.16 |
+| **Two t3.xlarge** | 8 | 32 GB | $242.94 |
+| **Four t3.medium** (2 vCPU / 4 GB each) | 8 | 16 GB | $121.48 |
+| **Two t3.large + Two t3.medium** | 8 | 24 GB | $182.22 |
+
+\*Costs are based on the 730 h/month rates given in the catalog.
+
+- The **cheapest single‑instance** that gives **≥ 8 vCPUs** is **two t3.xlarge** (or any larger SKU) → **$242.94**.
+- The **cheapest multi‑instance** that meets **8 vCPUs + 16 GB** is **four t3.medium** → **$121.48**, which is **$0.48 over** the $121 limit.
+- All other viable mixes (c5.xlarge, m5.xlarge, etc.) are even more expensive.
+
+Because the catalog does not include spot/discounted pricing or smaller‑granularity billing, the $121 ceiling cannot be satisfied while delivering the required 8 vCPU / 16 GB footprint on AWS.
+
+---
+
+### Recommendation
+
+1. **Adjust the budget** – raising it to **≈ $122** would allow the four t3.medium solution (exactly 8 vCPU / 16 GB) at **$121.48** per month.  
+2. **Consider a different provider** – GCP’s **e2‑standard‑4** (4 vCPU / 16 GB) costs **$97.82**; two of those would give 8 vCPU / 32 GB for **$195.64**, still above $121 but cheaper than many AWS combos.  
+3. **Re‑evaluate requirements** – if 4 vCPU / 16 GB is acceptable, a single **t3.xlarge** meets it for **$121.47** (just under the limit).  
+
+If the budget cannot be increased and the 8 vCPU / 16 GB spec is non‑negotiable, an AWS‑only deployment is not feasible with the provided SKU pricing.

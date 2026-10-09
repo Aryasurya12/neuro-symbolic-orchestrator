@@ -1,0 +1,25 @@
+**Recommended two‑cloud disaster‑recovery deployment**
+
+| Component | Provider / Region | SKU / Size | Qty | Monthly Cost |
+|-----------|-------------------|------------|-----|--------------|
+| **Primary compute** | **AWS – us‑east‑1** | t3.medium (2 vCPU, 4 GB) | 1 | **$30.37** |
+| **DR compute** | **Azure – eastus** | Standard_D4s_v5 (4 vCPU, 16 GB) – used as the DR node (you can down‑size later) | 1 | **$140.16** |
+| **DR link (cross‑region, cross‑cloud)** | us‑east‑1 ↔ eastus | – | – | **$3.00** (latency 12 ms × $0.25) |
+| **Base DR region fees** | us‑east‑1 (AWS) | – | – | **$120.00** |
+| | eastus (Azure) | – | – | **$125.00** |
+| **Dynamic scaling layer** (shared across both clouds) | Bandwidth | 200 Mbps | – | **$16.00** (200 × $0.08) |
+| | Worker replicas | 3 replicas | – | **$135.00** (3 × $45) |
+| **Subtotal** | | | | **$459.53** |
+| **Combined SLA** | 1 – ((1‑0.9995) × (1‑0.9995)) | | | **99.999975 %** |
+
+### Total monthly cost
+**$459.53 / month**
+
+### Why this mix?
+* **Two clouds** – AWS (us‑east‑1) + Azure (eastus) satisfy the “across two clouds” requirement.
+* **Cost‑effective DR link** – the lowest latency pair (12 ms) keeps the cross‑cloud DR surcharge to just $3.
+* **Compute sizing** – a modest t3.medium for the primary workload and a single Azure D4s_v5 node for DR (you can replace it with a smaller Azure SKU if you need to cut cost further).
+* **Dynamic scaling** – 200 Mbps bandwidth with 3 worker replicas gives ~89 % CPU utilisation per the model, providing headroom while keeping scaling costs low.
+* **High combined SLA** – 99.999975 % availability, well above typical 99.9 % enterprise targets.
+
+Feel free to adjust bandwidth or replica count if your traffic patterns change; the cost formulas scale linearly.

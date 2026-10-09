@@ -1,0 +1,7 @@
+{
+  "task_type": "ILP_VM_Allocation",
+  "outcome": "infeasible",
+  "reason": "No combination of available AWS VM SKUs provides at least 8 vCPUs and 16GB RAM within a $122 monthly budget. The cheapest option meeting the CPU requirement is two t3.xlarge instances (8 vCPUs, 32GB) costing $242.94, which exceeds the budget.",
+  "allocated_vms": [],
+  "total_monthly_cost_usd": 0
+}

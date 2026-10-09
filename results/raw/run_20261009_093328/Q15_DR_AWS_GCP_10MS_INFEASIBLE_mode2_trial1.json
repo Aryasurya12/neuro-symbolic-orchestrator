@@ -1,0 +1,11 @@
+{
+  "task_type": "Z3_Graph_Disaster_Recovery",
+  "outcome": "infeasible",
+  "reason": "No region pair in the provided topology meets both the required maximum latency of 10ms and the combined SLA of at least 99.99%; the smallest latency is 12ms between us-east-1 and eastus, which exceeds the latency constraint.",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

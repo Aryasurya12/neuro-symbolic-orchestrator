@@ -1,0 +1,20 @@
+**Recommended deployment**
+
+| Component | Provider / Region | SKU / Service | Qty | Monthly cost |
+|-----------|-------------------|---------------|-----|--------------|
+| **Disaster‑Recovery link** | AWS **us‑east‑1** ↔ GCP **us‑central1** | Inter‑region DR (base‑cost + latency surcharge) | – | **$243.00** |
+| **Application host – primary** | AWS **us‑east‑1** | **t3.medium** (2 vCPU, 4 GB) | 1 | **$30.37** |
+| **Application host – DR** | GCP **us‑central1** | **e2‑standard‑4** (4 vCPU, 16 GB) | 1 | **$97.82** |
+| **Dynamic scaling – bandwidth** | Shared (AWS + GCP) | Bandwidth provisioned | 1,000 Mbps (max) | **$80.00** |
+| **Dynamic scaling – worker replicas** | Shared | Worker replica (45 $/replica) | 3 | **$135.00** |
+| **Subtotal** | | | | **$586.19** |
+| **Budget margin** | | | | **$13.81** (under $600) |
+
+### Why this meets the requirements
+* **SLA:** Both regions have 99.95 % SLA. Combined SLA = 1 – ((1‑0.9995) × (1‑0.9995)) = 99.999975 % → exceeds the 99.99 % target.  
+* **Latency:** us‑east‑1 ↔ us‑central1 latency = **32 ms** (well under the 50 ms limit).  
+* **Cost:** Total monthly spend = **$586.19**, staying below the $600 ceiling.  
+* **Capacity:** 1,000 Mbps bandwidth with 3 worker replicas (75 Mbps each) gives ample head‑room for traffic spikes; scaling cost is predictable and fits the budget.
+
+### Summary
+Deploy the primary workload on an AWS **t3.medium** in **us‑east‑1** and the DR replica on a GCP **e2‑standard‑4** in **us‑central1**. Connect the two regions with the DR link (base costs + 32 ms × $0.25). Add dynamic scaling that provisions up to **1 Gbps** of bandwidth and **3 worker replicas** for auto‑scaling, costing $215 per month. The complete solution totals **$586.19/month**, satisfying the SLA, latency, and budget constraints.

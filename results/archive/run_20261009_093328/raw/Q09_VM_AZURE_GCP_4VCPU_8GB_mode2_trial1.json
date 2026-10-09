@@ -1,0 +1,18 @@
+{
+  "task_type": "ILP_VM_Allocation",
+  "outcome": "ready",
+  "reason": "",
+  "allocated_vms": [
+    {
+      "sku": "e2-standard-4",
+      "provider": "GCP",
+      "quantity": 1,
+      "monthly_cost": 97.82
+    }
+  ],
+  "primary_region": "",
+  "secondary_region": "",
+  "optimal_bandwidth_mbps": 0,
+  "recommended_replicas": 0,
+  "total_monthly_cost_usd": 97.82
+}

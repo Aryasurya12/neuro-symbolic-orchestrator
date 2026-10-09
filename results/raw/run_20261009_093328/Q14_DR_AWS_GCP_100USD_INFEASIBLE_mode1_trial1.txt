@@ -1,0 +1,28 @@
+**Result:** A disaster‑recovery pair that satisfies **both** the 99.99 % combined SLA **and** the ≤ 50 ms latency requirement cannot be built for ≤ $100 / month with the catalog you provided.
+
+**Why it’s impossible**
+
+| Region pair | Latency (ms) | Combined SLA | Monthly base cost* |
+|-------------|--------------|--------------|--------------------|
+| us‑east‑1 (AWS) ↔ us‑central1 (GCP) | 32 ms | 99.999975 % | $120 + $115 = $235 |
+| us‑east‑1 ↔ eastus (Azure) | 12 ms | 99.999975 % | $120 + $125 = $245 |
+| us‑west‑2 ↔ us‑central1 | 42 ms | 99.999975 % | $130 + $115 = $245 |
+| us‑west‑2 ↔ eastus | 70 ms (exceeds 50 ms) | – | – |
+| eu‑west‑1 ↔ eastus | 90 ms (exceeds 50 ms) | – | – |
+| … | … | … | … |
+
+\*Base‑cost formula: **base_cost(A) + base_cost(B) + (latency × $0.25)**.  
+Even the *cheapest* qualifying pair (us‑east‑1 ↔ us‑central1) costs:
+
+- Base region cost: $120 + $115 = $235  
+- Latency surcharge: 32 ms × $0.25 = $8  
+- **Total = $243 / month** (far above the $100 ceiling).
+
+Since the region‑level base fees dominate the budget, no combination of instance types, bandwidth, or worker replicas can bring the total under $100 while still meeting the required SLA and latency constraints.
+
+**Recommendation**
+
+- **Adjust the budget** (e.g., raise it to at least ~$250/month) to accommodate the minimum viable DR pair.  
+- **Or relax requirements** (e.g., accept a lower combined SLA, higher latency, or a single‑region standby) to fit the $100 limit.  
+
+With the current catalog, a compliant deployment under $100 is not feasible.

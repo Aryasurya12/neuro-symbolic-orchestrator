@@ -1,0 +1,24 @@
+{
+  "status": "INFEASIBLE",
+  "solver": "Z3_SMT_Graph_Steered_Solver",
+  "is_feasible": false,
+  "primary_region": "N/A",
+  "secondary_region": "N/A",
+  "disaster_recovery_topology": "Active-Active Multi-Region Mesh",
+  "inter_region_latency_ms": 0.0,
+  "latency_threshold_ms": 50.0,
+  "achieved_sla_pct": 0.0,
+  "target_sla_pct": 99.99,
+  "total_monthly_cost_usd": 0.0,
+  "budget_max_usd": 100.0,
+  "budget_utilized_pct": 0.0,
+  "cost_savings_usd": 0.0,
+  "error_message": "INFEASIBLE: Budget cap of $100.00 violated (minimum cost: $243.00)",
+  "constraint_status": {
+    "is_feasible": false,
+    "budget_ok": false,
+    "latency_ok": true,
+    "sla_ok": true,
+    "provider_ok": true
+  }
+}

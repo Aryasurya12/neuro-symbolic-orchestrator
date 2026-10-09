@@ -1,0 +1,11 @@
+{
+  "task_type": "Z3_Graph_Disaster_Recovery",
+  "outcome": "infeasible",
+  "reason": "All AWS-GCP region pairs meeting the required 99.99% combined SLA have costs far above the $100 monthly budget (e.g., us-east-1 & us-central1 cost $243, us-west-2 & us-central1 cost $255.5). No feasible solution exists within the constraints.",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

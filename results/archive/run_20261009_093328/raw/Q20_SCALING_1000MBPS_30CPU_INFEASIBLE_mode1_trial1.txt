@@ -1,0 +1,19 @@
+**Result – the request cannot be satisfied with the catalog constraints**
+
+| Requirement | What the catalog can deliver | Why it fails |
+|-------------|-----------------------------|--------------|
+| **Bandwidth** | 1000 Mbps → $80 / mo (bandwidth cost) | OK |
+| **Worker replicas** | 1 – 16 replicas (max) | To keep CPU ≤ 30 % the scaling model requires **≥ 45 replicas** (CPU = Bandwidth / (Replicas × 75 Mbps) × 100 %). The catalog caps replicas at 16, so the CPU would be **≈ 83 %** (1000 / (16 × 75) × 100). |
+| **Total cost limit** | $200 / mo | Even if we ignore the CPU breach, the cheapest possible scaling configuration that meets the 1000 Mbps demand is 16 replicas + 1000 Mbps bandwidth: <br>‑ Bandwidth: 1000 Mbps × $0.08 = $80.00 <br>‑ Replicas: 16 × $45 = $720.00 <br>‑ **Subtotal = $800.00** (far above $200). |
+| **VM layer** | The cheapest VM (AWS t3.medium) costs $30.37 / mo, but adding any VM(s) would only increase the total further. |
+
+### Bottom line
+- **CPU constraint (≤ 30 %)** → needs ≥ 45 replicas → exceeds the catalog’s replica ceiling (16).  
+- **Budget constraint ($200 / mo)** → even the minimal‑cost scaling (16 replicas + 1000 Mbps) costs **≈ $800 / mo**, well over budget.  
+
+### Recommendation
+- **Reduce the required bandwidth** (e.g., to ≤ 540 Mbps) so that 16 replicas keep CPU ≤ 30 % (540 / (16 × 75) × 100 ≈ 45 %). This would cost: 540 Mbps × $0.08 = $43.20 + 16 × $45 = $720 → **$763.20** (still over $200).  
+- **Increase the budget** to at least **≈ $800 / mo** to meet the 1000 Mbps demand with the maximum allowed replicas.  
+- **Or** request a catalog extension that allows more than 16 worker replicas or a different pricing model for workers.
+
+**Conclusion:** With the current catalog and a $200/month ceiling, a 1000 Mbps dynamic‑scaling deployment limited to 30 % CPU is **not feasible**. Adjust either the bandwidth, replica limit, or budget.

@@ -1,0 +1,6 @@
+**Provider:** AWS  
+**Region:** us‑east‑1 (base cost $120 / mo)  
+**Instance:** t3.medium (2 vCPU, 4 GB RAM) – $0.0416 /hr → **$30.37 / mo**  
+**Additional services:** None (no extra bandwidth or replica scaling needed for a single cheap server)  
+
+**Total monthly cost:** **$150.37** (well under the $200 / mo limit).

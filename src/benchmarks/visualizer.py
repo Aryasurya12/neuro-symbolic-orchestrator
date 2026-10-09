@@ -80,6 +80,9 @@ class BenchmarkVisualizer:
             cat = q_meta.get("category", "UNKNOWN")
             exp_outcome = q_meta.get("expected_outcome", "FEASIBLE")
 
+            if str(exp_outcome).upper() in ["NOT_GRADED", "NONE", "—", ""]:
+                continue
+
             pat_res = TruthTableEngine.compute_query_pattern(mode_dict, expected_outcome=exp_outcome)
             pat_res["query_id"] = q_id
             pat_res["trial"] = trial_num
@@ -93,9 +96,13 @@ class BenchmarkVisualizer:
                         cat_stats[cat][f"mode{m}_pass"] += 1
 
         for cat, data in cat_stats.items():
-            tot = max(1, data["total_queries"])
-            for m in [1, 2, 3, 4]:
-                data[f"mode{m}_rate_pct"] = round((data[f"mode{m}_pass"] / tot) * 100.0, 1)
+            tot = data["total_queries"]
+            if tot > 0:
+                for m in [1, 2, 3, 4]:
+                    data[f"mode{m}_rate_pct"] = round((data[f"mode{m}_pass"] / tot) * 100.0, 1)
+            else:
+                for m in [1, 2, 3, 4]:
+                    data[f"mode{m}_rate_pct"] = 0.0
 
         # 2. 16-Pattern Truth Table
         truth_table = TruthTableEngine.aggregate_truth_table(matched_runs)
@@ -224,24 +231,28 @@ class BenchmarkVisualizer:
         lines.append("")
 
         # Category Table
-        lines.append("--- 1. TASK SUCCESS RATE BY QUERY CATEGORY ---")
-        w_cat = 26
-        w_col = 13
-        hdr = f"| {'Query Category':<{w_cat}} | {'Mode 1 (Raw)':<{w_col}} | {'Mode 2 (JSON)':<{w_col}} | {'Mode 3 (Sym)':<{w_col}} | {'Mode 4 (NeuSym)':<{w_col}} |"
-        sep = f"+{'-'*(w_cat+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+"
-        lines.append(sep)
-        lines.append(hdr)
-        lines.append(sep)
+        has_graded_cat = any(data.get("total_queries", 0) > 0 for data in analytics.get("category_breakdown", {}).values())
+        if has_graded_cat:
+            lines.append("--- 1. TASK SUCCESS RATE BY QUERY CATEGORY ---")
+            w_cat = 26
+            w_col = 13
+            hdr = f"| {'Query Category':<{w_cat}} | {'Mode 1 (Raw)':<{w_col}} | {'Mode 2 (JSON)':<{w_col}} | {'Mode 3 (Sym)':<{w_col}} | {'Mode 4 (NeuSym)':<{w_col}} |"
+            sep = f"+{'-'*(w_cat+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+{'-'*(w_col+2)}+"
+            lines.append(sep)
+            lines.append(hdr)
+            lines.append(sep)
 
-        for cat, data in analytics.get("category_breakdown", {}).items():
-            c_name = cat.replace("_", " ").title()[:w_cat]
-            m1_s = f"{data['mode1_rate_pct']:.1f}% ({data['mode1_pass']}/{data['total_queries']})"
-            m2_s = f"{data['mode2_rate_pct']:.1f}% ({data['mode2_pass']}/{data['total_queries']})"
-            m3_s = f"{data['mode3_rate_pct']:.1f}% ({data['mode3_pass']}/{data['total_queries']})"
-            m4_s = f"{data['mode4_rate_pct']:.1f}% ({data['mode4_pass']}/{data['total_queries']})"
-            lines.append(f"| {c_name:<{w_cat}} | {m1_s:<{w_col}} | {m2_s:<{w_col}} | {m3_s:<{w_col}} | {m4_s:<{w_col}} |")
-        lines.append(sep)
-        lines.append("")
+            for cat, data in analytics.get("category_breakdown", {}).items():
+                if data.get("total_queries", 0) == 0:
+                    continue
+                c_name = cat.replace("_", " ").title()[:w_cat]
+                m1_s = f"{data['mode1_rate_pct']:.1f}% ({data['mode1_pass']}/{data['total_queries']})"
+                m2_s = f"{data['mode2_rate_pct']:.1f}% ({data['mode2_pass']}/{data['total_queries']})"
+                m3_s = f"{data['mode3_rate_pct']:.1f}% ({data['mode3_pass']}/{data['total_queries']})"
+                m4_s = f"{data['mode4_rate_pct']:.1f}% ({data['mode4_pass']}/{data['total_queries']})"
+                lines.append(f"| {c_name:<{w_cat}} | {m1_s:<{w_col}} | {m2_s:<{w_col}} | {m3_s:<{w_col}} | {m4_s:<{w_col}} |")
+            lines.append(sep)
+            lines.append("")
 
         # 16-Pattern Truth Table
         lines.append("--- 2. FOUR-MODE TRUTH TABLE DISTRIBUTION (16 STATES: M1-M2-M3-M4) ---")

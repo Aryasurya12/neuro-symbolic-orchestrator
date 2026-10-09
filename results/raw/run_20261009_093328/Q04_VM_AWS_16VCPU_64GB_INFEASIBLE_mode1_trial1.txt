@@ -1,0 +1,15 @@
+**Result:** With the current AWS SKU pricing in the catalog, a deployment that provides **16 vCPUs + 64 GB RAM** cannot be built for **≤ $450 / month**.
+
+| Possible AWS combos that meet the resource target | Monthly compute cost |
+|---------------------------------------------------|----------------------|
+| 2 × m5.2xlarge (8 vCPU / 32 GB each)               | **$560.64** |
+| 4 × m5.xlarge (4 vCPU / 16 GB each)                | **$560.64** |
+| 8 × m5.large (2 vCPU / 8 GB each)                  | **$560.64** |
+| 4 × c5.xlarge (4 vCPU / 8 GB each) + additional RAM (not available) – still exceeds budget |
+| Any other mix of the listed SKUs                | **> $450** |
+
+All feasible combinations that satisfy **16 vCPU + 64 GB RAM** on AWS cost **≈ $560 / month**, which is **$110 over** the $450 limit.
+
+**Recommendation:**  
+- **Either** raise the budget to at least **$560 / month** to use the standard on‑demand instances listed above,  
+- **Or** consider alternative providers (e.g., Azure Standard_D4s_v5 or GCP e2‑standard‑4) or negotiate reserved/spot pricing, which are not covered in the current catalog.

@@ -1,0 +1,14 @@
+**Result:** With the current catalog pricing, an AWS deployment that provides **8 vCPUs + 16 GB RAM** cannot be kept ≤ $122 / month.
+
+| Option | vCPU | RAM | Monthly cost |
+|--------|------|-----|--------------|
+| t3.xlarge (single) | 4 | 16 GB | **$121.47** |
+| 2 × t3.large | 4 | 16 GB | $120.74 |
+| 2 × t3.xlarge | 8 | 32 GB | $242.94 |
+| 1 × m5.2xlarge | 8 | 32 GB | $280.32 |
+| 1 × c5.xlarge + 1 × t3.large | 6 | 24 GB | $164.57 |
+| … | … | … | **> $122** |
+
+All configurations that reach **8 vCPUs** exceed the $122 / month ceiling (the cheapest 8‑vCPU option is the m5.2xlarge at $280.32).  
+
+**Recommendation:** Either raise the budget above $122 / month (e.g., use an m5.2xlarge for $280.32) or relax the vCPU requirement (a single t3.xlarge meets the RAM need for $121.47).

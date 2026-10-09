@@ -1,0 +1,13 @@
+**Provider:** AWS  
+**Region:** us‑east‑1 (lowest base‑cost region)  
+
+**Instance allocation**  
+- 2 × **m5.xlarge** – each provides 4 vCPU / 16 GB RAM  
+- Combined resources: **8 vCPU**, **32 GB RAM** (exceeds the 16 GB requirement, but meets the 8 vCPU demand)  
+
+**Monthly cost**  
+- m5.xlarge @ $140.16 / mo × 2 = **$280.32**  
+
+**Total monthly spend:** **$280.32** (well under the $300 ceiling)  
+
+*No additional DR or scaling components are needed for the stated requirement.*

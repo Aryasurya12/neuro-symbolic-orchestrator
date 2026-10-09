@@ -1,0 +1,14 @@
+**Result – No feasible solution**
+
+The catalog’s inter‑region latency matrix shows the smallest possible round‑trip latency is **12 ms** (us‑east‑1 ↔ eastus). The requirement is **≤ 10 ms**, which cannot be satisfied with any pair of regions in the provided data.
+
+Because the latency constraint cannot be met, a deployment that simultaneously satisfies:
+
+* **Multi‑region disaster‑recovery across AWS + GCP**  
+* **Combined SLA ≥ 99.99 %** (the best achievable with two 99.95 % regions is 99.9975 %)  
+* **Inter‑region latency ≤ 10 ms**  
+
+does not exist within the given catalog.
+
+**Recommendation:**  
+Either relax the latency requirement (e.g., to ≥ 12 ms) or consider a different set of regions/providers not listed in the catalog (e.g., colocated edge locations or a private backbone) to achieve the 10 ms target. Once the latency constraint is adjusted, a concrete allocation and cost estimate can be provided.

@@ -1,0 +1,32 @@
+**Recommended deployment**
+
+| Component | Choice | Qty / Size | Monthly cost (USD) |
+|-----------|--------|------------|--------------------|
+| **Dynamic‑scaling service** | Bandwidth 300 Mbps | – | 300 Mbps × $0.08 = **$24.00** |
+| | Worker replicas | 7 × t3.medium (2 vCPU, 4 GB) | 7 × $30.37 = **$212.59** |
+| | Replica licence (per‑replica) | 7 × $45.00 | **$315.00** |
+| **Disaster‑recovery pair** | Primary region – **us‑east‑1 (AWS)** | – | Base $120.00 |
+| | Secondary region – **eastus (Azure)** | – | Base $125.00 |
+| | Inter‑region latency cost (12 ms × $0.25) | – | **$3.00** |
+| **Subtotal** | – | – | **$339.00** (scaling) + **$212.59** (VMs) + **$248.00** (DR) = **$799.59** |
+
+**CPU utilisation check**
+
+- Required bandwidth per replica = 75 Mbps.  
+- With 7 replicas: 300 Mbps / (7 × 75) = 0.571 → 57.1 % CPU.  
+- This satisfies the **target ≈ 70 %** and stays **below the 60 % ceiling**.
+
+**SLA (combined)**  
+Primary SLA = 99.95 % (AWS us‑east‑1)  
+Secondary SLA = 99.95 % (Azure eastus)  
+
+Combined SLA = 1 – ((1‑0.9995) × (1‑0.9995)) ≈ **99.999975 %**.
+
+**Total monthly cost:** **$799.59**, well under the $1,500 limit.
+
+**Why this mix?**
+
+* **Compute:** t3.medium is the cheapest instance that provides enough CPU headroom for each replica (2 vCPU → 57 % utilisation).  
+* **Scaling:** 7 replicas give the required 300 Mbps capacity while keeping CPU ≤ 60 %.  
+* **DR:** The cheapest high‑SLA pair (us‑east‑1 ↔ eastus) adds only $3 latency cost and yields a near‑perfect combined SLA.  
+* **Budget:** Even after adding VM, bandwidth, replica licences and DR, the solution stays comfortably below the $1,500 ceiling, leaving room for future growth.

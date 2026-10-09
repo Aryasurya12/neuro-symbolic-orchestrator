@@ -1,0 +1,11 @@
+{
+  "task_type": "PSO_Continuous_Scaling",
+  "outcome": "infeasible",
+  "reason": "To keep CPU usage at or below 30% for 1000 Mbps, at least 45 replicas are required (CPU = (1000/(replicas*75))*100%). The maximum allowed replicas is 16, making the request infeasible within the given constraints.",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

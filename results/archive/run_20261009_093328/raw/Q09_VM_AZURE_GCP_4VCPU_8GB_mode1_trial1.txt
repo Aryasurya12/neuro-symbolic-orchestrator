@@ -1,0 +1,8 @@
+**Provider:** Azure  
+**Instance:** Standard_D4s_v5 (4 vCPU, 16 GB RAM) – meets the 4 vCPU / 8 GB requirement.  
+**Region:** any Azure region (e.g., eastus).  
+
+**Monthly cost:**  
+- VM compute charge: **$140.16**  
+
+Total = **$140.16 / month**, which stays under the $150 budget. No additional DR or scaling components are needed for the stated requirement.

@@ -1,0 +1,21 @@
+{
+  "status": "INFEASIBLE_BUDGET_EXCEEDED",
+  "solver": "Exact_Branch_and_Bound_ILP",
+  "total_monthly_cost_usd": 485.88,
+  "allocated_vms": [
+    {
+      "instance_type": "t3.xlarge",
+      "provider": "AWS",
+      "count": 4,
+      "vcpus_per_vm": 4,
+      "ram_gb_per_vm": 16.0,
+      "monthly_cost": 485.88
+    }
+  ],
+  "total_vcpus": 16,
+  "total_ram_gb": 64.0,
+  "budget_max_usd": 450.0,
+  "budget_utilized_pct": 107.97,
+  "cost_savings_usd": 0.0,
+  "solve_time_ms": 15.137
+}

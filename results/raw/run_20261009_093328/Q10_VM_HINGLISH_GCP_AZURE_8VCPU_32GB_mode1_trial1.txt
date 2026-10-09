@@ -1,0 +1,15 @@
+**Provider:** Google Cloud Platform (GCP) – us‑central1  
+
+**Compute layout**  
+| # of VMs | SKU (vCPU / RAM) | Monthly VM cost* |
+|----------|------------------|------------------|
+| 3 | e2‑standard‑4 (4 vCPU / 16 GB) | 3 × $97.82 = **$293.46** |
+
+- **Total vCPU:** 3 × 4 = 12 vCPU (≥ 8)  
+- **Total RAM:** 3 × 16 GB = 48 GB (exactly the required 48 GB)  
+
+\*Costs are the “per‑instance” price from the catalog (730 h/mo). No additional DR region is added because the budget constraint ($350) would be exceeded otherwise.
+
+**Total monthly cost:** **$293.46** (well under the $350 ceiling).  
+
+This meets the required 8‑core / 48 GB spec, stays within budget, and uses the cheapest combination of available SKUs.

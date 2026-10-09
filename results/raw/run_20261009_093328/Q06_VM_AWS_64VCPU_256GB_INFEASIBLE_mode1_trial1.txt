@@ -1,0 +1,6 @@
+**Result:** The requested workload (64 vCPUs + 256 GB RAM) cannot be satisfied on AWS within a $10 / month budget using the available SKU catalog.
+
+- The largest AWS VM in the catalog is **m5.2xlarge** (8 vCPU, 32 GB RAM) at **$280.32 / month**.  
+- Even a single instance of that size already exceeds the $10 limit, and you would need **8 × m5.2xlarge** (or an equivalent combination) to reach 64 vCPU/256 GB RAM, costing **≈ $2,242 / month**.
+
+**Conclusion:** With the current catalog and pricing, the target specifications and budget are mutually exclusive. To meet the budget you would need to drastically reduce the resource requirements, or to meet the resource requirements you must accept a substantially higher monthly spend. If you’d like a revised plan that balances cost and capacity, please provide adjusted constraints.

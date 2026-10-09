@@ -1,0 +1,11 @@
+{
+  "task_type": "ILP_VM_Allocation",
+  "outcome": "infeasible",
+  "reason": "No combination of available AWS VM SKUs can provide at least 16 vCPUs and 64GB RAM within the $450 monthly budget. The cheapest options exceed the budget (e.g., 4 x t3.xlarge = $485.88, 2 x m5.2xlarge = $560.44).",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

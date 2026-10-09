@@ -1,0 +1,21 @@
+{
+  "status": "OPTIMAL",
+  "solver": "SciPy_MILP_HiGHS",
+  "total_monthly_cost_usd": 121.48,
+  "allocated_vms": [
+    {
+      "instance_type": "t3.medium",
+      "provider": "AWS",
+      "count": 4,
+      "vcpus_per_vm": 2,
+      "ram_gb_per_vm": 4.0,
+      "monthly_cost": 121.48
+    }
+  ],
+  "total_vcpus": 8,
+  "total_ram_gb": 16.0,
+  "budget_max_usd": 300.0,
+  "budget_utilized_pct": 40.49,
+  "cost_savings_usd": 178.52,
+  "solve_time_ms": 8.083
+}

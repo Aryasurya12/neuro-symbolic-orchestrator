@@ -1,0 +1,29 @@
+**Result:** It isn’t possible to meet the requirement “8 vCPUs + 16 GB RAM on AWS for ≤ $121 / month” with the catalog you provided.
+
+**Why:**  
+
+| SKU | vCPUs | RAM | Monthly cost (per instance) |
+|-----|-------|-----|------------------------------|
+| t3.medium | 2 | 4 GB | $30.37 |
+| t3.large   | 2 | 8 GB | $60.74 |
+| t3.xlarge  | 4 | 16 GB| $121.47 |
+| c5.large   | 2 | 4 GB | $62.05 |
+| c5.xlarge  | 4 | 8 GB | $124.10 |
+| m5.large   | 2 | 8 GB | $70.08 |
+| m5.xlarge  | 4 | 16 GB| $140.16 |
+| m5.2xlarge | 8 | 32 GB| $280.32 |
+
+To reach **8 vCPUs** you need at least:
+
+* **2 × t3.xlarge** → 8 vCPU, 32 GB, **$242.94**  
+* **2 × c5.xlarge** → 8 vCPU, 16 GB, **$248.20**  
+* **2 × m5.xlarge** → 8 vCPU, 32 GB, **$280.32**  
+* **4 × t3.large** → 8 vCPU, 32 GB, **$242.96**  
+
+All combinations exceed the $121 ceiling (the cheapest single instance that meets the RAM requirement, a t3.xlarge, already costs $121.47 and provides only half the needed vCPUs).
+
+**Conclusion:** With the current SKU pricing, the target cannot be satisfied on AWS under $121 / month. You would need either:
+
+* a higher budget, or  
+* a different provider/instance family not listed, or  
+* to relax the vCPU or RAM requirement.

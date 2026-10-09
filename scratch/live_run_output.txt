@@ -1,0 +1,355 @@
+
+########################################################################################
+                   NEURASYM NEURO-SYMBOLIC 4-WAY COMPARATIVE BENCHMARK                  
+ Query: "Disaster recovery across AWS and GCP with 99.99 percent SLA and max 50ms latency under 250 dollar a month"
+########################################################################################
+
+
+========================================================================================
+                             MODE 3: PURE SYMBOLIC PIPELINE                             
+ 100% Offline | Rule-Based Parser (SCOPE) + Solvers (HiGHS/PSO/Z3) + IndependentChecker 
+========================================================================================
+
+--- STAGE 1: Lexical Analysis & Rule-Based Parsing (SCOPEParser) ---
+  [1.1 Lexical Entity Extraction]
+    * vCPUs        : NO MATCH (defaulting to archetype requirements)
+    * RAM (GB)     : NO MATCH (defaulting to archetype requirements)
+    * Budget       : MATCH -> "250 dollar" => $250.00 USD
+    * Provider     : MATCH -> "AWS" => "AWS"
+    * Latency SLA  : MATCH -> "max 50ms" => 50.0 ms
+
+  [1.2 Domain Intent & Contract Parameter Assembly]
+    * Domain Intent: PASS (cloud infrastructure/FinOps keywords verified)
+    * Extracted Parameters Table:
+      - budget_max_usd        : 250.0
+      - required_vcpus        : 1
+      - required_ram_gb       : 1.0
+      - metadata              : {'field_provenance': {'budget_max_usd': '[EXPLICIT]', 'service_count': '[DEFAULT: Baseline Fallback]', 'required_vcpus': '[DEFAULT: Baseline Fallback]', 'required_ram_gb': '[DEFAULT: Baseline Fallback]', 'latency_max_ms': '[EXPLICIT]', 'sla_availability_pct': '[DEFAULT: Baseline Fallback]', 'cloud_providers': '[EXPLICIT]', 'target_bandwidth_mbps': '[UNPARSED: Defaulted]', 'target_cpu_pct': '[UNPARSED: Defaulted]', 'max_cpu_pct': '[UNPARSED: Unconstrained]'}}
+      - latency_max_ms        : 50.0
+      - cloud_providers       : ['AWS', 'GCP']
+
+--- STAGE 2: Semantic Archetype Matching (CARM) ---
+  [2.1 Query Constraint Tokens]: ['Budget_Limit_Max', 'Inter_Node_Latency_Max', 'Multi_Region_Disjoint', 'SLA_Availability_Min']
+    * ILP_VM_Allocation           : score 0.14  (|Q∩T|=1, |Q∪T|=7)
+    * PSO_Continuous_Scaling      : score 0.00  (|Q∩T|=0, |Q∪T|=7)
+    * Z3_Graph_Disaster_Recovery  : score 0.75  (|Q∩T|=3, |Q∪T|=4)
+
+  [2.3 Routing Decision] -> Selected: Z3_Graph_Disaster_Recovery (margin: 0.61)
+
+--- STAGE 3: Contract Validation & Mathematical Formulation ---
+    Pydantic validation: PASS (Z3_Graph_Disaster_Recovery)
+
+--- STAGE 4: Solver Dispatch & Execution ---
+  [4.1 Solver Engine: Z3 SMT Graph Solver]
+    Status: FEASIBLE | Primary: AWS:us-east-1 (US_East) | Secondary: GCP:us-central1 (US_Central)
+
+  --- Mode 3 Parameter-Wise Independent Verification ---
+  [5.1 Parameter-by-Parameter Ground-Truth Audit Table]
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Parameter Checked                | Required Target        | Measured / Calc          | Delta / Margin         | Status   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Region Graph Topology            | Valid Nodes in Graph   | us-east-1 & us-central1  | Known Nodes            | [PASS]   |
+    | Failure Domain Disjointness      | Primary != Secondary   | us-east-1 vs us-central1 | Distinct Geographies   | [PASS]   |
+    | Inter-Region Network Latency     | <= 50.0 ms             | 32.0 ms                  | -18.0 ms (Margin)      | [PASS]   |
+    | Composite Availability SLA       | >= 99.9000%            | 99.99997%                | +0.09997%              | [PASS]   |
+    | Disaster Recovery Monthly Cost   | <= $250.00 USD         | $243.00 USD              | -$7.00 (Headroom)      | [PASS]   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+
+  [5.2 Detected Constraint Violations]
+    * None (0 constraint violations found)
+
+  [5.3 Verification Verdict]: Feasible against checked constraints
+  [5.4 Proof Classification]: Exact Discrete Minimum (Exhaustive Candidate Search)
+
+--- STAGE 6: Explanation Generation (only for Mode 4) ---
+  [SKIPPED: Mode 3 is pure symbolic and does not generate natural-language explanations]
+
++------------------------------------------------------------------------------------+
+| IN PLAIN ENGLISH: [NOT_GRADED]                                                     |
+|                                                                                    |
+| Headline     : Mode 3: Pure Symbolic completed without an evaluation ground-truth  |
+| key.                                                                               |
+| What Happened: Mode 3: Pure Symbolic executed at $243.00 and reported status       |
+| 'Feasible against checked constraints'. No ground-truth manifest record was        |
+| matched for this query.                                                            |
+| Why It Matters: Without a reference key, correctness, constraint adherence, and    |
+| cost optimality cannot be verified.                                                |
+| Check This   : Add this query to the benchmark manifest with expected parameters   |
+| to enable automatic grading.                                                       |
++------------------------------------------------------------------------------------+
+
+
+========================================================================================
+                              MODE 1: RAW UNCONSTRAINED LLM                             
+                     Provider: Groq API | Model: openai/gpt-oss-120b                    
+========================================================================================
+
+  [Stage 1.1: Request Formulation]
+    Query: "Disaster recovery across AWS and GCP with 99.99 percent SLA and max 50ms latency under 250 dollar a month"
+    Prompting Strategy: Free-form Natural Language Prose (No Schema, No Solver)
+
+  [Stage 1.2: Live LLM Response]
+    Status        : SUCCESS
+    Finish Reason : stop
+    Latency       : 3870.1 ms (3.87s)
+    Attempts Made : 1
+      - Attempt 1: max_tokens=4096, finish_reason=stop, status=OK
+    Raw Generation Content:
+    ------------------------------------------------------------------------------
+      **Result – the requested constraints cannot be satisfied with the catalog you provided.**
+      
+      | Requirement | What the catalog forces | Why it fails |
+      |-------------|------------------------|--------------|
+      | **99.99 % SLA** | The only two‑region pair that meets the latency limit (≤ 50 ms) and gives a combined SLA ≥ 99.99 % is **us‑east‑1 (AWS) ↔ us‑central1 (GCP)** (latency = 32 ms, combined SLA ≈ 99.999975 %). | – |
+      | **≤ 50 ms latency** | The same pair (us‑east‑1 ↔ us‑central1) is the only one ≤ 50 ms; all other AWS‑GCP combos are > 50 ms. | – |
+      | **Monthly budget ≤ $250** | Region‑base cost = $120 (us‑east‑1) + $115 (us‑central1) = **$235**.<br>Latency surcharge = 32 ms × $0.25 = **$8**.<br>**Region total = $243**. | Leaves only **$7** for compute, bandwidth and worker replicas. |
+      | **Compute, bandwidth & replicas** | Minimum allowed values are:<br>• Bandwidth = 100 Mbps → $8/month<br>• Replicas = 1 → $45/month<br>• Any VM (cheapest t3.medium) → $30.37/month | Minimum additional cost = $8 + $45 + $30.37 ≈ $83.37, which pushes the total to **≈ $326** – well over the $250 ceiling. |
+      
+      ### What can be changed?
+      
+      | Lever | Impact |
+      |------|--------|
+      | **Increase budget** – Raising the monthly budget to at least **$326** would allow the cheapest viable deployment (t3.medium + 100 Mbps + 1 replica). |
+      | **Relax latency** – Choosing a pair with higher latency (e.g., us‑east‑1 ↔ eu‑west‑1, latency = 85 ms) reduces the region‑pair cost (base $120 + $140 + 85 × 0.25 = $283) but still leaves insufficient room for compute. |
+      | **Reduce SLA requirement** – Using a single‑region or a lower‑SLA pair would cut region cost, but would not meet the 99.99 % target. |
+      | **Drop one provider** – Staying within a single cloud (e.g., only AWS) eliminates the cross‑cloud latency surcharge and region‑pair cost, but then you lose the “AWS + GCP” disaster‑recovery requirement. |
+      
+      ### Recommendation
+      
+      - **If the $250 budget is firm**, you must **relax at least one of the other constraints** (either accept higher latency, lower SLA, or drop the cross‑cloud requirement).  
+      - **If the cross‑cloud, 99.99 % SLA, ≤ 50 ms latency requirement is non‑negotiable**, increase the monthly budget to **≈ $330** to cover the minimal compute stack (t3.medium, 100 Mbps, 1 replica).  
+      
+      Feel free to let me know which constraint you’d like to adjust, and I can produce a concrete deployment plan that fits the new parameters.
+    ------------------------------------------------------------------------------
+
+  [Stage 1.3: Information Extraction & Semantic Normalization]
+    Normalization Status : SUCCESS
+    Extracted Cost Claim : $243.00 USD / month
+
+  [Stage 1.4: Independent Mathematical Verification (IndependentChecker)]
+
+  --- Mode 1 Parameter-Wise Independent Verification ---
+  [5.1 Parameter-by-Parameter Ground-Truth Audit Table]
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Parameter Checked                | Required Target        | Measured / Calc          | Delta / Margin         | Status   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Region Graph Topology            | Valid Nodes in Graph   | us-east-1 & us-central1  | Known Nodes            | [PASS]   |
+    | Failure Domain Disjointness      | Primary != Secondary   | us-east-1 vs us-central1 | Distinct Geographies   | [PASS]   |
+    | Inter-Region Network Latency     | <= 50.0 ms             | 32.0 ms                  | -18.0 ms (Margin)      | [PASS]   |
+    | Composite Availability SLA       | >= 99.9000%            | 99.99997%                | +0.09997%              | [PASS]   |
+    | Disaster Recovery Monthly Cost   | <= $250.00 USD         | $243.00 USD              | -$7.00 (Headroom)      | [PASS]   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+
+  [5.2 Detected Constraint Violations]
+    * None (0 constraint violations found)
+
+  [5.3 Verification Verdict]: Feasible against checked constraints (Unverified LLM)
+  [5.4 Proof Classification]: Matches independent optimum (not proven by this mode)
+
++------------------------------------------------------------------------------------+
+| IN PLAIN ENGLISH: [NOT_GRADED]                                                     |
+|                                                                                    |
+| Headline     : Mode 1: Raw LLM completed without an evaluation ground-truth key.   |
+| What Happened: Mode 1: Raw LLM executed at $243.00 and reported status 'VALID_PLAN |
+| (Feasible against checked constraints)'. No ground-truth manifest record was       |
+| matched for this query.                                                            |
+| Why It Matters: Without a reference key, correctness, constraint adherence, and    |
+| cost optimality cannot be verified.                                                |
+| Check This   : Add this query to the benchmark manifest with expected parameters   |
+| to enable automatic grading.                                                       |
++------------------------------------------------------------------------------------+
+
+
+========================================================================================
+                             MODE 2: SCHEMA-CONSTRAINED LLM                             
+                     Provider: Groq API | Model: openai/gpt-oss-120b                    
+========================================================================================
+
+  [Stage 2.1: JSON Schema Prompt Formulation]
+    Query: "Disaster recovery across AWS and GCP with 99.99 percent SLA and max 50ms latency under 250 dollar a month"
+    Prompting Strategy: Strict Pydantic JSON Schema Direct Inference
+
+  [Stage 2.2: Live Structured Response]
+    Status        : SUCCESS
+    Finish Reason : stop
+    Latency       : 1670.1 ms (1.67s)
+    Attempts Made : 1
+      - Attempt 1: max_tokens=4096, finish_reason=stop, status=OK
+    Emitted JSON Object:
+    ------------------------------------------------------------------------------
+      {
+            "task_type": "Z3_Graph_Disaster_Recovery",
+            "outcome": "ready",
+            "reason": "",
+            "allocated_vms": [],
+            "primary_region": "us-east-1",
+            "secondary_region": "us-central1",
+            "optimal_bandwidth_mbps": null,
+            "recommended_replicas": null,
+            "total_monthly_cost_usd": 243.0
+      }
+    ------------------------------------------------------------------------------
+
+  [Stage 2.3: Information Extraction & Task Suitability Check]
+    Normalization Status : SUCCESS
+    Extracted Cost Claim : $243.00 USD / month
+
+  [Stage 2.4: Independent Mathematical Verification (IndependentChecker)]
+
+  --- Mode 2 Parameter-Wise Independent Verification ---
+  [5.1 Parameter-by-Parameter Ground-Truth Audit Table]
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Parameter Checked                | Required Target        | Measured / Calc          | Delta / Margin         | Status   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Region Graph Topology            | Valid Nodes in Graph   | us-east-1 & us-central1  | Known Nodes            | [PASS]   |
+    | Failure Domain Disjointness      | Primary != Secondary   | us-east-1 vs us-central1 | Distinct Geographies   | [PASS]   |
+    | Inter-Region Network Latency     | <= 50.0 ms             | 32.0 ms                  | -18.0 ms (Margin)      | [PASS]   |
+    | Composite Availability SLA       | >= 99.9000%            | 99.99997%                | +0.09997%              | [PASS]   |
+    | Disaster Recovery Monthly Cost   | <= $250.00 USD         | $243.00 USD              | -$7.00 (Headroom)      | [PASS]   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+
+  [5.2 Detected Constraint Violations]
+    * None (0 constraint violations found)
+
+  [5.3 Verification Verdict]: Feasible against checked constraints (Unverified LLM)
+  [5.4 Proof Classification]: Matches independent optimum (not proven by this mode)
+
++------------------------------------------------------------------------------------+
+| IN PLAIN ENGLISH: [NOT_GRADED]                                                     |
+|                                                                                    |
+| Headline     : Mode 2: Schema LLM completed without an evaluation ground-truth     |
+| key.                                                                               |
+| What Happened: Mode 2: Schema LLM executed at $243.00 and reported status          |
+| 'VALID_PLAN (Feasible against checked constraints)'. No ground-truth manifest      |
+| record was matched for this query.                                                 |
+| Why It Matters: Without a reference key, correctness, constraint adherence, and    |
+| cost optimality cannot be verified.                                                |
+| Check This   : Add this query to the benchmark manifest with expected parameters   |
+| to enable automatic grading.                                                       |
++------------------------------------------------------------------------------------+
+
+
+****************************************************************************************
+                          MODE 4: FULL NEURO-SYMBOLIC PIPELINE                          
+         Provider: Groq API | Model: openai/gpt-oss-120b (Neural Interpretation)        
+****************************************************************************************
+
+  [Stage 4.1: Groq Neural Workload Requirement Interpretation]
+    Query: "Disaster recovery across AWS and GCP with 99.99 percent SLA and max 50ms latency under 250 dollar a month"
+    Interpretation Status : SUCCESS
+    Interpretation Outcome: READY
+    Extraction Latency    : 1608.1 ms
+
+  [Stage 4.2: Validated Neural Contract & Archetype Dispatch]
+    * Problem Archetype        : Z3_Graph_Disaster_Recovery
+    * Budget Maximum (USD)     : $250.00
+    * DR Constraints           : <= 50.0ms latency, >= 99.99% SLA
+
+--- STAGE 4: Solver Dispatch & Execution ---
+  [4.1 Solver Engine: Z3 SMT Graph Solver]
+    Status: FEASIBLE | Primary: AWS:us-east-1 (US_East) | Secondary: GCP:us-central1 (US_Central)
+
+  --- Mode 4 Parameter-Wise Independent Verification ---
+  [5.1 Parameter-by-Parameter Ground-Truth Audit Table]
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Parameter Checked                | Required Target        | Measured / Calc          | Delta / Margin         | Status   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+    | Region Graph Topology            | Valid Nodes in Graph   | us-east-1 & us-central1  | Known Nodes            | [PASS]   |
+    | Failure Domain Disjointness      | Primary != Secondary   | us-east-1 vs us-central1 | Distinct Geographies   | [PASS]   |
+    | Inter-Region Network Latency     | <= 50.0 ms             | 32.0 ms                  | -18.0 ms (Margin)      | [PASS]   |
+    | Composite Availability SLA       | >= 99.9900%            | 99.99997%                | +0.00997%              | [PASS]   |
+    | Disaster Recovery Monthly Cost   | <= $250.00 USD         | $243.00 USD              | -$7.00 (Headroom)      | [PASS]   |
+    +----------------------------------+------------------------+--------------------------+------------------------+----------+
+
+  [5.2 Detected Constraint Violations]
+    * None (0 constraint violations found)
+
+  [5.3 Verification Verdict]: Feasible against checked constraints
+  [5.4 Proof Classification]: Exact Discrete Minimum (Exhaustive Candidate Search)
+
+  [Stage 4.5: Natural Language Executive Report Generation via Live Provider API (Groq)]
+    * Provider Event: Live explanation successfully formulated by Groq
+    * Executive FinOps Report Formulated (33 lines)
+
++------------------------------------------------------------------------------------+
+| IN PLAIN ENGLISH: [NOT_GRADED]                                                     |
+|                                                                                    |
+| Headline     : Mode 4: Neuro-Symbolic completed without an evaluation ground-truth |
+| key.                                                                               |
+| What Happened: Mode 4: Neuro-Symbolic executed at $243.00 and reported status      |
+| 'Feasible against checked constraints'. No ground-truth manifest record was        |
+| matched for this query.                                                            |
+| Why It Matters: Without a reference key, correctness, constraint adherence, and    |
+| cost optimality cannot be verified.                                                |
+| Check This   : Add this query to the benchmark manifest with expected parameters   |
+| to enable automatic grading.                                                       |
++------------------------------------------------------------------------------------+
+
+
+========================================================================================
+                     FOUR-WAY PARADIGM COMPARATIVE BENCHMARK SUMMARY                    
+========================================================================================
+
++----------------------+----------------------------------+------------------+---------------+---------------+-----------------+------------------------+--------------------------------------+-----------+
+| Execution Mode       | Execution Path                   | Normalization    | Claimed Cost  | Recomputed    | Alloc Feas.     | Task Outcome           | Optimality / Verdict                 | Latency   |
++----------------------+----------------------------------+------------------+---------------+---------------+-----------------+------------------------+--------------------------------------+-----------+
+| Mode 1: Raw LLM      | Groq API (openai/gpt-oss-120b) - | SUCCESS          | $243.00       | $243.00       | [PASS]          | [NOT_GRADED]           | Matches independent optimum (not pro | 3.89s     |
+| Mode 2: Schema LLM   | Groq API (openai/gpt-oss-120b) - | SUCCESS          | $243.00       | $243.00       | [PASS]          | [NOT_GRADED]           | Matches independent optimum (not pro | 1.67s     |
+| Mode 3: Pure Symboli | Local SCOPE -> Local CARM (Z3_SM | SUCCESS          | $243.00       | $243.00       | [PASS]          | [NOT_GRADED]           | Exact Discrete Minimum (Exhaustive C | 10.3ms    |
+| Mode 4: Neuro-Symbol | Groq API (openai/gpt-oss-120b) - | SUCCESS          | $243.00       | $243.00       | [PASS]          | [NOT_GRADED]           | Exact Discrete Minimum (Exhaustive C | 2.41s     |
++----------------------+----------------------------------+------------------+---------------+---------------+-----------------+------------------------+--------------------------------------+-----------+
+
+========================================================================================
+ AUDITABLE EXECUTION SUMMARY & VERDICT ALIGNMENT:
+========================================================================================
+  • Mode 3 vs Mode 4 Independent Execution:
+    - Mode 3 Pure Symbolic Verdict   : Alloc [PASS] | Task [NOT_GRADED] | Cost: $243.00
+    - Mode 4 Neuro-Symbolic Verdict  : Alloc [PASS] | Task [NOT_GRADED] | Cost: $243.00
+    -> Coincidental Cost Match with Interpretation Mismatch: Both pipelines produced $243.00 plans, but extracted different parameters (SLA (Mode 3: 99.9%, Mode 4: 99.99%)). The answer matched only because the same allocation is optimal under both limits.
+  • Mode 1 (Raw LLM) Classification  : VALID_PLAN (Status: SUCCESS, Task: [NOT_GRADED], Claimed: $243.00)
+  • Mode 2 (Schema LLM) Normalization: SUCCESS (Task [NOT_GRADED], Claimed: $243.00)
+
+  Requirement Provenance Note: Evaluated against human manifest specification and independent checker.
+========================================================================================
+
+
+========================================================================================
+             MANIFEST GROUND-TRUTH GRADING & INTERPRETATION-MISMATCH REPORT             
+========================================================================================
+
+  [Manifest Reference: Query not explicitly found in manifest files]
+  Task Outcome: NOT_GRADED (Ad-hoc query excluded from manifest pass-rate grading)
+
+======================================================================================
+  INDEPENDENT VERDICT EVALUATION SUMMARY (PLAIN ENGLISH)
+======================================================================================
+
+  • Mode 1: Raw LLM          : [NOT_GRADED                ] Mode 1: Raw LLM completed without an evaluation ground-truth key.
+  • Mode 2: Schema LLM       : [NOT_GRADED                ] Mode 2: Schema LLM completed without an evaluation ground-truth key.
+  • Mode 3: Pure Symbolic    : [NOT_GRADED                ] Mode 3: Pure Symbolic completed without an evaluation ground-truth key.
+  • Mode 4: Neuro-Symbolic   : [NOT_GRADED                ] Mode 4: Neuro-Symbolic completed without an evaluation ground-truth key.
+
+--------------------------------------------------------------------------------------
+  LABEL REFERENCE & EVALUATION LEGEND:
+--------------------------------------------------------------------------------------
+    [CORRECT                   ] : Plan meets every keyed requirement and the cost is within tolerance of the independent optimum.
+    [CORRECT_BUT_COSTLIER      ] : Plan is valid but costs more than the optimum (shows both figures and the % gap).
+    [CORRECT_REFUSAL           ] : The key expected infeasible / unsupported / clarification / conflict, and the mode said so.
+    [WRONG_PLAN                ] : Plan violates a keyed requirement (names the violated requirement).
+    [WRONG_OUTCOME             ] : Said infeasible when feasible, guessed when it should have asked, or planned an unsupported task.
+    [RIGHT_ANSWER_WRONG_READING] : (Modes 3/4) Outcome matches but an extracted field differs from the key (list the fields); the answer is right only by luck.
+    [UNPARSEABLE               ] : Prose could not be turned into a checkable plan; NOT counted as a wrong answer.
+    [PROVIDER_FAILURE          ] : Timeout, 429, empty response, or truncation; not a reasoning failure.
+    [NOT_GRADED                ] : No key exists for this query.
+
+--------------------------------------------------------------------------------------
+  THINGS TO BE CAREFUL ABOUT IN THIS RUN:
+--------------------------------------------------------------------------------------
+    ! Mode 1: Raw LLM: Query is ungraded (no reference ground-truth key).
+    ! Mode 2: Schema LLM: Query is ungraded (no reference ground-truth key).
+    ! Mode 3: Pure Symbolic: Query is ungraded (no reference ground-truth key).
+    ! Mode 4: Neuro-Symbolic: Query is ungraded (no reference ground-truth key).
+
+--------------------------------------------------------------------------------------
+  NOTE: Task success, allocation validity, interpretation accuracy, cost vs optimal and speed are separate measurements. No single score combines them.
+======================================================================================

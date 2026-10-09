@@ -160,42 +160,55 @@ def execute_dashboard_llm_request(
                 {"role": "user", "content": f"Optimize allocation for: \"{query}\". Respond in JSON."},
             ]
 
-        # Attempt execution helper with reasoning effort setting
+        # Attempt execution helper with reasoning effort setting and rate limit backoff
         def _invoke_llm_attempt(attempt_num: int, tok_limit: int) -> Tuple[Any, Optional[str], str, Optional[Dict[str, Any]]]:
-            # Try setting low reasoning effort if supported by provider/model
-            try:
-                r = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.0 if mode_num == 2 else 0.2,
-                    max_tokens=tok_limit,
-                    extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
-                )
-            except Exception:
+            for retry_idx in range(4):
                 try:
-                    r = client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        temperature=0.0 if mode_num == 2 else 0.2,
-                        max_tokens=tok_limit,
-                        reasoning_effort="low",
-                    )
-                except Exception:
-                    r = client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        temperature=0.0 if mode_num == 2 else 0.2,
-                        max_tokens=tok_limit,
-                    )
-            ch = r.choices[0] if r.choices else None
-            f_reason = getattr(ch, "finish_reason", "unknown") if ch else "empty"
-            c_text = (ch.message.content or "").strip() if ch and ch.message else ""
-            u_dict = {
-                "prompt_tokens": r.usage.prompt_tokens,
-                "completion_tokens": r.usage.completion_tokens,
-                "total_tokens": r.usage.total_tokens,
-            } if hasattr(r, "usage") and r.usage else None
-            return r, f_reason, c_text, u_dict
+                    try:
+                        r = client.chat.completions.create(
+                            model=model,
+                            messages=messages,
+                            temperature=0.0 if mode_num == 2 else 0.2,
+                            max_tokens=tok_limit,
+                            extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                        )
+                    except Exception as e_low:
+                        if "429" in str(e_low) or "RateLimit" in type(e_low).__name__:
+                            raise e_low
+                        try:
+                            r = client.chat.completions.create(
+                                model=model,
+                                messages=messages,
+                                temperature=0.0 if mode_num == 2 else 0.2,
+                                max_tokens=tok_limit,
+                                reasoning_effort="low",
+                            )
+                        except Exception as e_med:
+                            if "429" in str(e_med) or "RateLimit" in type(e_med).__name__:
+                                raise e_med
+                            r = client.chat.completions.create(
+                                model=model,
+                                messages=messages,
+                                temperature=0.0 if mode_num == 2 else 0.2,
+                                max_tokens=tok_limit,
+                            )
+                    ch = r.choices[0] if r.choices else None
+                    f_reason = getattr(ch, "finish_reason", "unknown") if ch else "empty"
+                    c_text = (ch.message.content or "").strip() if ch and ch.message else ""
+                    u_dict = {
+                        "prompt_tokens": r.usage.prompt_tokens,
+                        "completion_tokens": r.usage.completion_tokens,
+                        "total_tokens": r.usage.total_tokens,
+                    } if hasattr(r, "usage") and r.usage else None
+                    return r, f_reason, c_text, u_dict
+                except Exception as exc:
+                    err_s = str(exc)
+                    if ("429" in err_s or "RateLimit" in type(exc).__name__) and retry_idx < 3:
+                        wait_time = 3.0 + retry_idx * 2.0
+                        time.sleep(wait_time)
+                        continue
+                    raise exc
+            raise RuntimeError("Exhausted rate limit retries")
 
         attempts: List[Dict[str, Any]] = []
         initial_max_tokens = max_tokens

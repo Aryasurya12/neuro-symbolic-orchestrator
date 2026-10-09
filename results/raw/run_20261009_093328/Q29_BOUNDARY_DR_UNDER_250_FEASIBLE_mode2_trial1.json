@@ -1,0 +1,11 @@
+{
+  "task_type": "Z3_Graph_Disaster_Recovery",
+  "outcome": "ready",
+  "reason": "",
+  "allocated_vms": [],
+  "primary_region": "us-east-1",
+  "secondary_region": "us-central1",
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": 243.0
+}

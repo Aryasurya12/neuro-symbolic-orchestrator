@@ -1,0 +1,12 @@
+**Provider:** AWS  
+
+**Instance selection (8 vCPU / 16 GB RAM target)**  
+- Use **2 × m5.xlarge** (each 4 vCPU / 16 GB) in the same region.  
+  - Monthly cost per m5.xlarge = $140.16  
+  - Total for 2 instances = **$280.32**
+
+**Region:** us‑east‑1 (cheapest AWS region in the catalog)
+
+**Additional services:** None (no DR pair, no dynamic scaling) – keeping the footprint to the core compute you asked for.
+
+**Total monthly cost:** **$280.32** (well under the $300 budget).

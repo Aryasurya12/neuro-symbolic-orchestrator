@@ -1,0 +1,41 @@
+**Provider & Regions**  
+- **AWS – us‑east‑1** (base $120 /mo)  
+- **GCP – us‑central1** (base $115 /mo)  
+
+These two regions give the lowest disaster‑recovery (DR) cost:
+
+\[
+\text{DR cost}=120+115+(32\text{ ms}\times0.25)=\boxed{\$243.00\;/\text{mo}}
+\]
+
+**Continuous‑Dynamic‑Scaling Configuration**
+
+| Parameter | Value | Cost |
+|-----------|-------|------|
+| Target CPU utilisation | **70 %** (by design) |
+| Replicas (workers) | **16** (max allowed) |
+| Bandwidth | **840 Mbps** (16 × 52.5 Mbps) |
+| Bandwidth cost | 840 Mbps × $0.08 = **$67.20** |
+| Replica cost | 16 × $45 = **$720.00** |
+| **Scaling total** | – | **$787.20** |
+
+*Derivation*:  
+CPU = (Bandwidth / (Replicas × 75 Mbps)) × 100 % → to hit 70 % → Bandwidth = 0.70 × Replicas × 75 = 52.5 × Replicas.  
+Choosing the maximum allowed replicas (16) keeps Bandwidth = 840 Mbps ≤ the 1000 Mbps ceiling and yields the highest throughput while staying well under the $1500 budget.
+
+**Overall Monthly Cost**
+
+\[
+\text{Total} = \text{Scaling cost} + \text{DR cost}
+= 787.20 + 243.00 = \boxed{\$1,030.20\;/\text{month}}
+\]
+
+**Recommendation Summary**
+
+- **Provider:** AWS (us‑east‑1) + GCP (us‑central1) for DR.  
+- **Instance types:** No dedicated VM cost is needed beyond the scaling model; the workers run on the 16 × replica pool.  
+- **Bandwidth:** 840 Mbps (cost $67.20).  
+- **Worker replicas:** 16 (cost $720.00).  
+- **DR pair:** us‑east‑1 ↔ us‑central1 (cost $243.00).  
+
+**Result:** A continuously scaling service that runs at ~70 % CPU, delivers 840 Mbps of throughput, and stays well within the $1500 budget at a total monthly expense of **$1,030.20**.

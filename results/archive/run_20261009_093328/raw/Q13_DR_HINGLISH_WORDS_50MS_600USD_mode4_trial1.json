@@ -1,0 +1,23 @@
+{
+  "status": "FEASIBLE",
+  "solver": "Z3_SMT_Graph_Steered_Solver",
+  "is_feasible": true,
+  "primary_region": "AWS:us-east-1 (US_East)",
+  "secondary_region": "GCP:us-central1 (US_Central)",
+  "disaster_recovery_topology": "Active-Active Multi-Region Mesh",
+  "inter_region_latency_ms": 32.0,
+  "latency_threshold_ms": 50.0,
+  "achieved_sla_pct": 99.99997,
+  "target_sla_pct": 99.99,
+  "total_monthly_cost_usd": 243.0,
+  "budget_max_usd": 600.0,
+  "budget_utilized_pct": 40.5,
+  "cost_savings_usd": 357.0,
+  "constraint_status": {
+    "is_feasible": true,
+    "budget_ok": true,
+    "latency_ok": true,
+    "sla_ok": true,
+    "provider_ok": true
+  }
+}

@@ -464,30 +464,44 @@ class NVIDIAExtractor:
             ]
 
             def _call_extraction(attempt_num: int, tok_limit: int):
-                try:
-                    return client.chat.completions.create(
-                        model=target_model,
-                        messages=messages,
-                        temperature=0.0,
-                        max_tokens=tok_limit,
-                        extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
-                    )
-                except Exception:
+                for retry_idx in range(4):
                     try:
-                        return client.chat.completions.create(
-                            model=target_model,
-                            messages=messages,
-                            temperature=0.0,
-                            max_tokens=tok_limit,
-                            reasoning_effort="low",
-                        )
-                    except Exception:
-                        return client.chat.completions.create(
-                            model=target_model,
-                            messages=messages,
-                            temperature=0.0,
-                            max_tokens=tok_limit,
-                        )
+                        try:
+                            return client.chat.completions.create(
+                                model=target_model,
+                                messages=messages,
+                                temperature=0.0,
+                                max_tokens=tok_limit,
+                                extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                            )
+                        except Exception as e_low:
+                            if "429" in str(e_low) or "RateLimit" in type(e_low).__name__:
+                                raise e_low
+                            try:
+                                return client.chat.completions.create(
+                                    model=target_model,
+                                    messages=messages,
+                                    temperature=0.0,
+                                    max_tokens=tok_limit,
+                                    reasoning_effort="low",
+                                )
+                            except Exception as e_med:
+                                if "429" in str(e_med) or "RateLimit" in type(e_med).__name__:
+                                    raise e_med
+                                return client.chat.completions.create(
+                                    model=target_model,
+                                    messages=messages,
+                                    temperature=0.0,
+                                    max_tokens=tok_limit,
+                                )
+                    except Exception as exc:
+                        err_s = str(exc)
+                        if ("429" in err_s or "RateLimit" in type(exc).__name__) and retry_idx < 3:
+                            wait_time = 3.0 + retry_idx * 2.0
+                            time.sleep(wait_time)
+                            continue
+                        raise exc
+                raise RuntimeError("Exhausted rate limit retries in extraction")
 
             # Attempt 1
             response = _call_extraction(1, 4096)

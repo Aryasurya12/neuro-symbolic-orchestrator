@@ -1,0 +1,42 @@
+{
+  "problem_type": "PSO_Continuous_Scaling",
+  "interpretation_outcome": "conflicting_requirements",
+  "cloud_providers": null,
+  "budget_max_usd": 1500.0,
+  "service_count": 1,
+  "required_vcpus": null,
+  "required_ram_gb": null,
+  "target_bandwidth_mbps": 300.0,
+  "min_bandwidth_mbps": null,
+  "max_bandwidth_mbps": null,
+  "min_replicas": null,
+  "max_replicas": null,
+  "target_replicas": null,
+  "target_cpu_pct": 70.0,
+  "max_cpu_pct": 60.0,
+  "latency_max_ms": 100.0,
+  "sla_availability_pct": 99.9,
+  "allowed_regions": null,
+  "primary_region": null,
+  "secondary_region": null,
+  "require_multi_region": null,
+  "require_multi_cloud": null,
+  "instance_count": null,
+  "min_instance_count": null,
+  "vcpus_per_instance": null,
+  "ram_gb_per_instance": null,
+  "clarification_questions": [],
+  "unsupported_reasons": [],
+  "conflicting_reasons": [
+    "Target CPU utilization (70%) exceeds the specified maximum CPU ceiling (60%)."
+  ],
+  "extracted_spans": {
+    "required_vcpus": "",
+    "required_ram_gb": "",
+    "budget_max_usd": "1500 dollar",
+    "cloud_providers": "",
+    "target_cpu_pct": "target CPU 70 percent",
+    "latency_max_ms": "",
+    "sla_availability_pct": ""
+  }
+}

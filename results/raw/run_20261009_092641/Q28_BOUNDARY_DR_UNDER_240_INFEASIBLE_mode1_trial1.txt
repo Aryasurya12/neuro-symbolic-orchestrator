@@ -1,0 +1,17 @@
+**Result – the budget cannot be met exactly.**  
+
+The cheapest AWS ↔ GCP pair that satisfies the latency ≤ 50 ms and the required combined SLA ≥ 99.99 % is:
+
+| Pair | Regions (Provider) | Latency (ms) | Combined SLA | Monthly cost |
+|------|--------------------|--------------|--------------|--------------|
+| **us‑east‑1 (AWS) ↔ us‑central1 (GCP)** | AWS – us‑east‑1  +  GCP – us‑central1 | 32 ms | 99.999975 % (1 – (0.0005 × 0.0005)) | **$120 + $115 + (32 × $0.25) = $243.00** |
+
+All other cross‑cloud combinations are more expensive (>$250/month).  
+
+Because the fixed “region base cost” for each cloud (AWS $120, GCP $115) already consumes $235 of the $240 budget, the additional latency surcharge pushes the total to **$243**, which exceeds the $240 limit by $3.
+
+### Recommendation
+- **Use the us‑east‑1 ↔ us‑central1 pair** – it meets the latency (32 ms < 50 ms) and far exceeds the SLA requirement (99.999975 % > 99.99 %).
+- Accept a slight budget overrun of $3/month, or increase the monthly budget to at least **$243** to stay within the technical constraints.  
+
+If the $240 ceiling is absolute, a cross‑cloud disaster‑recovery deployment that meets both the latency and SLA targets is **not feasible** with the given catalog.

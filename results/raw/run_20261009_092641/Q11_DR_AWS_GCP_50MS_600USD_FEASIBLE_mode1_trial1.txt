@@ -1,0 +1,21 @@
+**Recommended DR deployment**
+
+| Component | Provider / SKU | Region | Qty | Monthly cost |
+|-----------|----------------|--------|-----|--------------|
+| **Disaster‑recovery link** | – | **us‑east‑1 (AWS) ↔ us‑central1 (GCP)** | – | **Base $120 + $115 + (32 ms × $0.25) = $243.00** |
+| **Primary compute** | t3.medium (2 vCPU, 4 GB) | us‑east‑1 (AWS) | 1 | $30.37 |
+| **Secondary compute** | e2‑standard‑4 (4 vCPU, 16 GB) | us‑central1 (GCP) | 1 | $97.82 |
+| **Total** | – | – | – | **$371.19 / month** |
+
+**Why this meets the requirements**
+
+* **Latency:** us‑east‑1 ↔ us‑central1 latency = **32 ms** (≤ 50 ms).  
+* **Combined SLA:** 1 – ((1‑0.9995) × (1‑0.9995)) = **99.999975 %** (≥ 99.99 %).  
+* **Budget:** Total cost **$371.19** < **$600** per month, leaving headroom for optional scaling or ancillary services.  
+
+**Notes**
+
+* The chosen VM sizes are the smallest that still give a functional workload in each cloud while staying well under budget.  
+* If additional compute capacity is needed later, you can scale the AWS instance to a larger SKU (e.g., t3.large) or add more GCP replicas; the remaining budget (~$230) can cover such upgrades.  
+
+**Bottom line:** A low‑latency, high‑SLA DR pair between AWS us‑east‑1 and GCP us‑central1, with a modest primary/secondary VM footprint, costs **$371.19/month** and satisfies the 99.99 % SLA and ≤ 50 ms latency constraints.

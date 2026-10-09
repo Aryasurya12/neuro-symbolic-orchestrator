@@ -1,0 +1,55 @@
+**Provider & Regions (DR pair)**  
+- **AWS us‑east‑1** (primary) – base cost **$120 / mo**  
+- **GCP us‑central1** (secondary) – base cost **$115 / mo**  
+
+**DR link cost** (latency = 32 ms)  
+\(32 ms × $0.25 = $8.00\)  
+
+**Total DR cost** = $120 + $115 + $8 = **$243 / mo**  
+
+**Compute nodes** (one per region, just to host the scaling workers)  
+
+| Region | Provider | Instance SKU | Monthly cost |
+|--------|----------|--------------|--------------|
+| us‑east‑1 | AWS | t3.medium (2 vCPU, 4 GB) | **$30.37** |
+| us‑central1 | GCP | e2‑standard‑4 (4 vCPU, 16 GB) | **$97.82** |
+
+**Total VM cost** = $30.37 + $97.82 = **$128.19 / mo**  
+
+**Continuous Dynamic Scaling**  
+
+- **Required bandwidth:** 300 Mbps  
+- **Target CPU per replica ≤ 60 %**  
+
+CPU = \( \frac{Bandwidth}{Replicas × 75}\) × 100 %  
+\( \frac{300}{Replicas × 75}\) × 100 = \( \frac{400}{Replicas}\)%  
+
+To keep CPU ≤ 60 % → Replicas ≥ 7.  
+
+Choose **7 replicas** (minimum that satisfies the CPU constraint).  
+
+- **Bandwidth cost:** 300 Mbps × $0.08 = $24.00  
+- **Replica cost:** 7 × $45 = $315.00  
+
+**Scaling cost** = $24 + $315 = **$339.00 / mo**  
+
+---
+
+### **Overall Monthly Cost**
+
+| Component | Cost (USD) |
+|-----------|------------|
+| DR pair (base + latency) | $243.00 |
+| VM instances (2 nodes) | $128.19 |
+| Dynamic scaling (bandwidth + 7 replicas) | $339.00 |
+| **Total** | **$710.19** |
+
+---
+
+## Recommendation (concise)
+
+- **Primary region:** AWS us‑east‑1 with a **t3.medium** VM.  
+- **Secondary (DR) region:** GCP us‑central1 with an **e2‑standard‑4** VM.  
+- **Dynamic scaling layer:** 300 Mbps bandwidth, **7 worker replicas** (≈ 60 % CPU per replica).  
+
+**Total monthly spend:** **≈ $710 / month**, well under the $1,500 budget while keeping CPU ≤ 60 % and supporting the peak 300 Mbps traffic.

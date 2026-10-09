@@ -1,0 +1,13 @@
+{
+  "allocated_vms": [
+    {
+      "sku": "t3.xlarge",
+      "provider": "AWS",
+      "quantity": 2,
+      "monthly_cost": 300.21,
+      "vcpus": 8,
+      "ram_gb": 16.0
+    }
+  ],
+  "total_monthly_cost_usd": 300.21
+}

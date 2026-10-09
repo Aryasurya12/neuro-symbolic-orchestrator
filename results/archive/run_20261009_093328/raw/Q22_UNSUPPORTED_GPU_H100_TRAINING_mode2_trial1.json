@@ -1,0 +1,11 @@
+{
+  "task_type": "unsupported",
+  "outcome": "unsupported",
+  "reason": "The request involves GPU resources (H100) which are not present in the provided VM SKU catalog, so the task cannot be processed with the available data.",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

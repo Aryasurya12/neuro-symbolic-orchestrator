@@ -1,0 +1,7 @@
+**Answer**
+
+The catalog you provided only contains general‑purpose CPU‑based VM SKUs (t3, c5, m5, Standard_D4s_v5, e2‑standard‑4) and pricing for bandwidth, worker replicas, and multi‑region disaster‑recovery.  
+There are **no GPU‑enabled instance types** (e.g., NVIDIA H100) listed, and the cost model does not include GPU pricing or the ability to provision 8 H100 GPUs for a two‑week training job.
+
+**Conclusion:**  
+With the current catalog and domain rules, I cannot generate a concrete, cost‑calculated deployment plan for “train a transformer model on 8 H100 GPUs for two weeks.” You would need a catalog that includes GPU‑focused instance types (e.g., AWS p4d, Azure NDv4, GCP A2) and their hourly rates to produce a valid recommendation.

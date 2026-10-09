@@ -1,0 +1,11 @@
+{
+  "task_type": "PSO_Continuous_Scaling",
+  "outcome": "infeasible",
+  "reason": "The request requires a 300 Mbps peak workload with a target CPU utilization of 70% but also imposes a strict maximum CPU ceiling of 60%, which is contradictory and cannot be satisfied under any replica configuration.",
+  "allocated_vms": [],
+  "primary_region": null,
+  "secondary_region": null,
+  "optimal_bandwidth_mbps": null,
+  "recommended_replicas": null,
+  "total_monthly_cost_usd": null
+}

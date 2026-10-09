@@ -294,3 +294,16 @@ def test_no_network_access_in_offline_mock(temp_benchmark_dir):
         assert r.provider in ["Groq", "NVIDIA", "OpenRouter", "Mock_Provider", "Local_Deterministic", "None", None, ""]
         # With offline mock fixtures, duration is purely local compute
         assert r.total_duration_ms >= 0.0
+
+
+def test_final_manifest_validation_and_safety():
+    """Verifies that data/final_query_manifest.json passes all schema and safety checks."""
+    manifest_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "final_query_manifest.json")
+    assert os.path.exists(manifest_path), f"final_query_manifest.json not found at {manifest_path}"
+
+    is_valid, errors, stats = ManifestManager.validate_manifest_file(manifest_path)
+    assert is_valid, f"Manifest validation failed with errors: {errors}"
+    assert stats["total_queries"] == 29
+    assert stats["approved_count"] == 0
+    assert stats["feasible_with_cost_count"] == 12
+

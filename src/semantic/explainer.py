@@ -227,7 +227,8 @@ class FinOpsExplainer:
 
             # Clean markdown bold asterisks for category headers like **Governance & Tagging:**
             line = re.sub(r"^\*{1,2}(.*?):?\*{1,2}:?\s*", r"\1: ", line)
-            line = line.encode("ascii", "replace").decode("ascii")
+            from src.semantic.normalizer import OutputNormalizer
+            line = OutputNormalizer._normalize_unicode(line)
             line = re.sub(r"^[:\-\s]+", "", line).strip()
 
             words = line.split()
@@ -312,30 +313,45 @@ class FinOpsExplainer:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ]
-            try:
-                resp = client.chat.completions.create(
-                    model=target_model,
-                    messages=messages,
-                    temperature=0.2,
-                    max_tokens=max_tokens,
-                    extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
-                )
-            except Exception:
+            resp = None
+            for retry_idx in range(4):
                 try:
-                    resp = client.chat.completions.create(
-                        model=target_model,
-                        messages=messages,
-                        temperature=0.2,
-                        max_tokens=max_tokens,
-                        reasoning_effort="low",
-                    )
-                except Exception:
-                    resp = client.chat.completions.create(
-                        model=target_model,
-                        messages=messages,
-                        temperature=0.2,
-                        max_tokens=max_tokens,
-                    )
+                    try:
+                        resp = client.chat.completions.create(
+                            model=target_model,
+                            messages=messages,
+                            temperature=0.2,
+                            max_tokens=max_tokens,
+                            extra_body={"reasoning_format": "parsed", "reasoning_effort": "low"},
+                        )
+                    except Exception as e_low:
+                        if "429" in str(e_low) or "RateLimit" in type(e_low).__name__:
+                            raise e_low
+                        try:
+                            resp = client.chat.completions.create(
+                                model=target_model,
+                                messages=messages,
+                                temperature=0.2,
+                                max_tokens=max_tokens,
+                                reasoning_effort="low",
+                            )
+                        except Exception as e_med:
+                            if "429" in str(e_med) or "RateLimit" in type(e_med).__name__:
+                                raise e_med
+                            resp = client.chat.completions.create(
+                                model=target_model,
+                                messages=messages,
+                                temperature=0.2,
+                                max_tokens=max_tokens,
+                            )
+                    break
+                except Exception as exc:
+                    err_s = str(exc)
+                    if ("429" in err_s or "RateLimit" in type(exc).__name__) and retry_idx < 3:
+                        wait_time = 3.0 + retry_idx * 2.0
+                        time.sleep(wait_time)
+                        continue
+                    break
             elapsed_s = round(time.perf_counter() - t0, 2)
             if not resp or not resp.choices:
                 return None, None, elapsed_s, ExplanationSource.UNAVAILABLE
@@ -398,7 +414,7 @@ class FinOpsExplainer:
             f" Problem Type         : {problem}",
             f" Optimization Engine  : {solver_name}",
             f" Feasibility Status   : {'Feasible' if is_feasible else 'Infeasible'}",
-            f" Verification Verdict : {'FEASIBLE & CERTIFIED' if is_feasible else 'REJECTED (Constraint Violations Detected)'}",
+            f" Verification Verdict : {'FEASIBLE (Passed Independent Verification)' if is_feasible else 'REJECTED (Constraint Violations Detected)'}",
             f" Target Cloud(s)      : {', '.join(contract.cloud_providers)}",
             f" Exchange Rate        : 1 USD = {exchange_rate:.2f} INR",
             "-" * 82,
@@ -505,19 +521,24 @@ class FinOpsExplainer:
             ])
 
         # Obtain dynamic / LLM recommendations
-        recommendations = None
-        source_label = "Local Rule-Based Template"
-        provider_name, _, _, target_model, _ = settings.get_mode4_provider_config()
-        if enable_llm_explainer and is_feasible:
-            recs, resp_id, elapsed_s, src = cls.generate_llm_recommendations(contract, solver_result)
-            if recs:
-                recommendations = recs
-                source_label = f"{provider_name} API ({target_model} | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
+        recommendations = kwargs.get("_precomputed_recommendations")
+        source_label = kwargs.get("_precomputed_source_label")
+        if recommendations is None:
+            source_label = "Local Rule-Based Template"
+            provider_name, _, _, target_model, _ = settings.get_mode4_provider_config()
+            if enable_llm_explainer and not offline and is_feasible:
+                try:
+                    recs, resp_id, elapsed_s, src = cls.generate_llm_recommendations(contract, solver_result)
+                    if recs:
+                        recommendations = recs
+                        source_label = f"{provider_name} API ({target_model} | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
+                except Exception:
+                    pass
 
-        if not recommendations:
-            recommendations = cls.generate_dynamic_recommendations(
-                contract, solver_result, exchange_rate, is_feasible=is_feasible, violations=violations
-            )
+            if not recommendations:
+                recommendations = cls.generate_dynamic_recommendations(
+                    contract, solver_result, exchange_rate, is_feasible=is_feasible, violations=violations
+                )
 
         lines.extend([
             "-" * 82,
@@ -529,3 +550,61 @@ class FinOpsExplainer:
 
         lines.append("=" * 82)
         return "\n".join(lines)
+
+    @classmethod
+    def generate_report_with_source(
+        cls,
+        contract: CloudOptimizationContract,
+        solver_result: Dict[str, Any],
+        check_result: Optional[Dict[str, Any]] = None,
+        exchange_rate: float = settings.USD_TO_INR_RATE,
+        enable_llm_explainer: bool = False,
+        offline: bool = True,
+        **kwargs,
+    ) -> Tuple[str, ExplanationSource]:
+        """Generates executive report and returns tuple of (report_text, ExplanationSource)."""
+        is_feasible = True
+        violations = []
+        if check_result is not None:
+            is_feasible = bool(check_result.get("feasible_against_contract", False))
+            violations = check_result.get("violations", [])
+        else:
+            status_str = str(solver_result.get("status", "UNKNOWN")).upper()
+            if status_str in ["INFEASIBLE", "FAILED", "UNSAT"]:
+                is_feasible = False
+
+        recommendations = None
+        source_label = "Local Rule-Based Template"
+        exp_source = ExplanationSource.LOCAL_TEMPLATE
+        provider_name, _, _, target_model, _ = settings.get_mode4_provider_config()
+
+        if enable_llm_explainer and not offline and is_feasible:
+            try:
+                recs, resp_id, elapsed_s, src = cls.generate_llm_recommendations(contract, solver_result)
+                if recs:
+                    recommendations = recs
+                    source_label = f"{provider_name} API ({target_model} | response_id: {resp_id or 'unknown'} | {elapsed_s:.2f}s)"
+                    exp_source = ExplanationSource.LIVE_PROVIDER
+            except Exception:
+                recommendations = None
+                exp_source = ExplanationSource.LOCAL_TEMPLATE
+
+        if not recommendations:
+            recommendations = cls.generate_dynamic_recommendations(
+                contract, solver_result, exchange_rate, is_feasible=is_feasible, violations=violations
+            )
+            source_label = "Local Rule-Based Template"
+            exp_source = ExplanationSource.LOCAL_TEMPLATE
+
+        report_text = cls.generate_report(
+            contract=contract,
+            solver_result=solver_result,
+            check_result=check_result,
+            exchange_rate=exchange_rate,
+            enable_llm_explainer=False,
+            offline=True,
+            _precomputed_recommendations=recommendations,
+            _precomputed_source_label=source_label,
+            **kwargs,
+        )
+        return report_text, exp_source

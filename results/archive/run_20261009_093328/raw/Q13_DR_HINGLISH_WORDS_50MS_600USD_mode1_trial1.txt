@@ -1,0 +1,18 @@
+**Result:** It is not possible to satisfy **all** of the stated requirements simultaneously.
+
+| Requirement | What the catalog shows | Feasibility |
+|-------------|------------------------|-------------|
+| **Disaster‑recovery across AWS + GCP** | Must pick one AWS region and one GCP region. The cheapest pair that meets the latency limit (< 50 ms) is **us‑east‑1 (AWS)** ↔ **us‑central1 (GCP)** (32 ms). | ✅ |
+| **Combined SLA ≥ 99.99 %** | Both regions individually have 99.95 % SLA. Combined SLA = 1 – (0.0005 × 0.0005) = **99.999975 %**. | ✅ |
+| **Latency < 50 ms** | 32 ms for the pair above. | ✅ |
+| **Total monthly budget ≤ $100** | Region base costs: us‑east‑1 = $120 / mo, us‑central1 = $115 / mo. <br>Latency surcharge: 32 ms × $0.25 = $8. <br>**Total region cost = $120 + $115 + $8 = $243 / mo**. <br>Even without any compute, bandwidth or replica charges, the cost already exceeds the $100 limit. | ❌ |
+
+Because the **fixed regional base fees** alone are more than double the allowed budget, no combination of instance types, bandwidth, or replica counts can bring the total cost down to $100 while still providing the required AWS + GCP disaster‑recovery, 99.99 % (or higher) uptime, and sub‑50 ms latency.
+
+**What can be done?**
+
+1. **Raise the budget** – at least $250 / mo is needed just for the two regions (including latency surcharge).  
+2. **Relax the disaster‑recovery scope** – use a single‑cloud DR (e.g., only AWS) or drop the latency requirement.  
+3. **Accept a lower SLA** – choosing regions with lower base costs (none exist in the catalog) would be required.
+
+Given the current catalog and constraints, a viable deployment cannot be produced.

@@ -1,0 +1,12 @@
+**Provider:** AWS (us‑east‑1)
+
+**Instance selection**  
+- 2 × **m5.xlarge** (4 vCPU + 16 GB RAM each) → together give **8 vCPU** and **32 GB RAM** (exceeds the 16 GB requirement but meets the CPU requirement).  
+
+**Cost breakdown**  
+- m5.xlarge @ $0.1920 /hr → $140.16 / mo per instance  
+- 2 instances → **$280.32 / mo**  
+
+No additional DR region, bandwidth, or worker‑replica costs are needed for the stated requirement.
+
+**Total monthly cost:** **$280.32** (well under the $300 budget).

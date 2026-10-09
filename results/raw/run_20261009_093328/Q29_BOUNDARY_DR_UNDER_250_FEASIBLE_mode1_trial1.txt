@@ -1,0 +1,18 @@
+**Result – the request cannot be satisfied within the $250 /month budget.**
+
+| Requirement | Minimum cost to meet it |
+|-------------|------------------------|
+| **AWS + GCP DR pair** (us‑east‑1 ↔ us‑central1) – latency = 32 ms, combined SLA ≈ 99.999975 % | Base‑region fees = $120 + $115 = **$235**<br>Latency surcharge = 32 ms × $0.25 = **$8**<br>**Region total = $243** |
+| **Dynamic scaling** (the smallest allowed configuration) – 100 Mbps bandwidth + 1 worker replica | Bandwidth cost = 100 Mbps × $0.08 = **$8**<br>Replica cost = 1 × $45 = **$45**<br>**Scaling total = $53** |
+| **Grand total** | $243 + $53 = **$296** |
+
+Even with the cheapest DR pair (us‑east‑1 & us‑central1) and the minimal scaling footprint, the monthly spend is **$296**, which exceeds the $250 limit by $46.  
+
+To achieve a $250 /month ceiling you would need to either:
+
+* **Relax the SLA** (e.g., accept a lower combined SLA), or  
+* **Accept higher latency** (choose a region pair with a lower base‑cost region but higher latency), or  
+* **Remove the dynamic‑scaling component** (no bandwidth/replica cost), or  
+* **Increase the budget**.
+
+Given the constraints as stated, a feasible deployment does not exist.

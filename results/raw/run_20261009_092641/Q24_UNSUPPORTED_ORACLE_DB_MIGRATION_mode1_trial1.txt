@@ -1,0 +1,33 @@
+**Recommended Cloud Deployment**
+
+| Component | Provider / SKU | Region | Qty | Monthly Cost |
+|-----------|----------------|--------|-----|--------------|
+| **Database VM** (primary) | **AWS t3.large** – 2 vCPU / 8 GB | **us‑east‑1** | 1 | **$60.74** |
+| **Database VM** (DR standby) | **AWS t3.large** – 2 vCPU / 8 GB | **us‑west‑2** | 1 | **$60.74** |
+| **DR Link (pair cost)** | – | us‑east‑1 ↔ us‑west‑2 | – | **$130 (base) + (65 ms × $0.25) = $146.25** |
+| **Dynamic Scaling Service** (e.g. data‑ingest / API front‑end) | – | – | – | – |
+| – Bandwidth (provisioned) | 300 Mbps (mid‑range) | – | – | **300 × $0.08 = $24.00** |
+| – Worker Replicas | 4 replicas (75 Mbps each → 300 Mbps) | – | 4 | **4 × $45 = $180.00** |
+| **Total Monthly Cost** | | | | **$60.74 + $60.74 + $146.25 + $24.00 + $180.00 = $471.73** |
+
+### Why this configuration
+* **Oracle‑compatible VM** – t3.large provides enough CPU & memory for a medium‑size Oracle instance while staying well within the 730 h/month budget.
+* **Multi‑region DR** – us‑east‑1 (primary) + us‑west‑2 (standby) gives the lowest combined DR cost and latency (65 ms) among the AWS options, yielding a combined SLA of **99.99975 %** (1‑((1‑0.9995)²)).
+* **Dynamic scaling** – 300 Mbps bandwidth covers typical DB‑sync and client traffic; 4 worker replicas give exactly 300 Mbps of processing capacity (75 Mbps per replica) and keep CPU utilization at ~100 % (the model’s ceiling), ensuring no throttling.
+* **Cost‑effective** – All selected SKUs are within the catalog and the total stays under $500/mo.
+
+### Rough Migration Timeline
+| Phase | Activities | Approx. Duration |
+|------|------------|------------------|
+| **1. Planning & Architecture** | Requirements capture, sizing, network design, DR topology approval | 1‑2 weeks |
+| **2. Environment Provisioning** | Spin‑up VMs, configure VPC/VNet, set up DR pair, install Oracle software | 3‑5 days |
+| **3. Data Transfer** | Use Oracle Data Pump / RMAN over VPN/Direct Connect; for 5 TB typical on‑prem data → ~300 Mbps link ≈ 12‑14 hours of pure transfer plus validation | 1‑2 days |
+| **4. Cut‑over Testing** | Run functional & performance tests, fail‑over to DR, validate replication | 2‑3 days |
+| **5. Production Cut‑over** | Switch application traffic, monitor, de‑commission on‑prem | 1 day |
+| **6. Post‑migration Optimisation** | Tune parameters, adjust scaling policies, finalize DR drills | 1‑2 weeks |
+
+**Overall estimate:** **3 weeks** (15‑20 business days) from project kickoff to stable production, assuming network bandwidth of ~300 Mbps and no major data‑quality issues.
+
+---  
+
+**Summary:** Deploy a primary Oracle VM (AWS t3.large) in **us‑east‑1** with a standby in **us‑west‑2**, connect them via the DR link, and add a dynamic‑scaling front‑end of 300 Mbps bandwidth and 4 worker replicas. Total monthly cost ≈ **$471.73** and the migration can be completed in roughly **3 weeks**.

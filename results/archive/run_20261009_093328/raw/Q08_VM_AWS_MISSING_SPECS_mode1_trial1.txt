@@ -1,0 +1,13 @@
+**Provider:** AWS  
+
+**Region:** us‑east‑1 (base cost $120 / month) – the cheapest AWS region in the catalog.  
+
+**Instance:** t3.medium (2 vCPU, 4 GB RAM) – $0.0416 /hr → **$30.37 / month** (730 h).  
+
+**Total monthly cost:**  
+
+- Region base cost: **$120.00**  
+- VM cost: **$30.37**  
+- **Grand total:** **$150.37 / month**  
+
+This stays well under the $200 / month budget while providing a functional cheap server on AWS.

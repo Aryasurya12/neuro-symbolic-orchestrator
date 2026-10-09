@@ -1,0 +1,16 @@
+**Result – the request cannot be satisfied with the given catalog**
+
+| Requirement | What the catalog can provide | Why it fails |
+|-------------|-----------------------------|--------------|
+| **99.99 % combined SLA** | Any two‑region pair reaches at most 99.9975 % (e.g., us‑east‑1 + eastus) | ✅ |
+| **Maximum inter‑region latency ≤ 10 ms** | The smallest latency listed in the topology graph is **12 ms** (us‑east‑1 ↔ eastus) | ❌ |
+| **Budget ≤ $600 / month** | Even the cheapest viable pair (us‑east‑1 + eastus) costs: <br>Base = $120 + $125 = $245 <br>Latency cost = 12 ms × $0.25 = $3 <br>**Total region cost = $248** <br>Adding the cheapest compute (e.g., two t3.medium VMs @ $30.37 each) and minimal scaling (1 replica, 100 Mbps) would still be well under $600, but the latency constraint is already violated. | ❌ |
+
+Because the **minimum possible latency between any two distinct regions in the catalog is 12 ms**, the 10 ms latency target cannot be met, regardless of provider choice or cost optimizations.  
+
+**Conclusion:** With the current catalog and constraints, a disaster‑recovery deployment that satisfies **both** a 99.99 % SLA **and** ≤ 10 ms latency is **not feasible**. You would need either:
+
+1. A relaxed latency requirement (≥ 12 ms), or  
+2. Additional regions/peering links not listed in the catalog that can provide ≤ 10 ms latency.
+
+If you can adjust the latency requirement, I can immediately propose a concrete under‑$600 deployment that meets the SLA.

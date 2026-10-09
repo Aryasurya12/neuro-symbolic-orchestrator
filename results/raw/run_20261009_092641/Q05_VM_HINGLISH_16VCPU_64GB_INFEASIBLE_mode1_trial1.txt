@@ -1,0 +1,52 @@
+**Short answer:** With the SKUs that are available in the catalog, a 16 vCPU / 64 GB‑RAM footprint cannot be built for ≤ $450 / month on AWS. The cheapest combination that meets the exact hardware requirement exceeds the budget (see details below).
+
+---
+
+### Why the budget falls short
+
+| SKU (AWS) | vCPU | RAM | Monthly cost* |
+|-----------|------|-----|----------------|
+| **m5.2xlarge** | 8 | 32 GB | **$280.32** |
+| **m5.xlarge**  | 4 | 16 GB | **$140.16** |
+| **c5.xlarge**  | 4 | 8 GB  | **$124.10** |
+| **t3.large**   | 2 | 8 GB  | **$60.74** |
+| **t3.xlarge**  | 4 | 16 GB | **$121.47** |
+
+*All costs are based on 730 h / month (full‑time) as given in the catalog.
+
+To reach **16 vCPU / 64 GB** you need at least:
+
+| Option | Instances (type) | Total vCPU | Total RAM | Monthly cost |
+|--------|------------------|------------|-----------|--------------|
+| 1 | 2 × **m5.2xlarge** | 16 | 64 GB | **$560.64** |
+| 2 | 4 × **m5.xlarge** | 16 | 64 GB | **$560.64** |
+| 3 | 2 × **m5.2xlarge** + 2 × **t3.large** (adds extra RAM) | 20 | 80 GB | **$682.38** |
+| 4 | 2 × **c5.xlarge** + 2 × **t3.xlarge** (insufficient RAM) – **does not meet 64 GB** |
+
+The **cheapest** configuration that actually satisfies both CPU **and** RAM is **Option 1** (or Option 2), costing **$560.64 per month**, which is **$110.64 over the $450 limit**.
+
+---
+
+### What can be done within $450?
+
+If the exact 16 vCPU / 64 GB spec is flexible, you could consider a lower‑spec deployment that stays under budget, for example:
+
+| Configuration | vCPU | RAM | Monthly cost |
+|---------------|------|-----|--------------|
+| 2 × **m5.xlarge** | 8 | 32 GB | $280.32 |
+| 1 × **m5.2xlarge** + 1 × **t3.large** | 10 | 40 GB | $341.06 |
+| 3 × **c5.xlarge** | 12 | 24 GB | $372.30 |
+| 4 × **t3.xlarge** | 16 | 64 GB | **$485.88** (still slightly over) |
+
+The closest you can get to the target while staying ≤ $450 is **2 × m5.xlarge + 1 × t3.large** (10 vCPU, 40 GB RAM) at **$341.06**. You could then add **dynamic scaling** (bandwidth + worker replicas) on top of that if needed, still keeping total cost under $450.
+
+---
+
+### Recommendation
+
+- **If the 16 vCPU / 64 GB requirement is non‑negotiable:** the deployment will cost **≈ $560/month**, which exceeds the $450 budget. You would need to increase the budget or wait for a larger instance type to become available in the catalog.
+- **If you can relax the spec:** use **2 × m5.xlarge + 1 × t3.large** in **us‑east‑1** (cheapest region) for **$341.06/month** and optionally add dynamic scaling (bandwidth & replicas) within the remaining budget.
+
+---
+
+**Bottom line:** With the current catalog, a true 16 vCPU / 64 GB AWS server cannot be provisioned for $450/month. Adjusting the hardware requirements or the budget is required.

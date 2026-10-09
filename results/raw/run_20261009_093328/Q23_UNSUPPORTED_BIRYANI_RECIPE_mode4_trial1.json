@@ -1,0 +1,42 @@
+{
+  "problem_type": null,
+  "interpretation_outcome": "unsupported",
+  "cloud_providers": null,
+  "budget_max_usd": null,
+  "service_count": null,
+  "required_vcpus": null,
+  "required_ram_gb": null,
+  "target_bandwidth_mbps": null,
+  "min_bandwidth_mbps": null,
+  "max_bandwidth_mbps": null,
+  "min_replicas": null,
+  "max_replicas": null,
+  "target_replicas": null,
+  "target_cpu_pct": null,
+  "max_cpu_pct": null,
+  "latency_max_ms": null,
+  "sla_availability_pct": null,
+  "allowed_regions": null,
+  "primary_region": null,
+  "secondary_region": null,
+  "require_multi_region": null,
+  "require_multi_cloud": null,
+  "instance_count": null,
+  "min_instance_count": null,
+  "vcpus_per_instance": null,
+  "ram_gb_per_instance": null,
+  "clarification_questions": [],
+  "unsupported_reasons": [
+    "The request is about a cooking recipe, which is non-cloud and out of scope."
+  ],
+  "conflicting_reasons": [],
+  "extracted_spans": {
+    "required_vcpus": null,
+    "required_ram_gb": null,
+    "budget_max_usd": null,
+    "cloud_providers": null,
+    "target_cpu_pct": null,
+    "latency_max_ms": null,
+    "sla_availability_pct": null
+  }
+}

@@ -375,14 +375,14 @@ def trace_stage_6_explanation(
         log("  [SKIPPED: Mode 3 is pure symbolic and does not generate natural-language explanations]")
         return "Skipped (Pure Symbolic)", ExplanationSource.UNAVAILABLE
 
-    report_text = FinOpsExplainer.generate_report(
+    report_text, exp_source = FinOpsExplainer.generate_report_with_source(
         contract=contract,
         solver_result=solver_result,
         check_result=check_result,
         enable_llm_explainer=enable_llm_explainer,
     )
     log(report_text)
-    return report_text, ExplanationSource.LOCAL_TEMPLATE
+    return report_text, exp_source
 
 
 def run_llm_mode_trace(

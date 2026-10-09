@@ -32,6 +32,14 @@ from src.optimizers.raw_symbolic_runner import (
     run_pure_symbolic_raw,
 )
 from src.symbolic.optimizers.domain_catalog import DatabaseBackedCatalog, VM_CATALOG
+from src.reporting.explain_verdict import (
+    explain_run,
+    find_manifest_entry,
+    LABEL_COLORS,
+    LABEL_TOOLTIPS,
+    LABEL_LEGEND,
+    DISCLAIMER_RULE,
+)
 
 # Configure Streamlit page
 st.set_page_config(
@@ -2038,6 +2046,9 @@ if "mode1_msg" not in st.session_state:
 if "mode2_msg" not in st.session_state:
     st.session_state["mode2_msg"] = None
 
+if "mock_mode_active" not in st.session_state:
+    st.session_state["mock_mode_active"] = os.getenv("MOCK_LLM", "false").lower() in ["true", "1", "yes"]
+
 
 # =============================================================================
 # Streamlit Sidebar: Country/Currency Selector & Static FX Engine (Single Source of Truth)
@@ -2122,7 +2133,7 @@ with st.sidebar:
                 Key: {groq_disp} | Model: {os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile')[:20]}
             </div>
         </div>
-        <div style="background: {nvidia_bg}; border: 1px solid {nvidia_border}; border-radius: 8px; padding: 8px 12px; margin-bottom: 16px;">
+        <div style="background: {nvidia_bg}; border: 1px solid {nvidia_border}; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
                 <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: {nvidia_col};">NVIDIA API (Mode 4 Explainer)</span>
                 <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {nvidia_col};"></span>
@@ -2136,6 +2147,25 @@ with st.sidebar:
         </div>
         """
     )
+
+    mock_mode_active = st.checkbox(
+        "Offline / Mock LLM Mode",
+        value=st.session_state["mock_mode_active"],
+        key="mock_mode_active_toggle",
+        help="Run benchmark evaluations against deterministic offline fixtures with zero live API calls.",
+    )
+    st.session_state["mock_mode_active"] = mock_mode_active
+
+    if mock_mode_active:
+        render_html(
+            """
+            <div style="background: rgba(255, 166, 0, 0.15); border: 1px solid rgba(255, 166, 0, 0.4); border-radius: 8px; padding: 6px 10px; margin-bottom: 14px; font-size: 0.72rem; font-weight: 700; color: #FFA600; text-align: center;">
+                ⚠️ [MOCK MODE ACTIVE - ZERO LIVE CALLS]
+            </div>
+            """
+        )
+    else:
+        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
     render_html(
         """
@@ -2356,6 +2386,20 @@ else:
         </div>
         """
     )
+
+    if st.session_state.get("mock_mode_active", False):
+        render_html(
+            """
+            <div style="background: rgba(255, 166, 0, 0.12); border: 1px solid rgba(255, 166, 0, 0.4); border-left: 4px solid #FFA600; border-radius: 8px; padding: 10px 16px; margin-bottom: 20px;">
+                <div style="font-size: 0.86rem; font-weight: 700; color: #FFA600; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                    <span>⚠️ MOCK DATA — OFFLINE BENCHMARK MODE ACTIVE</span>
+                </div>
+                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; line-height: 1.4;">
+                    Evaluations and plain-English verdicts are using deterministic offline fixtures with zero live external API calls.
+                </div>
+            </div>
+            """
+        )
 
     # Workload Presets Catalog directly inside Dashboard above input box
     render_html('<div style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Workload Presets (Click to Fill & Run Immediately):</div>')
@@ -3351,6 +3395,7 @@ else:
         )
 
         modes_comp_list = live_result.get("bench_data", live_result.get("modes_comparison", []))
+        manifest_entry = find_manifest_entry(st.session_state["active_query_text"])
 
         comp_rows_html = ""
         for row in modes_comp_list:
@@ -3364,6 +3409,22 @@ else:
                 source_badge = '<span class="status-tag status-tag-live">Local Run</span>'
             else:
                 source_badge = '<span class="status-tag status-tag-live">Live API</span>'
+
+            # Build record representation for canonical explain_run
+            mode_num = 1 if "Mode 1" in mode_title else (2 if "Mode 2" in mode_title else (3 if "Mode 3" in mode_title else 4))
+            rec_row = {
+                "mode": mode_num,
+                "mode_name": f"Mode {mode_num}",
+                "feasibility": "PASS" if row.get("is_feasible") else ("FAIL" if src == "live" else ("NOT_EVALUATED" if src == "not_run" else "NOT_EVALUABLE")),
+                "recomputed_cost_usd": row.get("actual_cost_usd"),
+                "claimed_cost_usd": row.get("reported_cost_usd"),
+                "normalization_status": "API_FAILURE" if src == "live_error" else ("NOT_EVALUATED" if src == "not_run" else "SUCCESS"),
+                "requirements": live_result.get("contract").model_dump() if hasattr(live_result.get("contract"), "model_dump") else {},
+                "violations": [row.get("violations")] if (row.get("violations") and not row.get("is_feasible")) else [],
+                "summary_status": str(row.get("violations") or row.get("math") or ""),
+                "is_mock": st.session_state.get("mock_mode_active", False) or (src == "mock"),
+            }
+            v_info = explain_run(rec_row, key=manifest_entry)
 
             v_color = row.get("cost_color", "#FFA600")
             rep_cost_val = row.get("reported_cost_usd")
@@ -3400,11 +3461,27 @@ else:
             else:
                 violations_str = f'<span style="color: var(--text-secondary);">{row.get("violations", "—")}</span>'
 
+            # Badge HTML for canonical verdict label
+            badge_html = f'<span class="status-tag" style="background: rgba(0,0,0,0.3); color: {v_info["color"]}; border: 1px solid {v_info["color"]}; display: inline-block; margin-top: 4px;" title="{v_info["tooltip"]}">[{v_info["label"]}]</span>'
+            check_this_html = f'<div style="color: #FFA600; margin-top: 2px;">🔍 {v_info["check_this"]}</div>' if v_info.get("check_this") else ""
+
+            verdict_cell_html = f"""
+            <div style="font-weight: 600; color: var(--text-primary); font-size: 0.85rem; line-height: 1.35;">{v_info['headline']}</div>
+            <details style="margin-top: 4px; font-size: 0.76rem; color: var(--text-secondary);">
+                <summary style="cursor: pointer; color: var(--seq-4); font-weight: 600;">Details & Impact</summary>
+                <div style="padding-top: 4px; line-height: 1.45;">
+                    <div>{v_info['what_happened']}</div>
+                    <div style="color: var(--text-primary); margin-top: 2px;"><em>{v_info['why_it_matters']}</em></div>
+                    {check_this_html}
+                </div>
+            </details>
+            """
+
             comp_rows_html += f"""
             <tr>
-                <td><strong>{mode_title}</strong> {source_badge}</td>
+                <td><strong>{mode_title}</strong> {source_badge}<br>{badge_html}</td>
+                <td style="max-width: 260px;">{verdict_cell_html}</td>
                 <td>{row.get('nlu', '—')}</td>
-                <td>{row.get('math', '—')}</td>
                 <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums;">{row.get('latency', '—')}</td>
                 <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: {v_color};">{rep_disp}</td>
                 <td style="font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary);">{act_disp}</td>
@@ -3412,25 +3489,48 @@ else:
             </tr>
             """
 
+        # Build legend HTML items
+        legend_items_html = ""
+        for lbl, desc in LABEL_LEGEND.items():
+            lbl_color = LABEL_COLORS.get(lbl, "#8CA0B4")
+            legend_items_html += f"""
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 0.82rem;">
+                <span class="status-tag" style="background: rgba(0,0,0,0.3); color: {lbl_color}; border: 1px solid {lbl_color}; min-width: 140px; text-align: center;">[{lbl}]</span>
+                <span style="color: var(--text-secondary); line-height: 1.4;">{desc}</span>
+            </div>
+            """
+
         render_html(
             f"""
-            <div class="clean-card" style="padding: 0; overflow: hidden; margin-bottom: 8px;">
+            <div class="clean-card" style="padding: 0; overflow: hidden; margin-bottom: 12px;">
                 <table class="clean-table" style="margin: 0;">
                     <thead>
                         <tr>
                             <th>Execution Mode</th>
-                            <th>NLU / Parsing</th>
-                            <th>Math / Checker Verdict</th>
+                            <th>Canonical Verdict (Plain English)</th>
+                            <th>NLU / Contract</th>
                             <th>Latency</th>
                             <th>Reported Cost ({cur_symbol_hdr})</th>
-                            <th>Actual Catalog Cost ({cur_symbol_hdr})</th>
-                            <th>Independent Verification & Status</th>
+                            <th>Actual Cost ({cur_symbol_hdr})</th>
+                            <th>Independent Verification</th>
                         </tr>
                     </thead>
                     <tbody>
                         {comp_rows_html}
                     </tbody>
                 </table>
+            </div>
+
+            <div class="clean-card" style="border-top: 3px solid var(--seq-4); margin-bottom: 14px; padding: 16px 20px;">
+                <div class="card-header-title" style="margin-bottom: 4px;">
+                    <span>How to Read This: Multi-Measurement Evaluation & Label Legend</span>
+                </div>
+                <div style="background: var(--bg-surface-inset); border-left: 3px solid var(--seq-4); border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.86rem; color: var(--text-primary); line-height: 1.5;">
+                    <strong>Core Evaluation Principle:</strong> {DISCLAIMER_RULE}
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 8px;">
+                    {legend_items_html}
+                </div>
             </div>
             """
         )

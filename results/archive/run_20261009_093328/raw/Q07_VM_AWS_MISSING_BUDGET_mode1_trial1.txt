@@ -1,0 +1,15 @@
+**Provider:** AWS  
+
+**Instance selection (to meet 8 vCPU + 16 GB RAM):**  
+- Deploy **2 × c5.xlarge** (each = 4 vCPU, 8 GB RAM) in the same region (e.g., us‑east‑1).  
+- Combined they give **8 vCPU** and **16 GB RAM**.
+
+**Monthly cost calculation**  
+- c5.xlarge price: **$124.10 / month** (per instance)  
+- 2 instances: **2 × $124.10 = $248.20 / month**
+
+**Recommended deployment**  
+- **Region:** us‑east‑1 (AWS) – lowest base‑cost region and good latency for most US‑based users.  
+- **Resources:** 2 × c5.xlarge, no additional services required.  
+
+**Total monthly cost:** **$248.20**.

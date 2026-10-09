@@ -1,0 +1,41 @@
+**Provider:** AWS (single‑cloud, multi‑region DR)
+
+**Regions (DR pair)**  
+- **Primary:** us‑east‑1 (base $120 /mo)  
+- **Secondary:** us‑west‑2 (base $130 /mo)  
+- **Inter‑region latency:** 65 ms → latency surcharge = 65 × $0.25 = $16.25  
+
+**Region‑pair cost** = $120 + $130 + $16.25 = **$266.25 /mo**  
+**Combined SLA** ≈ 99.999975 % (well above 99.95 %)
+
+**Compute nodes** (one per region)  
+- Instance type: **m5.xlarge** (4 vCPU, 16 GB) – $140.16 /mo each  
+- Two instances = **$280.32 /mo**
+
+**Dynamic scaling layer**  
+- **Bandwidth:** 300 Mbps → $0.08 × 300 = $24.00 /mo  
+- **Worker replicas:** 7 (minimum to keep CPU ≤ 60 %) → $45 × 7 = $315.00 /mo  
+- **CPU per replica:** (300 Mbps / (7 × 75 Mbps)) × 100 % = ≈ 57 % (meets the ≤ 60 % rule)  
+
+**Dynamic‑scaling cost** = $24.00 + $315.00 = **$339.00 /mo**
+
+---
+
+### **Total monthly cost**
+
+| Item | Cost (USD) |
+|------|------------|
+| Region pair (base + latency) | $266.25 |
+| Two m5.xlarge instances | $280.32 |
+| Dynamic scaling (bandwidth + replicas) | $339.00 |
+| **Grand total** | **$885.57** |
+
+---
+
+**Recommendation summary**
+
+- Deploy the workload in **AWS us‑east‑1** (primary) and **us‑west‑2** (secondary) for disaster‑recovery.  
+- Run **one m5.xlarge VM** in each region to host the scaling layer.  
+- Enable the continuous dynamic scaling service with **300 Mbps bandwidth** and **7 worker replicas** (≈ 57 % CPU per replica).  
+
+**Result:** Handles the peak 300 Mbps traffic, keeps CPU ≤ 60 %, provides high‑availability DR, and stays well within the **$1,500** budget (total **$885.57 /mo**).

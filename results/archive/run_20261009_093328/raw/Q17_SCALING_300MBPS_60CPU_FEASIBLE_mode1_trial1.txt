@@ -1,0 +1,27 @@
+**Provider:** AWS (primary us‑east‑1, disaster‑recovery us‑central‑1)  
+
+**Compute (orchestrator) instances**  
+- 2 × t3.medium (2 vCPU, 4 GB) – one in each region  
+- Cost: 2 × $30.37 = $60.74 / mo  
+
+**Disaster‑recovery link** (us‑east‑1 ↔ us‑central‑1)  
+- Base cost: $120 + $115 = $235  
+- Latency cost: 32 ms × $0.25 = $8.00  
+- **DR total:** **$243.00 / mo** (combined SLA ≈ 99.999975 %)  
+
+**Dynamic‑scaling service**  
+- **Peak bandwidth:** 300 Mbps (cost = 300 × $0.08 = $24.00)  
+- **Worker replicas:** 7 (minimum to keep CPU ≤ 60 %: 300 Mbps / (7 × 75 Mbps) × 100 ≈ 57 %)  
+- **Replica cost:** 7 × $45 = $315.00  
+- **Scaling total:** **$339.00 / mo**  
+
+### **Total monthly cost**
+
+| Component | Cost (USD) |
+|-----------|------------|
+| Compute VMs (2 × t3.medium) | $60.74 |
+| DR link (us‑east‑1 ↔ us‑central‑1) | $243.00 |
+| Dynamic scaling (300 Mbps, 7 replicas) | $339.00 |
+| **Grand total** | **$642.74 / month** |
+
+**Result:** A fully‑redundant deployment on AWS, using t3.medium instances in us‑east‑1 and us‑central‑1, with a 300 Mbps bandwidth pipeline and 7 worker replicas, stays well under the $1,500 budget while keeping peak CPU usage ≤ 60 % and delivering a combined SLA of ≈ 99.999975 %.

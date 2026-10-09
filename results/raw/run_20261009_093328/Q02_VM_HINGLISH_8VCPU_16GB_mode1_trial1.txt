@@ -1,0 +1,27 @@
+**Provider:** AWS  
+
+**Region:** us‑east‑1 (cheapest AWS region in the catalog)  
+
+**Compute:** 2 × c5.xlarge  
+- vCPU = 4 × 2 = 8 vCPU  
+- RAM = 8 GB × 2 = 16 GB  
+
+**Dynamic‑Scaling (optional, fits the budget):**  
+- Bandwidth = 200 Mbps → 200 × $0.08 = $16.00 /mo  
+- Worker replicas = 2 (75 Mbps per replica → 2 × 75 = 150 Mbps < 200 Mbps, so we add a third replica to meet capacity)  
+  → 3 replicas × $45 = $135.00 /mo  
+
+**Cost breakdown**
+
+| Item | Monthly cost |
+|------|--------------|
+| 2 × c5.xlarge (compute) | 2 × $124.10 = **$248.20** |
+| Bandwidth (200 Mbps) | **$16.00** |
+| Worker replicas (3) | **$135.00** |
+| **Total** | **$399.20** |
+
+**Budget‑constrained option (no extra scaling):**  
+
+- 2 × c5.xlarge only → **$248.20 / month** (well under the $300 limit).  
+
+**Recommendation:** Deploy the two c5.xlarge instances in **us‑east‑1**. This gives exactly the required **8 vCPU / 16 GB RAM** and costs **$248.20 per month**, leaving room in the $300 budget for modest additional services (e.g., a small amount of bandwidth or a single worker replica if needed).
