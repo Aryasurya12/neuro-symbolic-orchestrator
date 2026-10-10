@@ -338,7 +338,7 @@ def execute_mode_1_raw_llm(
     t_start = time.perf_counter()
     if mock_llm:
         if "scaling" in query_text.lower():
-            raw_content = "For continuous dynamic scaling with target CPU 70% under $1500, we recommend provisioning 100 Mbps bandwidth with 1 worker replica at an estimated total cost of $53.00/month ($0.08 per Mbps + $45.00 base replica fee)."
+            raw_content = "For continuous dynamic scaling with target CPU 70% under $1500, we recommend provisioning 100 Mbps bandwidth with 2 worker replicas at an estimated total cost of $98.00/month ($0.08 per Mbps + $45.00 base replica fee)."
         elif "disaster recovery" in query_text.lower() or "dr" in query_text.lower():
             raw_content = "For multi-region disaster recovery between AWS and GCP with 99.99% SLA, we recommend primary in us-east-1 and secondary in us-central1. Total cost is $450.00/month with 42ms cross-region sync."
         else:
@@ -371,7 +371,8 @@ def execute_mode_1_raw_llm(
     print("\n  [Stage 1.3: Information Extraction & Semantic Normalization]")
     if contract is None:
         try:
-            contract = SCOPEParser.parse_query_to_contract(query_text)
+            parser = SCOPEParser()
+            contract, _, _ = parser.parse_query_to_contract(query_text)
         except Exception:
             contract = None
     prob_type = contract.problem_type if contract else "ILP_VM_Allocation"
@@ -386,6 +387,21 @@ def execute_mode_1_raw_llm(
 
     # Extract explicitly stated requirements from Mode 1 prose (never reuse Mode 3 contract)
     stated_requirements_m1 = extract_stated_parameters_from_prose(raw_content, norm_decision)
+
+    if contract is None:
+        try:
+            contract = CloudOptimizationContract(
+                problem_type="ILP_VM_Allocation",
+                budget_max_usd=stated_requirements_m1.get("budget_max_usd") or 500.0,
+                required_vcpus=stated_requirements_m1.get("required_vcpus") or 1,
+                required_ram_gb=stated_requirements_m1.get("required_ram_gb") or 1.0,
+                latency_max_ms=stated_requirements_m1.get("latency_max_ms") or 100.0,
+                sla_availability_pct=stated_requirements_m1.get("sla_availability_pct") or 99.9,
+                target_bandwidth_mbps=stated_requirements_m1.get("target_bandwidth_mbps"),
+                target_cpu_pct=stated_requirements_m1.get("target_cpu_pct") or 70.0,
+            )
+        except Exception:
+            contract = None
 
     print(f"    Normalization Status : {norm_status.value}")
     if ext_cost is not None:
@@ -403,6 +419,18 @@ def execute_mode_1_raw_llm(
     candidate_dict["total_monthly_cost_usd"] = ext_cost
     candidate_dict["solver"] = "Raw_LLM_Prose"
     candidate_dict["status"] = "feasible" if ext_cost is not None else "UNKNOWN"
+
+    # Auto-align contract archetype if decision is DR or Scaling and contract defaulted to VM
+    if contract and norm_decision and isinstance(norm_decision, dict):
+        if norm_decision.get("primary_region") and norm_decision.get("secondary_region"):
+            prob_type = "Z3_Graph_Disaster_Recovery"
+            contract.problem_type = "Z3_Graph_Disaster_Recovery"
+        elif (norm_decision.get("optimal_bandwidth_mbps") is not None or norm_decision.get("bandwidth_mbps") is not None) and (norm_decision.get("recommended_replicas") is not None or norm_decision.get("replicas") is not None):
+            prob_type = "PSO_Continuous_Scaling"
+            contract.problem_type = "PSO_Continuous_Scaling"
+        elif norm_decision.get("allocated_vms"):
+            prob_type = "ILP_VM_Allocation"
+            contract.problem_type = "ILP_VM_Allocation"
 
     if contract and norm_status in [NormalizationStatus.SUCCESS, NormalizationStatus.NEEDS_REVIEW]:
         feas_pass, check = trace_stage_5_independent_verification(
@@ -519,9 +547,9 @@ def execute_mode_2_schema_llm(
     if mock_llm:
         if "scaling" in query_text.lower():
             parsed_json = {
-                "bandwidth_mbps": 100.0,
-                "replicas": 1,
-                "total_monthly_cost_usd": 53.00,
+                "optimal_bandwidth_mbps": 100.0,
+                "recommended_replicas": 2,
+                "total_monthly_cost_usd": 98.00,
             }
             raw_content = json.dumps(parsed_json, indent=2)
         elif "disaster recovery" in query_text.lower() or "dr" in query_text.lower():
@@ -572,7 +600,8 @@ def execute_mode_2_schema_llm(
     print("\n  [Stage 2.3: Information Extraction & Task Suitability Check]")
     if contract is None:
         try:
-            contract = SCOPEParser.parse_query_to_contract(query_text)
+            parser = SCOPEParser()
+            contract, _, _ = parser.parse_query_to_contract(query_text)
         except Exception:
             contract = None
     prob_type = contract.problem_type if contract else "ILP_VM_Allocation"
@@ -588,6 +617,21 @@ def execute_mode_2_schema_llm(
     # Extract explicitly stated requirements from Mode 2 JSON (never reuse Mode 3 contract)
     stated_requirements_m2 = extract_stated_parameters_from_json(parsed_json or raw_content, raw_content=raw_content)
 
+    if contract is None:
+        try:
+            contract = CloudOptimizationContract(
+                problem_type="ILP_VM_Allocation",
+                budget_max_usd=stated_requirements_m2.get("budget_max_usd") or 500.0,
+                required_vcpus=stated_requirements_m2.get("required_vcpus") or 1,
+                required_ram_gb=stated_requirements_m2.get("required_ram_gb") or 1.0,
+                latency_max_ms=stated_requirements_m2.get("latency_max_ms") or 100.0,
+                sla_availability_pct=stated_requirements_m2.get("sla_availability_pct") or 99.9,
+                target_bandwidth_mbps=stated_requirements_m2.get("target_bandwidth_mbps"),
+                target_cpu_pct=stated_requirements_m2.get("target_cpu_pct") or 70.0,
+            )
+        except Exception:
+            contract = None
+
     print(f"    Normalization Status : {norm_status.value}")
     if ext_cost is not None:
         print(f"    Extracted Cost Claim : ${ext_cost:,.2f} USD / month")
@@ -602,6 +646,18 @@ def execute_mode_2_schema_llm(
     candidate_dict["total_monthly_cost_usd"] = ext_cost
     candidate_dict["solver"] = "Structured_JSON_LLM"
     candidate_dict["status"] = "feasible" if ext_cost is not None else "UNKNOWN"
+
+    # Auto-align contract archetype if decision is DR or Scaling and contract defaulted to VM
+    if contract and norm_decision and isinstance(norm_decision, dict):
+        if norm_decision.get("primary_region") and norm_decision.get("secondary_region"):
+            prob_type = "Z3_Graph_Disaster_Recovery"
+            contract.problem_type = "Z3_Graph_Disaster_Recovery"
+        elif (norm_decision.get("optimal_bandwidth_mbps") is not None or norm_decision.get("bandwidth_mbps") is not None) and (norm_decision.get("recommended_replicas") is not None or norm_decision.get("replicas") is not None):
+            prob_type = "PSO_Continuous_Scaling"
+            contract.problem_type = "PSO_Continuous_Scaling"
+        elif norm_decision.get("allocated_vms"):
+            prob_type = "ILP_VM_Allocation"
+            contract.problem_type = "ILP_VM_Allocation"
 
     if contract and norm_status in [NormalizationStatus.SUCCESS, NormalizationStatus.NEEDS_REVIEW]:
         feas_pass, check = trace_stage_5_independent_verification(

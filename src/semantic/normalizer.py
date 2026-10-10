@@ -439,8 +439,20 @@ class OutputNormalizer:
         extracted_monthly_cost: Optional[float] = None
         cost_ambiguous: bool = False
 
-        # Select claimed cost scoped to requested problem type
-        if problem_type == "PSO_Continuous_Scaling":
+        # Determine effective problem type if defaulted to ILP_VM_Allocation with no VM content
+        effective_problem_type = problem_type
+        if effective_problem_type == "ILP_VM_Allocation":
+            has_vm_sku_mention = any(re.search(r"\b" + re.escape(sku_name) + r"\b", raw_text, re.IGNORECASE) for sku_name in cls.KNOWN_SKUS)
+            has_dr_regions_count = len(re.findall(r"\b(us-east-1|us-west-2|eu-west-1|eastus|us-central-?1|us-central\s+1)\b", raw_text, re.IGNORECASE))
+            has_scaling_signals = bool(re.search(r"\b\d+(?:\.\d+)?\s*(?:mbps|gbps)\b", raw_text, re.IGNORECASE) and re.search(r"\b\d+\s*(?:worker\s+replicas?|replicas?|pods?|workers?)\b", raw_text, re.IGNORECASE))
+
+            if has_dr_regions_count >= 2 and not has_vm_sku_mention:
+                effective_problem_type = "Z3_Graph_Disaster_Recovery"
+            elif has_scaling_signals and not has_vm_sku_mention:
+                effective_problem_type = "PSO_Continuous_Scaling"
+
+        # Select claimed cost scoped to requested/effective problem type
+        if effective_problem_type == "PSO_Continuous_Scaling":
             if scaling_subtotal is not None:
                 extracted_monthly_cost = scaling_subtotal
                 evidence_list.append(
@@ -527,7 +539,7 @@ class OutputNormalizer:
             if vm_subtotal is not None or dr_subtotal is not None:
                 errors.append("Unsolicited VM/DR components detected; scope expansion preserved in evidence.")
 
-        elif problem_type == "ILP_VM_Allocation":
+        elif effective_problem_type == "ILP_VM_Allocation":
             if vm_subtotal is not None:
                 extracted_monthly_cost = vm_subtotal
                 evidence_list.append(
@@ -602,7 +614,7 @@ class OutputNormalizer:
             if scaling_subtotal is not None or dr_subtotal is not None:
                 errors.append("Unsolicited Scaling/DR components detected; scope expansion preserved in evidence.")
 
-        elif problem_type == "Z3_Graph_Disaster_Recovery":
+        elif effective_problem_type == "Z3_Graph_Disaster_Recovery":
             if dr_subtotal is not None:
                 extracted_monthly_cost = dr_subtotal
                 evidence_list.append(
@@ -695,8 +707,8 @@ class OutputNormalizer:
             if vm_subtotal is not None or scaling_subtotal is not None:
                 errors.append("Unsolicited VM/Scaling components detected; scope expansion preserved in evidence.")
 
-        # 3. Extract Decision Allocation based on problem type
-        if problem_type == "ILP_VM_Allocation":
+        # 3. Extract Decision Allocation based on effective problem type
+        if effective_problem_type == "ILP_VM_Allocation":
             allocated_vms = []
             for sku_name, sdata in cls.KNOWN_SKUS.items():
                 qty_patterns = [
@@ -754,7 +766,7 @@ class OutputNormalizer:
 
             normalized_decision = {"allocated_vms": allocated_vms} if allocated_vms else None
 
-        elif problem_type == "PSO_Continuous_Scaling":
+        elif effective_problem_type == "PSO_Continuous_Scaling":
             # Extract bandwidth and replicas
             bw_m = re.search(r"(\d+(?:\.\d+)?)\s*(?:mbps|gbps)", raw_text, re.IGNORECASE)
             if not bw_m:
@@ -803,7 +815,7 @@ class OutputNormalizer:
                 "recommended_replicas": rep_val,
             }
 
-        elif problem_type == "Z3_Graph_Disaster_Recovery":
+        elif effective_problem_type == "Z3_Graph_Disaster_Recovery":
             # Normalize region name matches including central variants (us-central1, us-central-1, us-central 1)
             # and collect unique regions in order of appearance
             region_pattern = r"\b(us-east-1|us-west-2|eu-west-1|eastus|us-central-?1|us-central\s+1)\b"
@@ -852,7 +864,7 @@ class OutputNormalizer:
                 }
         else:
             status = NormalizationStatus.TASK_INCOMPATIBLE
-            errors.append(f"Unsupported problem type: {problem_type}")
+            errors.append(f"Unsupported problem type: {effective_problem_type}")
             normalized_decision = None
 
         return status, extracted_monthly_cost, normalized_decision, errors, evidence_list
@@ -992,49 +1004,21 @@ class OutputNormalizer:
         has_scaling_fields = ("bandwidth_mbps" in parsed_json or "optimal_bandwidth_mbps" in parsed_json or "bandwidth" in parsed_json) and ("recommended_replicas" in parsed_json or "replicas" in parsed_json or "worker_replicas" in parsed_json)
         has_dr_fields = "primary_region" in parsed_json and "secondary_region" in parsed_json and bool(parsed_json.get("primary_region")) and bool(parsed_json.get("secondary_region"))
 
-        if requested_problem_type == "ILP_VM_Allocation" and not has_vm_fields and (has_scaling_fields or has_dr_fields or task_type_claimed in ["PSO_Continuous_Scaling", "Z3_Graph_Disaster_Recovery"]):
-            errors.append(
-                f"Task Incompatibility: Prompt requested VM Knapsack Allocation, but JSON emitted "
-                f"'{task_type_claimed or ('Dynamic Scaling' if has_scaling_fields else 'Disaster Recovery')}' task schema."
-            )
-            return (
-                NormalizationStatus.TASK_INCOMPATIBLE,
-                claimed_cost,
-                None,
-                errors,
-                evidence_list,
-            )
+        # Determine effective problem type with priority on model's explicit task_type or structural fields
+        # This prevents default VM bias from falsely rejecting valid DR and Scaling JSON schemas
+        if task_type_claimed in ["ILP_VM_Allocation", "PSO_Continuous_Scaling", "Z3_Graph_Disaster_Recovery"]:
+            effective_problem_type = task_type_claimed
+        elif has_dr_fields and not has_vm_fields and not has_scaling_fields:
+            effective_problem_type = "Z3_Graph_Disaster_Recovery"
+        elif has_scaling_fields and not has_vm_fields and not has_dr_fields:
+            effective_problem_type = "PSO_Continuous_Scaling"
+        elif has_vm_fields and not has_dr_fields and not has_scaling_fields:
+            effective_problem_type = "ILP_VM_Allocation"
+        else:
+            effective_problem_type = requested_problem_type or "ILP_VM_Allocation"
 
-        if requested_problem_type == "PSO_Continuous_Scaling" and not has_scaling_fields and (has_vm_fields or has_dr_fields or task_type_claimed in ["ILP_VM_Allocation", "Z3_Graph_Disaster_Recovery"]):
-            errors.append(
-                f"Task Incompatibility: Prompt requested Continuous Scaling task, but JSON emitted "
-                f"'{task_type_claimed or ('VM Allocation' if has_vm_fields else 'Disaster Recovery')}' schema. "
-                "Emitted structure cannot satisfy dynamic bandwidth/replica requirements."
-            )
-            return (
-                NormalizationStatus.TASK_INCOMPATIBLE,
-                claimed_cost,
-                None,
-                errors,
-                evidence_list,
-            )
-
-        if requested_problem_type == "Z3_Graph_Disaster_Recovery" and not has_dr_fields and (has_vm_fields or has_scaling_fields or task_type_claimed in ["ILP_VM_Allocation", "PSO_Continuous_Scaling"]):
-            errors.append(
-                f"Task Incompatibility: Prompt requested Disaster Recovery task, but JSON emitted "
-                f"'{task_type_claimed or ('VM Allocation' if has_vm_fields else 'Dynamic Scaling')}' schema. "
-                "Emitted structure does not specify multi-region topological placement."
-            )
-            return (
-                NormalizationStatus.TASK_INCOMPATIBLE,
-                claimed_cost,
-                None,
-                errors,
-                evidence_list,
-            )
-
-        # Normalization according to target problem
-        if requested_problem_type == "ILP_VM_Allocation":
+        # Normalization according to effective problem type
+        if effective_problem_type == "ILP_VM_Allocation":
             raw_vms = parsed_json.get("allocated_vms") or parsed_json.get("instances") or []
             normalized_vms = []
             for item in raw_vms:
@@ -1070,7 +1054,7 @@ class OutputNormalizer:
                 evidence_list,
             )
 
-        elif requested_problem_type == "PSO_Continuous_Scaling":
+        elif effective_problem_type == "PSO_Continuous_Scaling":
             raw_bw = parsed_json.get("optimal_bandwidth_mbps", parsed_json.get("bandwidth_mbps", parsed_json.get("bandwidth")))
             raw_reps = parsed_json.get("recommended_replicas", parsed_json.get("replicas", parsed_json.get("worker_replicas")))
             try:
@@ -1097,7 +1081,7 @@ class OutputNormalizer:
                 evidence_list,
             )
 
-        elif requested_problem_type == "Z3_Graph_Disaster_Recovery":
+        elif effective_problem_type == "Z3_Graph_Disaster_Recovery":
             prim = parsed_json.get("primary_region")
             sec = parsed_json.get("secondary_region")
             if not prim or not sec:
@@ -1121,6 +1105,6 @@ class OutputNormalizer:
             NormalizationStatus.TASK_INCOMPATIBLE,
             claimed_cost,
             None,
-            [f"Unsupported problem type: {requested_problem_type}"],
+            [f"Unsupported problem type: {effective_problem_type}"],
             evidence_list,
         )

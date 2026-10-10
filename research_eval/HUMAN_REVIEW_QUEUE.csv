@@ -1,0 +1,131 @@
+review_id,query_id,mode,mode_name,query_text,expected_outcome,historical_task_success,regraded_strict_success,explain_label,raw_prose_response,adjudication_decision,reviewer_notes
+REV_M1_Q04_VM_AWS_16VCPU_64GB_INFEASIBLE,Q04_VM_AWS_16VCPU_64GB_INFEASIBLE,1,Raw LLM,I need 16 vCPUs and 64GB RAM on AWS for under $450 a month.,INFEASIBLE,,1,CORRECT_REFUSAL,"**Result:** With the current AWS SKU pricing in the catalog, a deployment that provides **16 vCPUs + 64 GB RAM** cannot be built for **≤ $450 / month**.
+
+| Possible AWS combos that meet the resource target | Monthly compute cost |
+|---------------------------------------------------|----------------------|
+| 2 × m5.2xlarge (8 vCPU / 32 GB each)               | **$560.64** |
+| 4 × m5.xlarge (4 vCPU / 16 GB each)                | **$560.64** |
+| 8 × m5.large (2 vCPU / 8 GB each)                  | **$560.64** |
+| 4 × c5.xlarge (4 vCPU / 8 GB each) + additional RAM (not available) – still exceeds budget |
+| Any other mix of the listed SKUs                | **> $450** |
+
+All feasible combinations that satisfy **16 vCPU + 64 GB RAM** on AWS cost **≈ $560 / month**, which is **$110 over** the $450 limit.
+
+**Recommendation:**  
+- **Either** raise the budget to at least **$560 / month** to use the standard on‑demand instances listed above,  
+- **Or** consider alternative providers (e.g., Azure Standard_D4s_v5 or GCP e2‑standard‑4) or negotiate reserved/spot pricing, which are not covered in the current catalog.",PENDING_BLIND_REVIEW,
+REV_M1_Q06_VM_AWS_64VCPU_256GB_INFEASIBLE,Q06_VM_AWS_64VCPU_256GB_INFEASIBLE,1,Raw LLM,Deploy a massive database requiring 64 vCPUs and 256GB RAM on AWS for under 10 dollar a month,INFEASIBLE,1.0,1,CORRECT_REFUSAL,"**Result:** The requested workload (64 vCPUs + 256 GB RAM) cannot be satisfied on AWS within a $10 / month budget using the available SKU catalog.
+
+- The largest AWS VM in the catalog is **m5.2xlarge** (8 vCPU, 32 GB RAM) at **$280.32 / month**.  
+- Even a single instance of that size already exceeds the $10 limit, and you would need **8 × m5.2xlarge** (or an equivalent combination) to reach 64 vCPU/256 GB RAM, costing **≈ $2,242 / month**.
+
+**Conclusion:** With the current catalog and pricing, the target specifications and budget are mutually exclusive. To meet the budget you would need to drastically reduce the resource requirements, or to meet the resource requirements you must accept a substantially higher monthly spend. If you’d like a revised plan that balances cost and capacity, please provide adjusted constraints.",PENDING_BLIND_REVIEW,
+REV_M1_Q14_DR_AWS_GCP_100USD_INFEASIBLE,Q14_DR_AWS_GCP_100USD_INFEASIBLE,1,Raw LLM,Disaster recovery across AWS and GCP with 99.99% SLA and max 50ms latency under $100 a month.,INFEASIBLE,,1,CORRECT_REFUSAL,"**Result:** A disaster‑recovery pair that satisfies **both** the 99.99 % combined SLA **and** the ≤ 50 ms latency requirement cannot be built for ≤ $100 / month with the catalog you provided.
+
+**Why it’s impossible**
+
+| Region pair | Latency (ms) | Combined SLA | Monthly base cost* |
+|-------------|--------------|--------------|--------------------|
+| us‑east‑1 (AWS) ↔ us‑central1 (GCP) | 32 ms | 99.999975 % | $120 + $115 = $235 |
+| us‑east‑1 ↔ eastus (Azure) | 12 ms | 99.999975 % | $120 + $125 = $245 |
+| us‑west‑2 ↔ us‑central1 | 42 ms | 99.999975 % | $130 + $115 = $245 |
+| us‑west‑2 ↔ eastus | 70 ms (exceeds 50 ms) | – | – |
+| eu‑west‑1 ↔ eastus | 90 ms (exceeds 50 ms) | – | – |
+| … | … | … | … |
+
+\*Base‑cost formula: **base_cost(A) + base_cost(B) + (latency × $0.25)**.  
+Even the *cheapest* qualifying pair (us‑east‑1 ↔ us‑central1) costs:
+
+- Base region cost: $120 + $115 = $235  
+- Latency surcharge: 32 ms × $0.25 = $8  
+- **Total = $243 / month** (far above the $100 ceiling).
+
+Since the region‑level base fees dominate the budget, no combination of instance types, bandwidth, or worker replicas can bring the total under $100 while still meeting the required SLA and latency constraints.
+
+**Recommendation**
+
+- **Adjust the budget** (e.g., raise it to at least ~$250/month) to accommodate the minimum viable DR pair.  
+- **Or relax requirements** (e.g., accept a lower combined SLA, higher latency, or a single‑region standby) to fit the $100 limit.  
+
+With the current catalog, a compliant deployment under $100 is not feasible.",PENDING_BLIND_REVIEW,
+REV_M1_Q15_DR_AWS_GCP_10MS_INFEASIBLE,Q15_DR_AWS_GCP_10MS_INFEASIBLE,1,Raw LLM,Disaster recovery across AWS and GCP with 99.99% SLA and max 10ms latency under $600 a month.,INFEASIBLE,1.0,1,CORRECT_REFUSAL,"**Result – the request cannot be satisfied with the given catalog**
+
+| Requirement | What the catalog can provide | Why it fails |
+|-------------|-----------------------------|--------------|
+| **99.99 % combined SLA** | Any two‑region pair reaches at most 99.9975 % (e.g., us‑east‑1 + eastus) | ✅ |
+| **Maximum inter‑region latency ≤ 10 ms** | The smallest latency listed in the topology graph is **12 ms** (us‑east‑1 ↔ eastus) | ❌ |
+| **Budget ≤ $600 / month** | Even the cheapest viable pair (us‑east‑1 + eastus) costs: <br>Base = $120 + $125 = $245 <br>Latency cost = 12 ms × $0.25 = $3 <br>**Total region cost = $248** <br>Adding the cheapest compute (e.g., two t3.medium VMs @ $30.37 each) and minimal scaling (1 replica, 100 Mbps) would still be well under $600, but the latency constraint is already violated. | ❌ |
+
+Because the **minimum possible latency between any two distinct regions in the catalog is 12 ms**, the 10 ms latency target cannot be met, regardless of provider choice or cost optimizations.  
+
+**Conclusion:** With the current catalog and constraints, a disaster‑recovery deployment that satisfies **both** a 99.99 % SLA **and** ≤ 10 ms latency is **not feasible**. You would need either:
+
+1. A relaxed latency requirement (≥ 12 ms), or  
+2. Additional regions/peering links not listed in the catalog that can provide ≤ 10 ms latency.
+
+If you can adjust the latency requirement, I can immediately propose a concrete under‑$600 deployment that meets the SLA.",PENDING_BLIND_REVIEW,
+REV_M1_Q20_SCALING_1000MBPS_30CPU_INFEASIBLE,Q20_SCALING_1000MBPS_30CPU_INFEASIBLE,1,Raw LLM,Dynamic scaling for 1000 Mbps with maximum CPU 30 percent under 200 dollar.,INFEASIBLE,,1,CORRECT_REFUSAL,"**Result – the request cannot be satisfied with the catalog constraints**
+
+| Requirement | What the catalog can deliver | Why it fails |
+|-------------|-----------------------------|--------------|
+| **Bandwidth** | 1000 Mbps → $80 / mo (bandwidth cost) | OK |
+| **Worker replicas** | 1 – 16 replicas (max) | To keep CPU ≤ 30 % the scaling model requires **≥ 45 replicas** (CPU = Bandwidth / (Replicas × 75 Mbps) × 100 %). The catalog caps replicas at 16, so the CPU would be **≈ 83 %** (1000 / (16 × 75) × 100). |
+| **Total cost limit** | $200 / mo | Even if we ignore the CPU breach, the cheapest possible scaling configuration that meets the 1000 Mbps demand is 16 replicas + 1000 Mbps bandwidth: <br>‑ Bandwidth: 1000 Mbps × $0.08 = $80.00 <br>‑ Replicas: 16 × $45 = $720.00 <br>‑ **Subtotal = $800.00** (far above $200). |
+| **VM layer** | The cheapest VM (AWS t3.medium) costs $30.37 / mo, but adding any VM(s) would only increase the total further. |
+
+### Bottom line
+- **CPU constraint (≤ 30 %)** → needs ≥ 45 replicas → exceeds the catalog’s replica ceiling (16).  
+- **Budget constraint ($200 / mo)** → even the minimal‑cost scaling (16 replicas + 1000 Mbps) costs **≈ $800 / mo**, well over budget.  
+
+### Recommendation
+- **Reduce the required bandwidth** (e.g., to ≤ 540 Mbps) so that 16 replicas keep CPU ≤ 30 % (540 / (16 × 75) × 100 ≈ 45 %). This would cost: 540 Mbps × $0.08 = $43.20 + 16 × $45 = $720 → **$763.20** (still over $200).  
+- **Increase the budget** to at least **≈ $800 / mo** to meet the 1000 Mbps demand with the maximum allowed replicas.  
+- **Or** request a catalog extension that allows more than 16 worker replicas or a different pricing model for workers.
+
+**Conclusion:** With the current catalog and a $200/month ceiling, a 1000 Mbps dynamic‑scaling deployment limited to 30 % CPU is **not feasible**. Adjust either the bandwidth, replica limit, or budget.",PENDING_BLIND_REVIEW,
+REV_M1_Q23_UNSUPPORTED_BIRYANI_RECIPE,Q23_UNSUPPORTED_BIRYANI_RECIPE,1,Raw LLM,What is the best recipe for biryani for 20 people?,UNSUPPORTED,,1,CORRECT_REFUSAL,"I’m sorry, but I can’t help with that.",PENDING_BLIND_REVIEW,
+REV_M1_Q26_BOUNDARY_VM_UNDER_121_INFEASIBLE,Q26_BOUNDARY_VM_UNDER_121_INFEASIBLE,1,Raw LLM,Deploy 8 vCPUs and 16GB RAM on AWS for under 121 dollar a month,INFEASIBLE,1.0,1,CORRECT_REFUSAL,"**Result:** It isn’t possible to meet the requirement “8 vCPUs + 16 GB RAM on AWS for ≤ $121 / month” with the catalog you provided.
+
+**Why:**  
+
+| SKU | vCPUs | RAM | Monthly cost (per instance) |
+|-----|-------|-----|------------------------------|
+| t3.medium | 2 | 4 GB | $30.37 |
+| t3.large   | 2 | 8 GB | $60.74 |
+| t3.xlarge  | 4 | 16 GB| $121.47 |
+| c5.large   | 2 | 4 GB | $62.05 |
+| c5.xlarge  | 4 | 8 GB | $124.10 |
+| m5.large   | 2 | 8 GB | $70.08 |
+| m5.xlarge  | 4 | 16 GB| $140.16 |
+| m5.2xlarge | 8 | 32 GB| $280.32 |
+
+To reach **8 vCPUs** you need at least:
+
+* **2 × t3.xlarge** → 8 vCPU, 32 GB, **$242.94**  
+* **2 × c5.xlarge** → 8 vCPU, 16 GB, **$248.20**  
+* **2 × m5.xlarge** → 8 vCPU, 32 GB, **$280.32**  
+* **4 × t3.large** → 8 vCPU, 32 GB, **$242.96**  
+
+All combinations exceed the $121 ceiling (the cheapest single instance that meets the RAM requirement, a t3.xlarge, already costs $121.47 and provides only half the needed vCPUs).
+
+**Conclusion:** With the current SKU pricing, the target cannot be satisfied on AWS under $121 / month. You would need either:
+
+* a higher budget, or  
+* a different provider/instance family not listed, or  
+* to relax the vCPU or RAM requirement.",PENDING_BLIND_REVIEW,
+REV_M1_Q28_BOUNDARY_DR_UNDER_240_INFEASIBLE,Q28_BOUNDARY_DR_UNDER_240_INFEASIBLE,1,Raw LLM,Disaster recovery across AWS and GCP with 99.99 percent SLA and max 50ms latency under 240 dollar a month,INFEASIBLE,,1,CORRECT_REFUSAL,"**Result – the requested constraints cannot be satisfied with the catalog data**
+
+| Requirement | What the catalog forces | Why it fails |
+|-------------|------------------------|--------------|
+| **Provider mix** – one AWS region + one GCP region | The cheapest AWS region is **us‑east‑1** (base $120 / mo). The cheapest GCP region is **us‑central‑1** (base $115 / mo). | Minimum base‑region cost = $120 + $115 = **$235**. |
+| **Latency ≤ 50 ms** | The smallest inter‑region latency between any AWS region and GCP is **us‑east‑1 ↔ us‑central‑1 = 32 ms**. | Latency cost = 32 ms × $0.25 = **$8**. |
+| **Combined SLA ≥ 99.99 %** | All listed regions have SLA = 99.95 %. Combined SLA = 1 – ((1‑0.9995) × (1‑0.9995)) = **99.999975 %**, which meets the SLA requirement. |
+| **Budget ≤ $240 / month** | Total cost = base $120 + base $115 + latency $8 = **$243** **before** adding any compute (bandwidth, worker replicas, VM SKUs, etc.). | Even with **zero** compute the cost already exceeds the $240 ceiling, leaving no room for the required VM, bandwidth or replica charges. |
+
+Because the **minimum unavoidable cost** for an AWS + GCP disaster‑recovery pair that satisfies the latency (≤ 50 ms) and SLA (≥ 99.99 %) constraints is **$243 / month**, the budget of **$240 / month** cannot be met.
+
+**Recommendation:**  
+- Either increase the monthly budget to at least **$250** (to cover the $243 base cost plus the smallest viable compute package),  
+- Or relax one of the constraints (e.g., accept a slightly higher latency, a lower SLA, or use a single‑cloud DR approach).  
+
+With the current catalog and constraints, no feasible deployment exists.",PENDING_BLIND_REVIEW,

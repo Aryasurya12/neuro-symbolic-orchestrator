@@ -1228,6 +1228,13 @@ class IndependentChecker:
 
         problem_type = contract_dict.get("problem_type", "ILP_VM_Allocation")
 
+        # Dynamic archetype resolution to prevent false VM knapsack mismatch when contract was defaulted to ILP_VM_Allocation
+        if problem_type == "ILP_VM_Allocation" and not res_dict.get("allocated_vms") and not res_dict.get("instances"):
+            if res_dict.get("primary_region") and res_dict.get("secondary_region"):
+                problem_type = "Z3_Graph_Disaster_Recovery"
+            elif (res_dict.get("optimal_bandwidth_mbps") is not None or res_dict.get("bandwidth_mbps") is not None) and (res_dict.get("recommended_replicas") is not None or res_dict.get("replicas") is not None):
+                problem_type = "PSO_Continuous_Scaling"
+
         if problem_type == "ILP_VM_Allocation":
             check = cls.verify_vm_allocation(contract_dict, res_dict, terminal_stream_mode=terminal_stream_mode)
         elif problem_type == "Z3_Graph_Disaster_Recovery":
